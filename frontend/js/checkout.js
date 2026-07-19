@@ -166,7 +166,7 @@
   }
   function summaryTotals(q) {
     const rows = [`<div class="summary-line"><span>Subtotal</span><span>${money(q.subtotal)}</span></div>`];
-    if (q.promo_discount > 0) rows.push(`<div class="summary-line free-note"><span>Offers (B2G1)</span><span>− ${money(q.promo_discount)}</span></div>`);
+    if (q.promo_discount > 0) rows.push(`<div class="summary-line free-note"><span>Offers (B1G1)</span><span>− ${money(q.promo_discount)}</span></div>`);
     if (q.coupon_discount > 0) rows.push(`<div class="summary-line free-note"><span>Coupon ${esc(q.coupon_code)}</span><span>− ${money(q.coupon_discount)}</span></div>`);
     if (state.mode === "delivery") {
       if (q.delivery_area_required) {

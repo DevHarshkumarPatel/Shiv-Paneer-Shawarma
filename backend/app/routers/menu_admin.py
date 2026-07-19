@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from ..deps import require_owner
 from ..models import Category, Subcategory, Item, Variant, Promo
 from ..schemas.models import (
-    CategoryPayload, SubcategoryPayload, ItemPayload, PromoPayload,
+    CategoryPayload, SubcategoryPayload, ItemPayload, PromoPayload, ReorderPayload,
 )
 
 router = APIRouter(prefix="/api/admin/menu", tags=["admin-menu"])
@@ -93,6 +93,23 @@ def list_items(_owner=Depends(require_owner)):
     return {"items": [i.to_dict() for i in items]}
 
 
+@router.post("/items/reorder")
+def reorder_items(body: ReorderPayload, _owner=Depends(require_owner)):
+    """Persist a new display order: sort_order = position in the given list.
+
+    The client sends the ids of one category's items in their dragged order.
+    """
+    updated = []
+    for idx, item_id in enumerate(body.order):
+        item = Item.get_by_id(int(item_id))
+        if item:
+            item.sort_order = idx
+            updated.append(item)
+    for item in updated:
+        item.put()
+    return {"ok": True, "updated": len(updated)}
+
+
 def _variants(payloads) -> list[Variant]:
     return [Variant(base=v.base, size=v.size, price=v.price) for v in payloads]
 
@@ -146,10 +163,21 @@ def list_promos(_owner=Depends(require_owner)):
     return {"promos": [p.to_dict() for p in Promo.query()]}
 
 
+def _targets(body: PromoPayload) -> list[int]:
+    """Union of the multi-target list and the legacy single target."""
+    ids = list(dict.fromkeys(body.target_ids or []))     # de-dupe, keep order
+    if body.target_id and body.target_id not in ids:
+        ids.append(body.target_id)
+    return ids
+
+
 @router.post("/promos")
 def create_promo(body: PromoPayload, _owner=Depends(require_owner)):
+    targets = _targets(body)
+    if not targets:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pick at least one category or item.")
     promo = Promo(
-        scope=body.scope, target_id=body.target_id, ptype=body.ptype,
+        scope=body.scope, target_id=targets[0], target_ids=targets, ptype=body.ptype,
         value=body.value, label=body.label, active=body.active,
     )
     promo.put()
@@ -161,8 +189,12 @@ def update_promo(promo_id: int, body: PromoPayload, _owner=Depends(require_owner
     promo = Promo.get_by_id(promo_id)
     if not promo:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Promo not found.")
+    targets = _targets(body)
+    if not targets:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pick at least one category or item.")
     promo.scope = body.scope
-    promo.target_id = body.target_id
+    promo.target_id = targets[0]
+    promo.target_ids = targets
     promo.ptype = body.ptype
     promo.value = body.value
     promo.label = body.label

@@ -25,7 +25,7 @@
   const WELCOME_LIST = `
     <ul class="tour-steps-list">
       <li><span class="ico">🍽️</span> Pick <b>dine-in, takeaway or delivery</b></li>
-      <li><span class="ico">🌯</span> Add items — <b>Buy 2 Get 1 Free!</b></li>
+      <li><span class="ico">🌯</span> Add items — <b>Buy 1 Get 1 Free!</b></li>
       <li><span class="ico">💳</span> Checkout &amp; pay by <b>UPI</b></li>
       <li><span class="ico">📍</span> <b>Track</b> your order live</li>
     </ul>`;
@@ -37,8 +37,8 @@
         ctaFirst: "Show me around →" },
       { target: ".ordertypes", title: "1 · Choose your order type",
         bodyHTML: "Start with <b>Dine-in</b>, <b>Takeaway</b> or <b>Delivery</b>. Prices and any delivery fee adjust automatically." },
-      { target: ".section .card", title: "Buy 2 Get 1 Free 🎉",
-        bodyHTML: "This offer runs on shawarmas, cheese delights, kullads &amp; bowls. Add 3 of the same item and one is <b>free</b> — applied for you at checkout." },
+      { target: ".section .card", title: "Buy 1 Get 1 Free 🎉",
+        bodyHTML: "This offer runs on shawarmas, cheese delights, kullads &amp; bowls. Add 2 of the same item and one is <b>free</b> — applied for you at checkout." },
       { target: '.header-actions a[href="track.html"]', title: "Track anytime", placement: "bottom",
         bodyHTML: "Once you order, check its status here — from <em>Placed</em> to <em>Delivered</em> — with your order ID. Tap <b>Refresh</b> for the latest." },
       { target: ".section .btn-primary", title: "Ready to order?",
@@ -49,11 +49,11 @@
       { target: "#modeSeg", title: "Order type",
         bodyHTML: "Switch between <b>dine-in</b>, <b>takeaway</b> and <b>delivery</b> here anytime — totals update instantly." },
       { target: "#catChips", title: "Browse the menu", wait: 6000,
-        bodyHTML: "Tap a category to jump to it. A <b>B2G1</b> tag means <b>Buy 2 Get 1 Free</b> on those items." },
+        bodyHTML: "Tap a category to jump to it. A <b>B1G1</b> tag means <b>Buy 1 Get 1 Free</b> on those items." },
       { target: () => document.querySelector(".add-btn"), title: "Add an item", wait: 6000,
         bodyHTML: "Tap <b>＋ Choose &amp; Add</b> to pick your base (wheat / millet), size and quantity, then add it to your cart." },
       { target: "#headerCart", title: "Your cart", placement: "bottom",
-        bodyHTML: "Everything you add collects here. Add <b>3 of the same</b> item and one is free automatically." },
+        bodyHTML: "Everything you add collects here. Add <b>2 of the same</b> item and one is free automatically." },
       { target: "#headerCart", title: "Checkout when ready", placement: "bottom",
         bodyHTML: "Open your cart and tap <b>Proceed to checkout →</b> to add your details and pay. You'll get an order ID to track. Enjoy! 🌯",
         last: true, ctaLast: "Got it" },

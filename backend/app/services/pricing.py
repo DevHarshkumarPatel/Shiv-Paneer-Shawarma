@@ -66,9 +66,11 @@ class PricingResult:
 
 
 def _load_active_promos() -> dict[tuple[str, int], Promo]:
+    """Map each (scope, target id) -> promo. A promo may target several ids."""
     promos: dict[tuple[str, int], Promo] = {}
     for p in Promo.query(Promo.active == True):  # noqa: E712
-        promos[(p.scope, p.target_id)] = p
+        for tid in p.target_id_list():
+            promos[(p.scope, tid)] = p
     return promos
 
 
@@ -84,7 +86,11 @@ def _match_variant(item: Item, base: str, size: str):
 
 
 def _apply_item_promo(promo: Promo | None, unit_price: float, qty: int) -> tuple[int, float, str]:
-    """Return (free_quantity, promo_discount_amount, label)."""
+    """Return (free_quantity, promo_discount_amount, label).
+
+    Note: b1g1 is NOT handled here. It is a store-wide, cross-item offer applied
+    over the whole cart in `_apply_cart_b1g1`, not per line.
+    """
     if not promo:
         return 0, 0.0, ""
     if promo.ptype == "b2g1":
@@ -99,10 +105,44 @@ def _apply_item_promo(promo: Promo | None, unit_price: float, qty: int) -> tuple
     return 0, 0.0, ""
 
 
+def _apply_cart_b1g1(result: PricingResult, promo: Promo, line_indices: list[int]) -> None:
+    """Buy 1 Get 1 across the promo's eligible items, mix and match.
+
+    Only the given lines (those covered by an active b1g1 promo for their item
+    or category) take part. Their units are pooled and paired by price, highest
+    first; the cheaper unit of each pair is free, so the customer is billed the
+    higher-priced eligible items. Mutates `result` in place.
+    """
+    label = promo.label or "Buy 1 Get 1 Free"
+    # Expand every eligible unit, remembering which line it came from.
+    units = [
+        (result.lines[idx].unit_price, idx)
+        for idx in line_indices
+        for _ in range(result.lines[idx].quantity)
+    ]
+    # Highest price first; index 1, 3, 5, ... is the cheaper unit of each pair.
+    units.sort(key=lambda u: u[0], reverse=True)
+    for pos in range(1, len(units), 2):
+        price, idx = units[pos]
+        line = result.lines[idx]
+        line.free_quantity += 1
+        line.line_total -= price
+        if not line.promo_label:
+            line.promo_label = label
+        result.promo_discount += price
+
+
 def price_cart(cart: list[dict], order_type: str, coupon_code: str = "",
                delivery_area_id: int = 0) -> PricingResult:
     result = PricingResult()
     promos = _load_active_promos()
+
+    # Buy-1-Get-1 is a cross-item offer: every line whose scoped promo is b1g1
+    # is pooled together and settled once, after all lines are priced. Its scope
+    # (whole store, a category, or a single item) is whatever the owner set on
+    # the promo, exactly like the other promo types.
+    b1g1_promo = None
+    b1g1_lines: list[int] = []
 
     for raw in cart:
         item_id = int(raw.get("item_id"))
@@ -119,7 +159,13 @@ def price_cart(cart: list[dict], order_type: str, coupon_code: str = "",
 
         # Item-scoped promo wins over a category-scoped promo.
         promo = promos.get(("item", item_id)) or promos.get(("category", item.category_id))
-        free_qty, line_discount, promo_label = _apply_item_promo(promo, unit_price, qty)
+        if promo and promo.ptype == "b1g1":
+            # Eligible for the cross-item B1G1 pool; settled below, not per line.
+            free_qty, line_discount, promo_label = 0, 0.0, ""
+            b1g1_lines.append(len(result.lines))
+            b1g1_promo = b1g1_promo or promo
+        else:
+            free_qty, line_discount, promo_label = _apply_item_promo(promo, unit_price, qty)
         line_total = gross - line_discount
 
         result.lines.append(PricedLine(
@@ -130,6 +176,9 @@ def price_cart(cart: list[dict], order_type: str, coupon_code: str = "",
         ))
         result.subtotal += gross
         result.promo_discount += line_discount
+
+    if b1g1_lines:
+        _apply_cart_b1g1(result, b1g1_promo, b1g1_lines)
 
     after_promo = result.subtotal - result.promo_discount
 

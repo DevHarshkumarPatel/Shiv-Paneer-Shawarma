@@ -106,10 +106,15 @@ class ItemPayload(BaseModel):
     sort_order: int = 0
 
 
+class ReorderPayload(BaseModel):
+    order: list[int] = []   # item ids in their new display order
+
+
 class PromoPayload(BaseModel):
-    scope: str          # item | category
-    target_id: int
-    ptype: str          # b2g1 | percent | flat
+    scope: str                    # item | category
+    target_id: int = 0            # legacy single target; optional now
+    target_ids: list[int] = []    # one or more item/category ids the promo applies to
+    ptype: str          # b2g1 | b1g1 | percent | flat
     value: float = 0.0
     label: str = ""
     active: bool = True

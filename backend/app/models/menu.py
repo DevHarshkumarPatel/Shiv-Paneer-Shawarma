@@ -98,18 +98,28 @@ class Promo(ndb.Model):
     """Owner-configured promotion, item-wise or category-wise."""
 
     scope = ndb.StringProperty(choices=["item", "category"], required=True)
-    target_id = ndb.IntegerProperty(required=True)     # Item id or Category id
-    ptype = ndb.StringProperty(choices=["b2g1", "percent", "flat"], required=True)
-    value = ndb.FloatProperty(default=0.0)             # percent (0-100) or flat INR; 0 for b2g1
+    target_id = ndb.IntegerProperty(default=0)         # legacy single target (first of target_ids)
+    target_ids = ndb.IntegerProperty(repeated=True)    # Item ids or Category ids the promo applies to
+    ptype = ndb.StringProperty(choices=["b2g1", "b1g1", "percent", "flat"], required=True)
+    value = ndb.FloatProperty(default=0.0)             # percent (0-100) or flat INR; 0 for b2g1/b1g1
     label = ndb.StringProperty(default="")             # e.g. "Buy 2 Get 1 Free"
     active = ndb.BooleanProperty(default=True)
     created_at = ndb.DateTimeProperty(auto_now_add=True)
 
+    def target_id_list(self) -> list[int]:
+        """All targets, tolerating rows written before target_ids existed."""
+        ids = list(self.target_ids or [])
+        if self.target_id and self.target_id not in ids:
+            ids.append(self.target_id)
+        return ids
+
     def to_dict(self) -> dict:
+        targets = self.target_id_list()
         return {
             "id": self.key.id(),
             "scope": self.scope,
-            "target_id": self.target_id,
+            "target_id": targets[0] if targets else 0,   # kept for older clients
+            "target_ids": targets,
             "ptype": self.ptype,
             "value": self.value,
             "label": self.label,

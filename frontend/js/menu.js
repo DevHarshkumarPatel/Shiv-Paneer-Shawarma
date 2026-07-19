@@ -43,7 +43,7 @@
   function renderChips() {
     const chips = MENU.categories.map((c, i) => `
       <button class="chip ${i === 0 ? "active" : ""}" data-cat="cat-${c.id}">
-        ${esc(c.name)} ${c.offer_badge ? `<span class="tag">B2G1</span>` : ""}
+        ${esc(c.name)} ${c.offer_badge ? `<span class="tag">B1G1</span>` : ""}
       </button>`).join("");
     el("#catChips").innerHTML = `<button class="chip active" data-cat="__all">All</button>` + chips;
     els("#catChips .chip").forEach((chip) => chip.addEventListener("click", () => {
@@ -248,7 +248,7 @@
     const lineHTML = lines.map((l) => {
       const key = Store.lineKey(l);
       const qLine = q && q.lines.find((x) => x.item_id === l.item_id && x.base === l.base && x.size === l.size);
-      const freeNote = qLine && qLine.free_quantity ? `<div class="free-note">🎉 ${qLine.free_quantity} free (B2G1)</div>` : "";
+      const freeNote = qLine && qLine.free_quantity ? `<div class="free-note">🎉 ${qLine.free_quantity} free (B1G1)</div>` : "";
       const lineTotal = qLine ? qLine.line_total : l.unit_price * l.quantity;
       return `
         <div class="cart-line">
@@ -291,7 +291,7 @@
   function totalsHTML(q) {
     const rows = [];
     rows.push(rowLine("Subtotal", money(q.subtotal)));
-    if (q.promo_discount > 0) rows.push(rowLine("Offers (B2G1)", "− " + money(q.promo_discount), "free-note"));
+    if (q.promo_discount > 0) rows.push(rowLine("Offers (B1G1)", "− " + money(q.promo_discount), "free-note"));
     if (q.coupon_discount > 0) rows.push(rowLine(`Coupon ${esc(q.coupon_code)}`, "− " + money(q.coupon_discount), "free-note"));
     if (q.delivery_fee > 0) rows.push(rowLine("Delivery fee", money(q.delivery_fee)));
     return rows.join("") + `<div class="row-between grand"><span>Total</span><span>${money(q.total)}</span></div>`;

@@ -108,11 +108,19 @@
       ${o.payment.upi_reference ? `<span class="text-xs text-muted" style="font-size:var(--fs-xs);">UTR: ${esc(o.payment.upi_reference)}</span>` : ""}
     </div>`;
 
-    const verifyBtns = o.payment.status === "awaiting_verification"
-      ? `<div class="row" style="margin-bottom:8px;">
+    let verifyBtns = "";
+    if (o.payment.status === "awaiting_verification") {
+      verifyBtns = `<div class="row" style="margin-bottom:8px;">
            <button class="btn btn-sm btn-primary grow" data-verify="${esc(o.public_id)}" data-result="paid">✓ Confirm payment</button>
            <button class="btn btn-sm btn-danger" data-verify="${esc(o.public_id)}" data-result="failed">Reject</button>
-         </div>` : "";
+         </div>`;
+    } else if (o.payment.status === "pending" && o.status !== "cancelled") {
+      // Cash (or UPI with no reference yet): let the owner confirm payment on hand-over.
+      const label = o.payment.method === "cash" ? "✓ Mark cash received" : "✓ Mark as paid";
+      verifyBtns = `<div class="row" style="margin-bottom:8px;">
+           <button class="btn btn-sm btn-primary grow" data-verify="${esc(o.public_id)}" data-result="paid">${label}</button>
+         </div>`;
+    }
 
     const actions = terminal
       ? `<div class="text-sm text-muted">Order ${esc(statusLabel(o.status))}.</div>`

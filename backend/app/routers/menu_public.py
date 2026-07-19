@@ -21,10 +21,10 @@ def get_menu():
     for p in Promo.query():
         if not p.active:
             continue
-        if p.scope == "item":
-            promos_by_item[p.target_id] = p.to_dict()
-        else:
-            promos_by_cat[p.target_id] = p.to_dict()
+        index = promos_by_item if p.scope == "item" else promos_by_cat
+        pd = p.to_dict()
+        for tid in p.target_id_list():
+            index[tid] = pd
 
     def item_json(it: Item) -> dict:
         d = it.to_dict()

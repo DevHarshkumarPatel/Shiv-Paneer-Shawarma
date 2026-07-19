@@ -108,27 +108,101 @@
   }
 
   /* ---------------- Items ---------------- */
+  function itemRow(i) {
+    const prices = i.variants.map((v) => v.price);
+    const range = prices.length ? (Math.min(...prices) === Math.max(...prices) ? money(prices[0]) : `${money(Math.min(...prices))}–${money(Math.max(...prices))}`) : "—";
+    return `<tr draggable="true" data-id="${i.id}">
+      <td class="drag-handle text-muted" title="Drag to reorder" style="cursor:grab;user-select:none;width:1%;">⠿</td>
+      <td><strong>${esc(i.name)}</strong>${i.tags.length ? `<br/><span class="text-sm text-muted">${esc(i.tags.join(", "))}</span>` : ""}</td>
+      <td>${i.variants.length} variant(s)</td>
+      <td>${range}</td>
+      <td>${i.active ? "✅" : "⛔"}</td>
+      <td class="row"><button class="btn btn-sm btn-outline" data-edit="${i.id}">Edit</button>
+        <button class="btn btn-sm btn-danger" data-del="${i.id}">Delete</button></td>
+    </tr>`;
+  }
+
   function renderItems() {
     const body = el("#tabBody");
     body.innerHTML = "";
     body.appendChild(toolbar("Items & Prices", "Add item", null));
-    const rows = data.items.map((i) => {
-      const prices = i.variants.map((v) => v.price);
-      const range = prices.length ? (Math.min(...prices) === Math.max(...prices) ? money(prices[0]) : `${money(Math.min(...prices))}–${money(Math.max(...prices))}`) : "—";
-      return `<tr>
-        <td><strong>${esc(i.name)}</strong>${i.tags.length ? `<br/><span class="text-sm text-muted">${esc(i.tags.join(", "))}</span>` : ""}</td>
-        <td>${esc(catName(i.category_id))}</td>
-        <td>${i.variants.length} variant(s)</td>
-        <td>${range}</td>
-        <td>${i.active ? "✅" : "⛔"}</td>
-        <td class="row"><button class="btn btn-sm btn-outline" data-edit="${i.id}">Edit</button>
-          <button class="btn btn-sm btn-danger" data-del="${i.id}">Delete</button></td>
-      </tr>`;
-    }).join("");
-    body.insertAdjacentHTML("beforeend", `<div class="table-wrap"><table class="admin-table"><thead><tr><th>Item</th><th>Category</th><th>Variants</th><th>Price</th><th>Active</th><th></th></tr></thead><tbody>${rows || emptyRow(6)}</tbody></table></div>`);
+    body.insertAdjacentHTML("beforeend", `<p class="text-muted text-sm" style="margin:0 0 var(--sp-3);">Drag ⠿ to reorder items within a category — the order is saved automatically and used on the customer menu.</p>`);
+
+    // One draggable table per category (ordering is within a category).
+    const groups = data.categories.map((c) => ({ cat: c, items: data.items.filter((i) => i.category_id === c.id) }));
+    const known = new Set(data.categories.map((c) => c.id));
+    const orphans = data.items.filter((i) => !known.has(i.category_id));
+    if (orphans.length) groups.push({ cat: { id: 0, name: "Uncategorized" }, items: orphans });
+
+    if (!data.items.length) {
+      body.insertAdjacentHTML("beforeend", `<div class="table-wrap"><table class="admin-table"><tbody>${emptyRow(6)}</tbody></table></div>`);
+    }
+    groups.forEach(({ cat, items }) => {
+      if (!items.length) return;
+      const rows = items.map(itemRow).join("");
+      body.insertAdjacentHTML("beforeend", `
+        <h3 style="margin:var(--sp-4) 0 var(--sp-2);">${esc(cat.name)}</h3>
+        <div class="table-wrap"><table class="admin-table"><thead><tr><th></th><th>Item</th><th>Variants</th><th>Price</th><th>Active</th><th></th></tr></thead>
+          <tbody data-cat="${cat.id}">${rows}</tbody></table></div>`);
+    });
+
     el("#addBtn").addEventListener("click", () => itemForm());
     els("[data-edit]", body).forEach((b) => b.addEventListener("click", () => itemForm(data.items.find((i) => i.id == b.dataset.edit))));
     els("[data-del]", body).forEach((b) => b.addEventListener("click", () => del(`/api/admin/menu/items/${b.dataset.del}`, "Delete this item?")));
+    els("tbody[data-cat]", body).forEach((tbody) => makeSortable(tbody, () => persistItemOrder(tbody)));
+  }
+
+  /* Drag-to-reorder rows within one <tbody>. Calls onReorder() only if the
+     order actually changed. */
+  function makeSortable(tbody, onReorder) {
+    let dragEl = null;
+    let before = [];
+    const idsOf = (tb) => els("tr[data-id]", tb).map((r) => r.dataset.id);
+    els("tr[data-id]", tbody).forEach((row) => {
+      row.addEventListener("dragstart", (e) => {
+        dragEl = row; before = idsOf(tbody);
+        row.style.opacity = "0.4";
+        e.dataTransfer.effectAllowed = "move";
+        try { e.dataTransfer.setData("text/plain", row.dataset.id); } catch (_) {}
+      });
+      row.addEventListener("dragend", () => {
+        if (!dragEl) return;
+        dragEl.style.opacity = "";
+        dragEl = null;
+        if (idsOf(tbody).join(",") !== before.join(",")) onReorder();
+      });
+    });
+    tbody.addEventListener("dragover", (e) => {
+      if (!dragEl) return;
+      e.preventDefault();
+      const after = dragAfterRow(tbody, e.clientY);
+      if (after == null) tbody.appendChild(dragEl);
+      else tbody.insertBefore(dragEl, after);
+    });
+  }
+
+  function dragAfterRow(tbody, y) {
+    let closest = null, closestOffset = Number.NEGATIVE_INFINITY;
+    els("tr[data-id]", tbody).forEach((row) => {
+      if (row.style.opacity === "0.4") return;   // skip the row being dragged
+      const box = row.getBoundingClientRect();
+      const offset = y - box.top - box.height / 2;
+      if (offset < 0 && offset > closestOffset) { closestOffset = offset; closest = row; }
+    });
+    return closest;
+  }
+
+  async function persistItemOrder(tbody) {
+    const order = els("tr[data-id]", tbody).map((r) => +r.dataset.id);
+    try {
+      await API.post("/api/admin/menu/items/reorder", { order });
+      order.forEach((id, idx) => { const it = data.items.find((i) => i.id === id); if (it) it.sort_order = idx; });
+      data.items.sort((a, b) => a.category_id - b.category_id || a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+      toast("Order saved", "ok");
+    } catch (e) {
+      toast(e.message, "err");
+      renderItems();   // revert the DOM to the last known-good order
+    }
   }
 
   // Category <option>s + a sentinel that opens the inline "new category" row.
@@ -228,7 +302,8 @@
         tags: el("#fTags", m.backdrop).value.split(",").map((s) => s.trim()).filter(Boolean),
         veg: true,
         active: el("#fActive", m.backdrop).value === "true",
-        sort_order: it.sort_order || 0,
+        // New items append to the end of their category; edits keep their place. Reorder via drag.
+        sort_order: item ? it.sort_order : data.items.filter((i) => i.category_id === +el("#fCat", m.backdrop).value).length,
         variants,
       };
       if (!payload.name) return toast("Name is required", "err");
@@ -244,8 +319,8 @@
     const rows = data.promos.map((p) => `
       <tr>
         <td>${esc(p.label || "—")}</td>
-        <td>${esc(p.scope)}: ${esc(p.scope === "item" ? itemName(p.target_id) : catName(p.target_id))}</td>
-        <td>${esc(p.ptype)}${p.ptype !== "b2g1" ? ` (${p.value}${p.ptype === "percent" ? "%" : "₹"})` : ""}</td>
+        <td>${esc(p.scope)}: ${esc(((p.target_ids && p.target_ids.length ? p.target_ids : [p.target_id]).map((id) => p.scope === "item" ? itemName(id) : catName(id)).join(", ")))}</td>
+        <td>${esc(p.ptype)}${p.ptype === "percent" || p.ptype === "flat" ? ` (${p.value}${p.ptype === "percent" ? "%" : "₹"})` : ""}</td>
         <td>${p.active ? "✅" : "⛔"}</td>
         <td class="row"><button class="btn btn-sm btn-outline" data-edit="${p.id}">Edit</button>
           <button class="btn btn-sm btn-danger" data-del="${p.id}">Delete</button></td>
@@ -257,9 +332,8 @@
   }
 
   function promoForm(promo) {
-    const p = promo || { scope: "category", target_id: data.categories[0] && data.categories[0].id, ptype: "b2g1", value: 0, label: "", active: true };
-    const targetOptions = (scope) => (scope === "item" ? data.items : data.categories)
-      .map((x) => `<option value="${x.id}" ${x.id === p.target_id ? "selected" : ""}>${esc(x.name)}</option>`).join("");
+    const p = promo || { scope: "category", target_ids: [data.categories[0] && data.categories[0].id].filter((x) => x != null), ptype: "b2g1", value: 0, label: "", active: true };
+    const selectedTargets = new Set((p.target_ids && p.target_ids.length ? p.target_ids : [p.target_id]).filter((x) => x != null));
     const m = modal({
       title: promo ? "Edit promo" : "Add promo",
       bodyHTML: `
@@ -267,34 +341,80 @@
           <div class="field grow"><label>Scope</label><select class="select" id="fScope">
             <option value="category" ${p.scope === "category" ? "selected" : ""}>Whole category</option>
             <option value="item" ${p.scope === "item" ? "selected" : ""}>Single item</option></select></div>
-          <div class="field grow"><label>Target</label><select class="select" id="fTarget">${targetOptions(p.scope)}</select></div>
+          <div class="field grow"><label id="fTargetLabel">Categories</label>
+            <div class="ms" id="fTargetMs">
+              <button type="button" class="select ms-toggle" id="fTargetToggle"><span class="ms-summary placeholder" id="fTargetSummary">Choose…</span><span class="ms-caret">▾</span></button>
+              <div class="ms-panel" id="fTargetPanel" hidden>
+                <div class="ms-bar"><span id="fTargetCount">0 selected</span><span class="ms-actions"><button type="button" id="fTargetAll">Select all</button> · <button type="button" id="fTargetNone">Clear</button></span></div>
+                <div id="fTargetOpts"></div>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="input-row">
           <div class="field grow"><label>Type</label><select class="select" id="fType">
             <option value="b2g1" ${p.ptype === "b2g1" ? "selected" : ""}>Buy 2 Get 1 Free</option>
+            <option value="b1g1" ${p.ptype === "b1g1" ? "selected" : ""}>Buy 1 Get 1 Free</option>
             <option value="percent" ${p.ptype === "percent" ? "selected" : ""}>Percent off</option>
             <option value="flat" ${p.ptype === "flat" ? "selected" : ""}>Flat ₹ off (per unit)</option></select></div>
           <div class="field grow" id="valWrap"><label>Value</label><input class="input" id="fValue" type="number" value="${p.value}" /></div>
         </div>
+        <p class="text-muted text-sm" id="b1g1Hint" style="display:none;">Buy 1 Get 1 applies to the items in every category/item you select. Eligible items are pooled together and, for every 2 of them in a cart, the cheaper one is free. Select all categories to run it store-wide.</p>
         <div class="field"><label>Label shown to customers</label><input class="input" id="fLabel" value="${esc(p.label)}" placeholder="Buy 2 Get 1 Free" /></div>
         <div class="field"><label>Active</label><select class="select" id="fActive"><option value="true" ${p.active ? "selected" : ""}>Active</option><option value="false" ${!p.active ? "selected" : ""}>Off</option></select></div>`,
       footHTML: `<button class="btn btn-primary btn-block" id="saveBtn">Save promo</button>`,
     });
     const scopeSel = el("#fScope", m.backdrop);
     const typeSel = el("#fType", m.backdrop);
-    const syncTarget = () => { el("#fTarget", m.backdrop).innerHTML = targetOptions(scopeSel.value); };
-    const syncVal = () => { el("#valWrap", m.backdrop).style.display = typeSel.value === "b2g1" ? "none" : "block"; };
+
+    /* ----- checkbox multi-select for targets ----- */
+    const targetList = () => (scopeSel.value === "item" ? data.items : data.categories);
+    const renderTargetOpts = () => {
+      el("#fTargetOpts", m.backdrop).innerHTML = targetList().map((x) =>
+        `<label class="ms-opt"><input type="checkbox" value="${x.id}" ${selectedTargets.has(x.id) ? "checked" : ""}/> <span>${esc(x.name)}</span></label>`).join("")
+        || `<div class="ms-opt text-muted">Nothing to select yet.</div>`;
+      els("#fTargetOpts input[type=checkbox]", m.backdrop).forEach((cb) =>
+        cb.addEventListener("change", () => { cb.checked ? selectedTargets.add(+cb.value) : selectedTargets.delete(+cb.value); updateTargetSummary(); }));
+    };
+    const updateTargetSummary = () => {
+      const names = targetList().filter((x) => selectedTargets.has(x.id)).map((x) => x.name);
+      const sum = el("#fTargetSummary", m.backdrop);
+      sum.textContent = names.length ? (names.length <= 2 ? names.join(", ") : `${names.length} selected`) : "Choose…";
+      sum.classList.toggle("placeholder", !names.length);
+      el("#fTargetCount", m.backdrop).textContent = `${names.length} selected`;
+    };
+    el("#fTargetToggle", m.backdrop).addEventListener("click", () => {
+      const ms = el("#fTargetMs", m.backdrop), panel = el("#fTargetPanel", m.backdrop);
+      const open = panel.hidden;
+      panel.hidden = !open; ms.classList.toggle("open", open);
+    });
+    el("#fTargetAll", m.backdrop).addEventListener("click", () => { targetList().forEach((x) => selectedTargets.add(x.id)); renderTargetOpts(); updateTargetSummary(); });
+    el("#fTargetNone", m.backdrop).addEventListener("click", () => { selectedTargets.clear(); renderTargetOpts(); updateTargetSummary(); });
+
+    const syncTarget = () => {
+      selectedTargets.clear();   // category ids and item ids aren't interchangeable
+      el("#fTargetLabel", m.backdrop).textContent = scopeSel.value === "item" ? "Items" : "Categories";
+      renderTargetOpts(); updateTargetSummary();
+    };
+    const noValueType = (t) => t === "b2g1" || t === "b1g1";
+    const syncVal = () => {
+      el("#valWrap", m.backdrop).style.display = noValueType(typeSel.value) ? "none" : "block";
+      el("#b1g1Hint", m.backdrop).style.display = typeSel.value === "b1g1" ? "block" : "none";
+    };
     scopeSel.addEventListener("change", syncTarget);
     typeSel.addEventListener("change", syncVal);
+    renderTargetOpts(); updateTargetSummary();
     syncVal();
     el("#saveBtn", m.backdrop).addEventListener("click", async () => {
       const ptype = typeSel.value;
+      const targetIds = [...selectedTargets];
+      if (!targetIds.length) return toast(`Pick at least one ${scopeSel.value === "item" ? "item" : "category"}`, "err");
       const payload = {
         scope: scopeSel.value,
-        target_id: +el("#fTarget", m.backdrop).value,
+        target_ids: targetIds,
         ptype,
-        value: ptype === "b2g1" ? 0 : (parseFloat(el("#fValue", m.backdrop).value) || 0),
-        label: el("#fLabel", m.backdrop).value.trim() || (ptype === "b2g1" ? "Buy 2 Get 1 Free" : ""),
+        value: noValueType(ptype) ? 0 : (parseFloat(el("#fValue", m.backdrop).value) || 0),
+        label: el("#fLabel", m.backdrop).value.trim() || (ptype === "b2g1" ? "Buy 2 Get 1 Free" : ptype === "b1g1" ? "Buy 1 Get 1 Free" : ""),
         active: el("#fActive", m.backdrop).value === "true",
       };
       await save(promo ? "put" : "post", promo ? `/api/admin/menu/promos/${promo.id}` : "/api/admin/menu/promos", payload, m);

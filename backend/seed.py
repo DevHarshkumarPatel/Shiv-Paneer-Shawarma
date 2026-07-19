@@ -39,7 +39,7 @@ def single(price: int) -> list[Variant]:
 
 MENU = [
     {
-        "name": "Shawarma", "badge": "Buy 2 Get 1",
+        "name": "Shawarma", "badge": "Buy 1 Get 1",
         "items": [
             {"name": "Signature Paneer", "tags": ["Whole Wheat", "Millets"], "v": wheat_millet(129, 159)},
             {"name": "Mexican Paneer", "tags": ["Whole Wheat", "Millets"], "v": wheat_millet(149, 179)},
@@ -48,7 +48,7 @@ MENU = [
         ],
     },
     {
-        "name": "Cheese Delights", "badge": "Buy 2 Get 1",
+        "name": "Cheese Delights", "badge": "Buy 1 Get 1",
         "items": [
             {"name": "Cheese Shawarma", "tags": ["Whole Wheat", "Millets"], "v": wheat_millet(149, 179)},
             {"name": "Cheese Chilli", "tags": ["Whole Wheat", "Millets"], "v": wheat_millet(179, 209)},
@@ -56,7 +56,7 @@ MENU = [
         ],
     },
     {
-        "name": "Kullad", "badge": "Buy 2 Get 1",
+        "name": "Kullad", "badge": "Buy 1 Get 1",
         "items": [
             {"name": "Classic Kullad", "tags": [], "v": size_only(139, 159)},
             {"name": "Mexican Kullad", "tags": [], "v": size_only(169, 189)},
@@ -65,7 +65,7 @@ MENU = [
         ],
     },
     {
-        "name": "Bowl", "badge": "Buy 2 Get 1",
+        "name": "Bowl", "badge": "Buy 1 Get 1",
         "items": [
             {"name": "Classic Paneer Bowl", "tags": [], "v": single(179)},
             {"name": "Peri Peri Paneer Bowl", "tags": [], "v": single(199)},
@@ -105,10 +105,10 @@ def seed_menu():
         for ii, it in enumerate(cat_def["items"]):
             Item(category_id=cat.key.id(), name=it["name"], tags=it["tags"],
                  variants=it["v"], veg=True, sort_order=ii, active=True).put()
-        # Category-wide Buy-2-Get-1 promo.
-        Promo(scope="category", target_id=cat.key.id(), ptype="b2g1",
-              label="Buy 2 Get 1 Free", active=True).put()
-        print(f"Category '{cat.name}' with {len(cat_def['items'])} items + B2G1 promo.")
+        # Category-wide Buy-1-Get-1 promo.
+        Promo(scope="category", target_id=cat.key.id(), target_ids=[cat.key.id()],
+              ptype="b1g1", label="Buy 1 Get 1 Free", active=True).put()
+        print(f"Category '{cat.name}' with {len(cat_def['items'])} items + B1G1 promo.")
 
 
 def seed_coupon():
