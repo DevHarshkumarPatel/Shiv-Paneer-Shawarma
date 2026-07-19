@@ -80,6 +80,21 @@ const UI = (() => {
       timeZone: IST_TZ, hour: "numeric", minute: "2-digit", hour12: true,
     }) + " IST";
   }
+  // "2026-07-19" — the IST calendar date for `value` (defaults to now).
+  // en-CA yields ISO YYYY-MM-DD, ideal for <input type="date"> and API params.
+  function istDateISO(value) {
+    const d = value ? _toDate(value) : new Date();
+    if (!d) return "";
+    return d.toLocaleDateString("en-CA", { timeZone: IST_TZ });
+  }
+  // "19 Jul 2026" — human label for an IST calendar date string / value.
+  function fmtDate(value) {
+    const d = /^\d{4}-\d{2}-\d{2}$/.test(String(value)) ? _toDate(value + "T12:00:00Z") : _toDate(value);
+    if (!d) return "";
+    return d.toLocaleDateString("en-IN", {
+      timeZone: IST_TZ, day: "2-digit", month: "short", year: "numeric",
+    });
+  }
 
-  return { money, esc, el, els, toast, modal, statusLabel, fmtDateTime, fmtTime };
+  return { money, esc, el, els, toast, modal, statusLabel, fmtDateTime, fmtTime, istDateISO, fmtDate };
 })();

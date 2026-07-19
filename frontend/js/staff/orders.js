@@ -1,6 +1,6 @@
 /* Staff/owner live orders board: list, advance status, verify payment. */
 (function () {
-  const { money, esc, el, els, toast, statusLabel, fmtDateTime, fmtTime } = UI;
+  const { money, esc, el, els, toast, statusLabel, fmtDateTime, fmtTime, istDateISO, fmtDate } = UI;
 
   const FLOW = {
     delivery: ["placed", "confirmed", "preparing", "packing", "ready", "on_the_way", "delivered"],
@@ -11,6 +11,7 @@
 
   let filter = "all";
   let activeOnly = true;
+  let dateFilter = istDateISO();   // IST "YYYY-MM-DD"; "" = all dates
   let user = null;
 
   document.addEventListener("DOMContentLoaded", init);
@@ -25,8 +26,29 @@
       c.classList.add("active"); filter = c.dataset.filter; load();
     }));
     el("#activeOnly").addEventListener("change", (e) => { activeOnly = e.target.checked; load(); });
+
+    // Date picker: defaults to today (IST). Max is today so future dates can't be chosen.
+    const dateInput = el("#dateFilter");
+    dateInput.value = dateFilter;
+    dateInput.max = istDateISO();
+    dateInput.addEventListener("change", (e) => { dateFilter = e.target.value; syncDateButtons(); load(); });
+    el("#todayBtn").addEventListener("click", () => {
+      dateFilter = istDateISO(); dateInput.value = dateFilter; syncDateButtons(); load();
+    });
+    el("#allDatesBtn").addEventListener("click", () => {
+      dateFilter = ""; dateInput.value = ""; syncDateButtons(); load();
+    });
+    syncDateButtons();
+
     el("#refreshBtn").addEventListener("click", load);
     await load();
+  }
+
+  // Highlight whichever date shortcut matches the current selection.
+  function syncDateButtons() {
+    const isToday = dateFilter === istDateISO();
+    el("#todayBtn").classList.toggle("active", isToday && !!dateFilter);
+    el("#allDatesBtn").classList.toggle("active", !dateFilter);
   }
 
   async function load() {
@@ -34,6 +56,7 @@
     if (btn) { btn.disabled = true; btn.textContent = "Refreshing…"; }
     let path = `/api/admin/orders?active_only=${activeOnly}`;
     if (filter !== "all") path += `&order_type=${filter}`;
+    if (dateFilter) path += `&date=${dateFilter}`;
     try {
       const { orders } = await API.get(path);
       render(orders);
@@ -48,8 +71,11 @@
 
   function render(orders) {
     if (!orders.length) {
-      el("#ordersBoard").innerHTML = `<div class="empty"><div class="emoji">🍽️</div><h3>No ${activeOnly ? "active " : ""}orders</h3>
-        <p class="text-muted">New orders appear here automatically.</p></div>`;
+      const when = dateFilter
+        ? (dateFilter === istDateISO() ? "today" : `on ${fmtDate(dateFilter)}`)
+        : "";
+      el("#ordersBoard").innerHTML = `<div class="empty"><div class="emoji">🍽️</div><h3>No ${activeOnly ? "active " : ""}orders${when ? " " + esc(when) : ""}</h3>
+        <p class="text-muted">Pick another date or tap “All dates” to see more.</p></div>`;
       return;
     }
     el("#ordersBoard").innerHTML = `<div class="orders-grid">${orders.map(card).join("")}</div>`;

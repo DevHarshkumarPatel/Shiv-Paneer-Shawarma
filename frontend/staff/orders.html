@@ -29,6 +29,11 @@
   <div class="container">
     <div class="board-toolbar">
       <strong>Orders</strong>
+      <div class="date-field">
+        <label for="dateFilter" title="Show orders placed on this date">📅 <input type="date" id="dateFilter" /></label>
+        <button class="btn btn-ghost btn-sm" id="todayBtn">Today</button>
+        <button class="btn btn-ghost btn-sm" id="allDatesBtn">All dates</button>
+      </div>
       <button class="btn btn-outline btn-sm" id="refreshBtn">↻ Refresh</button>
       <span class="text-sm text-muted" id="lastUpdated"></span>
       <span class="spacer"></span>
