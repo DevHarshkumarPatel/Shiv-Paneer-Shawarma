@@ -1,0 +1,110 @@
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Shiv Paneer Shawarma — Authentic Paneer Shawarma, Bowls & Kullad</title>
+<meta name="description" content="Order Shiv Paneer Shawarma online. 100% veg paneer shawarma, cheese delights, kullad and bowls. Dine-in, takeaway or home delivery." />
+<link rel="icon" href="assets/img/logo.jpeg" />
+<link rel="stylesheet" href="assets/css/tokens.css" />
+<link rel="stylesheet" href="assets/css/base.css" />
+<link rel="stylesheet" href="assets/css/components.css" />
+<link rel="stylesheet" href="assets/css/menu.css" />
+<link rel="stylesheet" href="assets/css/tour.css" />
+
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="index.html">
+      <img src="assets/img/logo.jpeg" alt="Shiv Paneer Shawarma logo" />
+      <div>
+        <div class="name">Shiv Paneer Shawarma</div>
+        <div class="tagline">Authentic Taste · 100% Veg</div>
+      </div>
+    </a>
+    <div class="header-actions">
+      <a class="btn btn-ghost btn-sm" href="track.html">Track order</a>
+      <a class="btn btn-outline btn-sm" href="menu.html">Menu</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="container">
+      <img class="hero-logo" src="assets/img/logo.jpeg" alt="Shiv Paneer Shawarma" />
+      <h1>Paneer Shawarma, done right.</h1>
+      <p class="lead">No Maida · No Palm Oil · No Mayonnaise. Whole wheat &amp; millet wraps,
+        ~35g protein per shawarma, loaded kullads and bowls — freshly made to order.</p>
+      <div class="pills">
+        <span>⚡ ~35g Protein</span>
+        <span>🌾 Whole Wheat &amp; Millets</span>
+        <span>🥗 100% Veg</span>
+        <span>🔥 Made fresh</span>
+      </div>
+
+      <h2 style="margin-top:var(--sp-6); color:#fff;">How would you like your order?</h2>
+      <div class="ordertypes">
+        <a class="ot-card" data-mode="dine_in" href="menu.html">
+          <div class="ico">🍽️</div><div class="t">Dine-in</div>
+          <div class="d">Eat at the outlet · no extra charge</div>
+        </a>
+        <a class="ot-card" data-mode="takeaway" href="menu.html">
+          <div class="ico">🥡</div><div class="t">Takeaway</div>
+          <div class="d">Pick up yourself · no extra charge</div>
+        </a>
+        <a class="ot-card" data-mode="delivery" href="menu.html">
+          <div class="ico">🛵</div><div class="t">Delivery</div>
+          <div class="d">To your doorstep · pay online</div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="row wrap" style="gap:var(--sp-4);">
+        <div class="card card-pad grow" style="min-width:240px;">
+          <h3>Buy 2 Get 1 Free</h3>
+          <p class="text-muted text-sm">Running on Shawarma, Cheese Delights, Kullad &amp; Bowls. Add 3 of the same, pay for 2 — applied automatically at checkout.</p>
+        </div>
+        <div class="card card-pad grow" style="min-width:240px;">
+          <h3>Live order tracking</h3>
+          <p class="text-muted text-sm">Every order gets an ID. Follow it from <em>Placed</em> to <em>Delivered</em> on the <a href="track.html">track page</a>.</p>
+        </div>
+        <div class="card card-pad grow" style="min-width:240px;">
+          <h3>Pay your way</h3>
+          <p class="text-muted text-sm">UPI (GPay / PhonePe / Paytm) for online payment, or pay at the counter for dine-in &amp; takeaway.</p>
+        </div>
+      </div>
+      <div class="text-center" style="margin-top:var(--sp-5);">
+        <a class="btn btn-primary btn-lg" href="menu.html">Start your order →</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="row-between wrap">
+      <div>
+        <div class="brand" style="color:#fff;">
+          <img src="assets/img/logo.jpeg" alt="" style="height:38px;width:38px;border-radius:8px;background:#fff;padding:2px;" />
+          <strong>Shiv Paneer Shawarma</strong>
+        </div>
+        <p class="text-sm" style="margin-top:8px;opacity:.8;">Authentic Taste · No Maida · No Palm Oil · No Mayonnaise</p>
+      </div>
+      <div class="text-sm">
+        <a href="menu.html">Menu</a> &nbsp;·&nbsp;
+        <a href="track.html">Track order</a> &nbsp;·&nbsp;
+        <a href="staff/login.html">Staff login</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script src="js/config.js"></script>
+<script src="js/store.js"></script>
+<script>
+  // Remember the chosen order mode when entering from a landing card.
+  document.querySelectorAll(".ot-card").forEach((c) => {
+    c.addEventListener("click", () => Store.setMode(c.dataset.mode));
+  });
+</script>
+<script src="js/tour.js"></script>

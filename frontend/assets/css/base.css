@@ -1,0 +1,61 @@
+/* Reset + base elements + layout primitives + header/footer. */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--ink);
+  background: var(--bg);
+  line-height: 1.5;
+  font-size: var(--fs-md);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4 { margin: 0 0 var(--sp-3); line-height: 1.2; font-weight: 800; }
+p { margin: 0 0 var(--sp-3); }
+a { color: inherit; text-decoration: none; }
+img { max-width: 100%; display: block; }
+button { font-family: inherit; cursor: pointer; }
+ul { margin: 0; padding: 0; list-style: none; }
+
+.container { width: 100%; max-width: var(--container); margin: 0 auto; padding: 0 var(--sp-4); }
+.section { padding: var(--sp-6) 0; }
+.hidden { display: none !important; }
+.text-muted { color: var(--ink-2); }
+.text-sm { font-size: var(--fs-sm); }
+.text-center { text-align: center; }
+.stack > * + * { margin-top: var(--sp-3); }
+.row { display: flex; gap: var(--sp-3); }
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
+.wrap { flex-wrap: wrap; }
+.grow { flex: 1; }
+
+/* Header */
+.site-header {
+  position: sticky; top: 0; z-index: 40;
+  background: linear-gradient(100deg, var(--brand) 0%, var(--brand-600) 60%, var(--brand-700) 100%);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+.site-header .container {
+  min-height: var(--header-h);
+  display: flex; align-items: center; gap: var(--sp-3);
+}
+.brand { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.brand img { height: 42px; width: 42px; border-radius: 10px; background: #fff; padding: 3px; object-fit: contain; box-shadow: var(--shadow-sm); }
+.brand .name { font-weight: 800; font-size: 1.05rem; line-height: 1.1; }
+.brand .tagline { font-size: var(--fs-xs); opacity: 0.9; }
+.header-actions { margin-left: auto; display: flex; align-items: center; gap: var(--sp-2); }
+
+/* Footer */
+.site-footer { background: var(--dark); color: #d9cfc4; margin-top: var(--sp-7); }
+.site-footer .container { padding-top: var(--sp-6); padding-bottom: var(--sp-6); }
+.site-footer a { color: var(--brand); }
+
+/* Utility badges near brand */
+.brand-flags { display: flex; gap: 6px; flex-wrap: wrap; }
+.brand-flags span { font-size: var(--fs-xs); background: rgba(255,255,255,0.18); padding: 2px 8px; border-radius: var(--r-pill); }
+
+@media (max-width: 600px) {
+  .brand .tagline, .brand-flags { display: none; }
+  .brand .name { font-size: 0.95rem; }
+}

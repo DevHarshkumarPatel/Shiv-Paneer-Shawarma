@@ -1,0 +1,62 @@
+/* Guided product tour: spotlight overlay + coachmark tooltips.
+   Self-contained; only depends on design tokens (tokens.css). */
+.tour-root { position: fixed; inset: 0; z-index: 3000; font-family: var(--font); }
+
+/* Full-screen click blocker. Transparent for spotlight steps (the spot's
+   huge box-shadow does the dimming); solid dim for centered steps. */
+.tour-mask { position: fixed; inset: 0; background: transparent; }
+.tour-mask.dim { background: rgba(23, 17, 12, 0.66); }
+
+/* The highlighted cut-out: a transparent rect with a giant shadow that
+   darkens everything around it, plus a saffron glow ring. */
+.tour-spot {
+  position: fixed; border-radius: var(--r-md); pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(23, 17, 12, 0.66);
+  outline: 3px solid var(--brand); outline-offset: 3px;
+  transition: top .25s ease, left .25s ease, width .25s ease, height .25s ease;
+}
+
+.tour-tip {
+  position: fixed; z-index: 3002; width: min(340px, calc(100vw - 32px));
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg); padding: var(--sp-5);
+  opacity: 0; transform: translateY(4px); transition: opacity .2s ease, transform .2s ease;
+}
+.tour-tip.show { opacity: 1; transform: none; }
+.tour-tip.centered { width: min(410px, calc(100vw - 32px)); }
+
+.tour-tip-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-2); gap: var(--sp-3); }
+.tour-badge { font-size: var(--fs-xs); font-weight: 700; color: var(--brand-700); background: var(--brand-soft); padding: 3px 10px; border-radius: var(--r-pill); white-space: nowrap; }
+.tour-x { background: none; border: 0; font-size: 22px; line-height: 1; color: var(--ink-3); cursor: pointer; padding: 0 2px; }
+.tour-x:hover { color: var(--ink); }
+
+.tour-title { margin: 0 0 6px; font-size: var(--fs-lg); line-height: 1.25; }
+.tour-body { margin: 0; font-size: var(--fs-sm); color: var(--ink-2); line-height: 1.55; }
+.tour-body b { color: var(--ink); }
+
+.tour-steps-list { list-style: none; padding: 0; margin: var(--sp-3) 0 0; display: grid; gap: 12px; }
+.tour-steps-list li { display: flex; align-items: center; gap: 12px; font-size: var(--fs-sm); color: var(--ink); }
+.tour-steps-list li .ico { font-size: 1.35rem; flex: 0 0 auto; width: 30px; text-align: center; }
+
+.tour-foot { display: flex; align-items: center; justify-content: space-between; margin-top: var(--sp-4); gap: var(--sp-3); }
+.tour-dots { display: flex; gap: 6px; }
+.tour-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); transition: background .2s; }
+.tour-dot.on { background: var(--brand); }
+.tour-btns { display: flex; gap: 8px; }
+.tour-btn { border-radius: var(--r-pill); padding: 8px 16px; font-size: var(--fs-sm); font-weight: 700; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.tour-btn:hover { background: var(--surface-2); }
+.tour-btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+.tour-btn.primary:hover { background: var(--brand-600); }
+.tour-btn:disabled { opacity: .4; cursor: default; }
+
+/* Replay button injected into each page header. */
+.tour-help { display: inline-flex; align-items: center; gap: 6px; }
+
+@media (max-width: 520px) {
+  .tour-tip { padding: var(--sp-4); }
+  .tour-foot { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-spot, .tour-tip { transition: none; }
+}

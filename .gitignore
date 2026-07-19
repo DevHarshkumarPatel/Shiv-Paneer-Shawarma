@@ -1,0 +1,23 @@
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Env / secrets
+backend/.env
+*.key
+service-account*.json
+
+# Logs / local
+*.log
+/tmp/sps-*.log
+.dev/
+
+# Deploy build artifacts + generated secrets
+.deploy/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

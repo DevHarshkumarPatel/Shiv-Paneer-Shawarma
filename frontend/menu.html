@@ -1,0 +1,78 @@
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Menu — Shiv Paneer Shawarma</title>
+<link rel="icon" href="assets/img/logo.jpeg" />
+<link rel="stylesheet" href="assets/css/tokens.css" />
+<link rel="stylesheet" href="assets/css/base.css" />
+<link rel="stylesheet" href="assets/css/components.css" />
+<link rel="stylesheet" href="assets/css/menu.css" />
+<link rel="stylesheet" href="assets/css/tour.css" />
+
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="index.html">
+      <img src="assets/img/logo.jpeg" alt="Shiv Paneer Shawarma logo" />
+      <div>
+        <div class="name">Shiv Paneer Shawarma</div>
+        <div class="tagline">No Maida · No Palm Oil · No Mayonnaise</div>
+      </div>
+    </a>
+    <div class="header-actions">
+      <a class="btn btn-ghost btn-sm" href="track.html">Track</a>
+      <button class="btn btn-outline btn-sm cart-pill" id="headerCart" aria-label="Cart">
+        🛒 <span class="count hidden" id="headerCartCount">0</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="site-header" style="position:sticky; top:var(--header-h); background:var(--surface); color:var(--ink); box-shadow:var(--shadow-sm); z-index:39;">
+  <div class="container" style="min-height:auto; display:block; padding-top:8px; padding-bottom:0;">
+    <div class="order-mode">
+      <span class="text-sm text-muted">Order type:</span>
+      <div class="seg" id="modeSeg">
+        <button data-mode="dine_in">🍽️ Dine-in</button>
+        <button data-mode="takeaway">🥡 Takeaway</button>
+        <button data-mode="delivery">🛵 Delivery</button>
+      </div>
+      <span class="text-sm text-muted" id="modeHint"></span>
+    </div>
+    <div class="chips" id="catChips"></div>
+  </div>
+</div>
+
+<main>
+  <div class="container">
+    <div class="menu-layout">
+      <div id="menuContent">
+        <div class="center-load"><div class="spinner"></div><div>Loading the menu…</div></div>
+      </div>
+
+      <aside class="cart-panel desktop card" id="cartPanel">
+        <div class="card-pad">
+          <div class="cart-title"><h3 style="margin:0;">Your order</h3><button class="btn btn-sm btn-danger hidden" id="clearCart">Clear</button></div>
+          <div id="cartBody"></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</main>
+
+<!-- Mobile sticky cart bar -->
+<div class="cart-bar" id="cartBar">
+  <div><div class="cb-count" id="cbCount">0 items</div><div class="text-sm" style="opacity:.9;">Tap to view cart</div></div>
+  <div class="cb-total" id="cbTotal">₹0</div>
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <p class="text-sm" style="opacity:.8;">Shiv Paneer Shawarma · Authentic Taste — <a href="staff/login.html">Staff login</a></p>
+  </div>
+</footer>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/store.js"></script>
+<script src="js/menu.js"></script>
+<script src="js/tour.js"></script>

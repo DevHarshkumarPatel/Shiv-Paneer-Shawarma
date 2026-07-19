@@ -1,0 +1,42 @@
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Track your order — Shiv Paneer Shawarma</title>
+<link rel="icon" href="assets/img/logo.jpeg" />
+<link rel="stylesheet" href="assets/css/tokens.css" />
+<link rel="stylesheet" href="assets/css/base.css" />
+<link rel="stylesheet" href="assets/css/components.css" />
+<link rel="stylesheet" href="assets/css/menu.css" />
+<link rel="stylesheet" href="assets/css/checkout.css" />
+<link rel="stylesheet" href="assets/css/tour.css" />
+
+<header class="site-header">
+  <div class="container">
+    <a class="brand" href="index.html">
+      <img src="assets/img/logo.jpeg" alt="Shiv Paneer Shawarma logo" />
+      <div><div class="name">Shiv Paneer Shawarma</div><div class="tagline">Track your order</div></div>
+    </a>
+    <div class="header-actions"><a class="btn btn-ghost btn-sm" href="menu.html">Menu</a></div>
+  </div>
+</header>
+
+<main class="section">
+  <div class="container" style="max-width:720px;">
+    <div class="card step-card"><div class="card-pad">
+      <h2 style="margin-top:0;">Track your order</h2>
+      <p class="text-muted text-sm">Enter the order id we shared with you (e.g. SPS-260718-0001).</p>
+      <div class="input-row">
+        <input class="input" id="orderIdInput" placeholder="SPS-YYMMDD-XXXX" style="text-transform:uppercase;" />
+        <button class="btn btn-primary" id="trackBtn">Track</button>
+      </div>
+    </div></div>
+    <div id="trackResult"></div>
+  </div>
+</main>
+
+<footer class="site-footer"><div class="container"><p class="text-sm" style="opacity:.8;">Shiv Paneer Shawarma · <a href="staff/login.html">Staff login</a></p></div></footer>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/track.js"></script>
+<script src="js/tour.js"></script>

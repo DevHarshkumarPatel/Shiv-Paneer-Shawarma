@@ -1,0 +1,86 @@
+/* Staff / owner back-office styles. */
+.staff-body { background: #f3ede4; }
+
+.staff-header { background: var(--dark); color: #fff; position: sticky; top: 0; z-index: 40; box-shadow: var(--shadow-sm); }
+.staff-header .container { min-height: 58px; display: flex; align-items: center; gap: var(--sp-3); }
+.staff-header .brand .name { color: #fff; }
+.staff-header .nav { margin-left: var(--sp-4); display: flex; gap: 4px; }
+.staff-header .nav a { padding: 8px 14px; border-radius: var(--r-pill); font-weight: 700; font-size: var(--fs-sm); color: #d7ccc0; }
+.staff-header .nav a.active { background: rgba(255,255,255,.12); color: #fff; }
+.staff-header .who { margin-left: auto; display: flex; align-items: center; gap: var(--sp-3); font-size: var(--fs-sm); }
+
+/* Login */
+.login-wrap { min-height: 100vh; display: grid; place-items: center; padding: var(--sp-4);
+  background: radial-gradient(120% 120% at 50% -20%, #3a2a18, var(--dark)); }
+.login-card { width: 100%; max-width: 380px; }
+.login-card .logo { width: 76px; height: 76px; border-radius: 18px; background: #fff; padding: 6px; object-fit: contain; margin: 0 auto var(--sp-3); box-shadow: var(--shadow-md); }
+
+/* Orders board */
+.board-toolbar { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; margin: var(--sp-4) 0; }
+.board-toolbar .spacer { flex: 1; }
+.live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); display: inline-block; box-shadow: 0 0 0 0 rgba(26,143,60,.6); animation: pulse 1.6s infinite; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(26,143,60,.5);} 70%{ box-shadow: 0 0 0 8px rgba(26,143,60,0);} 100%{box-shadow:0 0 0 0 rgba(26,143,60,0);} }
+
+.orders-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--sp-4); }
+.order-card { background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--brand); border-radius: var(--r-md); box-shadow: var(--shadow-sm); overflow: hidden; }
+.order-card.type-delivery { border-left-color: var(--info); }
+.order-card.type-dine_in { border-left-color: var(--veg); }
+.order-card.type-takeaway { border-left-color: var(--brand); }
+.order-card .oc-head { padding: var(--sp-3) var(--sp-4); display: flex; align-items: center; justify-content: space-between; gap: 8px; border-bottom: 1px solid var(--line); }
+.order-card .oc-id { font-weight: 800; }
+.order-card .oc-meta { font-size: var(--fs-xs); color: var(--ink-2); }
+.order-card .oc-body { padding: var(--sp-3) var(--sp-4); }
+.oc-item { font-size: var(--fs-sm); display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
+.oc-item .q { color: var(--brand-700); font-weight: 800; }
+.oc-cust { font-size: var(--fs-xs); color: var(--ink-2); border-top: 1px dashed var(--line); margin-top: 8px; padding-top: 8px; }
+.order-card .oc-foot { padding: var(--sp-3) var(--sp-4); border-top: 1px solid var(--line); background: var(--surface-2); }
+.type-tag { font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; padding: 3px 8px; border-radius: var(--r-pill); }
+.type-tag.delivery { background: #e4effb; color: var(--info); }
+.type-tag.dine_in { background: #e5f5ea; color: var(--veg); }
+.type-tag.takeaway { background: var(--brand-soft); color: var(--brand-700); }
+
+.status-pill { font-size: var(--fs-xs); font-weight: 800; padding: 4px 10px; border-radius: var(--r-pill); text-transform: capitalize; background: var(--surface-2); border: 1px solid var(--line); }
+.status-pill.placed { background:#fff4e0; color:#b5730a; }
+.status-pill.confirmed { background:#e4effb; color:var(--info); }
+.status-pill.preparing, .status-pill.packing { background:#fdeede; color:var(--brand-700); }
+.status-pill.ready, .status-pill.on_the_way { background:#e7f6ec; color:var(--veg); }
+.status-pill.delivered, .status-pill.picked_up, .status-pill.served { background:#e7f6ec; color:#0f7a32; }
+.status-pill.cancelled { background:#fdecea; color:var(--err); }
+
+.pay-pill { font-size: var(--fs-xs); font-weight: 700; padding: 3px 9px; border-radius: var(--r-pill); }
+.pay-pill.paid { background:#e7f6ec; color:#0f7a32; }
+.pay-pill.awaiting_verification { background:#fff4e0; color:#b5730a; }
+.pay-pill.pending { background:var(--surface-2); color:var(--ink-2); }
+.pay-pill.failed { background:#fdecea; color:var(--err); }
+
+.admin-table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: var(--r-md); overflow: hidden; }
+.admin-table th, .admin-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--line); font-size: var(--fs-sm); }
+.admin-table th { background: var(--surface-2); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .03em; color: var(--ink-3); }
+.admin-table tr:last-child td { border-bottom: none; }
+
+.section-tabs { display: flex; gap: 4px; margin: var(--sp-4) 0; flex-wrap: wrap; }
+
+/* Wraps admin tables so they scroll sideways on narrow screens instead of
+   blowing out the page width. */
+.table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: var(--r-md); }
+
+/* ---------------- Responsive: tablet + phone ---------------- */
+@media (max-width: 720px) {
+  /* Header wraps: brand + who on the first row, nav on its own scrollable row. */
+  .staff-header .container { flex-wrap: wrap; row-gap: 8px; padding-top: 8px; padding-bottom: 8px; min-height: 0; gap: var(--sp-2); }
+  .staff-header .nav { order: 3; width: 100%; margin-left: 0; overflow-x: auto; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+  .staff-header .nav a { white-space: nowrap; }
+  .staff-header .who { margin-left: auto; min-width: 0; }
+  .staff-header .who #whoami { display: inline-block; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+
+  .board-toolbar { gap: var(--sp-2); }
+  .board-toolbar .spacer { display: none; }
+  .board-toolbar .chips { width: 100%; overflow-x: auto; }
+}
+
+@media (max-width: 480px) {
+  .orders-grid { grid-template-columns: 1fr; gap: var(--sp-3); }
+  .admin-table th, .admin-table td { padding: 8px 10px; white-space: nowrap; }
+  .order-card .oc-head, .order-card .oc-body, .order-card .oc-foot { padding-left: var(--sp-3); padding-right: var(--sp-3); }
+  .staff-header .who #whoami { max-width: 38vw; }
+}

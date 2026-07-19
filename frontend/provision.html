@@ -1,0 +1,77 @@
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>User Setup — Shiv Paneer Shawarma</title>
+<link rel="icon" href="assets/img/logo.jpeg" />
+<link rel="stylesheet" href="assets/css/tokens.css" />
+<link rel="stylesheet" href="assets/css/base.css" />
+<link rel="stylesheet" href="assets/css/components.css" />
+<link rel="stylesheet" href="assets/css/staff.css" />
+<body class="staff-body">
+
+<!-- Gate: enter the setup key -->
+<div class="login-wrap" id="gate">
+  <div class="card login-card">
+    <div class="card-pad">
+      <img class="logo" src="assets/img/logo.jpeg" alt="Shiv Paneer Shawarma" />
+      <h2 class="text-center" style="margin-bottom:4px;">User Setup</h2>
+      <p class="text-center text-muted text-sm" style="margin-bottom:var(--sp-4);">
+        Enter the setup key to create and manage staff / owner accounts.</p>
+      <form id="gateForm">
+        <div class="field"><label>Setup key</label>
+          <input class="input" id="setupKey" type="password" autocomplete="off" required /></div>
+        <div id="gateErr" class="text-sm" style="color:var(--err);min-height:18px;margin-bottom:8px;"></div>
+        <button class="btn btn-primary btn-block btn-lg" id="gateBtn" type="submit">Unlock</button>
+      </form>
+      <p class="text-center text-sm text-muted" style="margin-top:var(--sp-4);"><a href="index.html">← Back to website</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- App: create + manage users -->
+<div id="app" class="hidden">
+  <header class="staff-header">
+    <div class="container">
+      <a class="brand" href="provision.html">
+        <img src="assets/img/logo.jpeg" alt="logo" style="height:34px;width:34px;border-radius:8px;background:#fff;padding:2px;" />
+        <div class="name">Shiv Paneer Shawarma</div>
+      </a>
+      <nav class="nav"><span style="color:#d7ccc0;padding:8px 14px;">User Setup</span></nav>
+      <div class="who">
+        <span class="text-sm" style="opacity:.8;">Setup mode</span>
+        <button class="btn btn-ghost btn-sm" id="lockBtn" style="border-color:rgba(255,255,255,.4);">Lock</button>
+      </div>
+    </div>
+  </header>
+
+  <main><div class="container" style="max-width:960px;">
+    <div class="card step-card" style="margin-top:var(--sp-5);"><div class="card-pad">
+      <h2 style="margin-top:0;">Create a user</h2>
+      <div class="input-row">
+        <div class="field grow"><label>Name</label><input class="input" id="cName" placeholder="Full name" /></div>
+        <div class="field grow"><label>Email</label><input class="input" id="cEmail" type="email" placeholder="name@shivpaneer.com" /></div>
+      </div>
+      <div class="input-row">
+        <div class="field grow"><label>Password</label>
+          <div class="input-row">
+            <input class="input" id="cPass" type="text" placeholder="min 6 characters" />
+            <button class="btn btn-outline" id="cGen" type="button" title="Generate">🎲</button>
+          </div>
+        </div>
+        <div class="field" style="min-width:150px;"><label>Role</label>
+          <select class="select" id="cRole"><option value="staff">Staff</option><option value="owner">Owner</option></select></div>
+      </div>
+      <button class="btn btn-primary btn-lg" id="createBtn">＋ Create user</button>
+    </div></div>
+
+    <div class="card step-card"><div class="card-pad">
+      <div class="row-between"><h2 style="margin:0;">Existing users</h2><button class="btn btn-outline btn-sm" id="refreshBtn">↻ Refresh</button></div>
+      <div id="usersTable" style="margin-top:var(--sp-3);"></div>
+    </div></div>
+  </div></main>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/provision.js"></script>

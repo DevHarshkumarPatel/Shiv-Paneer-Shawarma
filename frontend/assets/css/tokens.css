@@ -1,0 +1,60 @@
+/* Design tokens: colours, spacing, typography, radius, shadows.
+   The palette is drawn from the Shiv Paneer Shawarma logo (saffron/orange,
+   deep charcoal, temple-red accents). Light UI with a dark hero band. */
+:root {
+  /* Brand */
+  --brand: #F7941D;          /* saffron/orange from logo */
+  --brand-600: #ef7f00;
+  --brand-700: #d96f00;
+  --brand-soft: #fff2e2;
+  --accent-red: #E23A2E;     /* "Paneer" red */
+  --accent-blue: #1f6fd6;    /* "Shawarma" blue */
+  --veg: #1a8f3c;
+
+  /* Surfaces */
+  --bg: #fff7ef;
+  --surface: #ffffff;
+  --surface-2: #fbf3ea;
+  --ink: #20160e;
+  --ink-2: #5c5148;
+  --ink-3: #8a7f75;
+  --line: #ecdfd0;
+  --dark: #17110c;
+  --dark-2: #241a12;
+
+  /* Feedback */
+  --ok: #1a8f3c;
+  --warn: #c98a00;
+  --err: #d33b2c;
+  --info: #1f6fd6;
+
+  /* Typography */
+  --font: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.85rem;
+  --fs-md: 1rem;
+  --fs-lg: 1.2rem;
+  --fs-xl: 1.6rem;
+  --fs-2xl: 2.2rem;
+
+  /* Spacing */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  /* Radius + shadow */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-pill: 999px;
+  --shadow-sm: 0 1px 3px rgba(30, 20, 10, 0.08);
+  --shadow-md: 0 6px 20px rgba(30, 20, 10, 0.10);
+  --shadow-lg: 0 18px 46px rgba(30, 20, 10, 0.18);
+
+  --container: 1120px;
+  --header-h: 64px;
+}
