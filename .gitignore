@@ -21,3 +21,5 @@ service-account*.json
 .DS_Store
 .idea/
 .vscode/
+
+classic_github_token
