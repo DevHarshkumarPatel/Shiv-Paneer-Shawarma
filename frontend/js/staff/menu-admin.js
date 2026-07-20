@@ -2,7 +2,7 @@
 (function () {
   const { money, esc, el, els, toast, modal } = UI;
 
-  let data = { categories: [], items: [], promos: [], coupons: [], areas: [] };
+  let data = { categories: [], items: [], promos: [], coupons: [], areas: [], settings: { ordering_enabled: true } };
   let tab = "items";
 
   document.addEventListener("DOMContentLoaded", init);
@@ -24,14 +24,15 @@
 
   async function load() {
     try {
-      const [cats, items, promos, coupons, areas] = await Promise.all([
+      const [cats, items, promos, coupons, areas, settings] = await Promise.all([
         API.get("/api/admin/menu/categories"),
         API.get("/api/admin/menu/items"),
         API.get("/api/admin/menu/promos"),
         API.get("/api/coupons"),
         API.get("/api/admin/delivery-areas"),
+        API.get("/api/admin/settings"),
       ]);
-      data = { categories: cats.categories, items: items.items, promos: promos.promos, coupons: coupons.coupons, areas: areas.areas };
+      data = { categories: cats.categories, items: items.items, promos: promos.promos, coupons: coupons.coupons, areas: areas.areas, settings };
       render();
     } catch (e) {
       if (e.status === 401) { location.href = "login.html"; return; }
@@ -48,10 +49,11 @@
         ${tabBtn("promos", "🎉 Promos")}
         ${tabBtn("coupons", "🏷️ Coupons")}
         ${tabBtn("areas", "🛵 Delivery Areas")}
+        ${tabBtn("settings", "⚙️ Settings")}
       </div>
       <div id="tabBody"></div>`;
     els("[data-tab]").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; render(); }));
-    ({ items: renderItems, categories: renderCategories, promos: renderPromos, coupons: renderCoupons, areas: renderAreas }[tab])();
+    ({ items: renderItems, categories: renderCategories, promos: renderPromos, coupons: renderCoupons, areas: renderAreas, settings: renderSettings }[tab])();
   }
 
   function toolbar(title, addLabel, onAdd) {
@@ -520,6 +522,45 @@
       if (!payload.name) return toast("Area name is required", "err");
       if (payload.fee < 0) return toast("Fee cannot be negative", "err");
       await save(area ? "put" : "post", area ? `/api/admin/delivery-areas/${area.id}` : "/api/admin/delivery-areas", payload, m);
+    });
+  }
+
+  /* ---------------- Settings ---------------- */
+  function renderSettings() {
+    const body = el("#tabBody");
+    const on = !!data.settings.ordering_enabled;
+    body.innerHTML = `
+      <h2 style="margin:0 0 var(--sp-3);">Settings</h2>
+      <div class="card"><div class="card-pad">
+        <div class="row-between" style="gap:var(--sp-4);flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:600;">Accept customer orders</div>
+            <p class="text-muted text-sm" style="margin:4px 0 0;max-width:46ch;">
+              When this is on, customers can place orders from the customer site.
+              Turn it off to temporarily stop taking new orders (the menu stays visible).</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="orderingToggle" ${on ? "checked" : ""} />
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </label>
+        </div>
+        <div class="text-sm ${on ? "" : "text-muted"}" id="orderingState" style="margin-top:var(--sp-3);">
+          ${on ? "🟢 Ordering is <strong>open</strong> — customers can place orders." : "🔴 Ordering is <strong>closed</strong> — customers cannot place orders."}
+        </div>
+      </div></div>`;
+    el("#orderingToggle").addEventListener("change", async (e) => {
+      const enabled = e.target.checked;
+      e.target.disabled = true;
+      try {
+        data.settings = await API.put("/api/admin/settings", { ordering_enabled: enabled });
+        toast(enabled ? "Ordering turned on" : "Ordering turned off", "ok");
+      } catch (err) {
+        toast(err.message, "err");
+        e.target.checked = !enabled;   // revert on failure
+      } finally {
+        e.target.disabled = false;
+        renderSettings();
+      }
     });
   }
 

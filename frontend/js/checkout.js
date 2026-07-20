@@ -13,6 +13,7 @@
     upiReference: "",
     qr: null,          // server-generated UPI QR (amount pre-filled)
     placing: false,
+    orderingEnabled: true,   // owner master switch (from /api/settings)
   };
 
   const MODE_LABEL = { dine_in: "Dine-in", takeaway: "Takeaway", delivery: "Delivery" };
@@ -20,6 +21,13 @@
   document.addEventListener("DOMContentLoaded", init);
 
   async function init() {
+    // Check the ordering switch first so the customer is notified immediately,
+    // even before we look at the cart.
+    try {
+      const s = await API.get("/api/settings");
+      state.orderingEnabled = s.ordering_enabled !== false;
+    } catch { /* default to enabled if unreachable */ }
+    if (!state.orderingEnabled) { renderClosed(); return; }
     if (!Store.count()) { renderEmpty(); return; }
     try {
       const cfg = await API.get("/api/config");
@@ -39,6 +47,16 @@
     el("#checkoutRoot").innerHTML = `<div class="empty"><div class="emoji">🛒</div>
       <h3>Your cart is empty</h3><p class="text-muted">Add some items before checking out.</p>
       <a class="btn btn-primary" href="menu.html">Browse the menu</a></div>`;
+  }
+
+  function renderClosed() {
+    el("#checkoutRoot").innerHTML = `
+      <div class="notice-banner">🔔 <strong>We're not accepting online orders right now.</strong>
+        You're welcome to explore our menu — please check back a little later to place your order.</div>
+      <div class="empty"><div class="emoji">🔔</div>
+        <h3>Online ordering is paused</h3>
+        <p class="text-muted">Your cart is saved on this device — you'll be able to place your order once ordering reopens.</p>
+        <a class="btn btn-primary" href="menu.html">Back to menu</a></div>`;
   }
 
   async function refreshQuote() {
@@ -238,6 +256,7 @@
   /* ---------------- place order ---------------- */
   async function placeOrder() {
     if (state.placing) return;
+    if (!state.orderingEnabled) { renderClosed(); return; }
     const c = state.customer;
     if (!c.name.trim()) return toast("Please enter your name", "err");
     if (!/^[0-9]{10}$/.test(c.phone)) return toast("Enter a valid 10-digit phone number", "err");

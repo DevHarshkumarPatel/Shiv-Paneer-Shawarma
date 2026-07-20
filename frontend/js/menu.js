@@ -5,6 +5,7 @@
   let quoteTimer = null;
   let lastQuote = null;
   let couponCode = Store.get().coupon || "";
+  let orderingEnabled = true;   // owner master switch (from /api/settings)
 
   const MODE_HINTS = {
     dine_in: "Eat at the outlet — no extra charge.",
@@ -22,9 +23,28 @@
       const cfg = await API.get("/api/config");
       window.SPS_CONFIG.runtime = cfg || {};
     } catch { /* non-fatal */ }
+    try {
+      const s = await API.get("/api/settings");
+      orderingEnabled = s.ordering_enabled !== false;
+    } catch { /* default to enabled if unreachable */ }
     await loadMenu();
+    applyOrderingState();
     syncMode();
     onCartChange();
+  }
+
+  /* When the owner has turned ordering off, keep the menu browsable but block
+     placing orders: show a banner and disable the "add" buttons. */
+  function applyOrderingState() {
+    const layout = document.querySelector(".menu-layout");
+    const existing = el("#orderingClosedBanner");
+    if (orderingEnabled) { if (existing) existing.remove(); return; }
+    if (!existing && layout) {
+      layout.insertAdjacentHTML("beforebegin",
+        `<div class="notice-banner" id="orderingClosedBanner">🔔 <strong>We're not accepting online orders right now.</strong>
+          You're welcome to explore our menu — please check back a little later to place your order.</div>`);
+    }
+    els("[data-add]").forEach((b) => { b.disabled = true; b.textContent = "Ordering closed"; });
   }
 
   async function loadMenu() {
@@ -134,6 +154,7 @@
   }
 
   function openItemModal(itemId) {
+    if (!orderingEnabled) { toast("Online ordering is currently closed", "err"); return; }
     const item = allItemsFlat().find((i) => i.id === itemId);
     if (!item) return;
     const { bases, sizes } = variantShape(item);
@@ -274,7 +295,7 @@
         </div>
       </div>
       <div class="cart-totals">${totals}</div>
-      <button class="btn btn-primary btn-block btn-lg" id="goCheckout" style="margin-top:var(--sp-3);">Proceed to checkout →</button>`;
+      <button class="btn btn-primary btn-block btn-lg" id="goCheckout" style="margin-top:var(--sp-3);" ${orderingEnabled ? "" : "disabled"}>${orderingEnabled ? "Proceed to checkout →" : "Ordering closed"}</button>`;
 
     target.querySelectorAll("[data-inc]").forEach((b) => b.addEventListener("click", () => {
       const l = Store.get().lines.find((x) => Store.lineKey(x) === b.dataset.inc); Store.setQty(b.dataset.inc, l.quantity + 1);

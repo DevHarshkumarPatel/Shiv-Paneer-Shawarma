@@ -10,7 +10,7 @@ from .config import settings
 from .db import wrap_router_endpoints
 from .routers import (
     auth, menu_public, menu_admin, coupons, orders, orders_admin, payments,
-    provision, delivery_areas,
+    provision, delivery_areas, settings as settings_router,
 )
 
 # Disable the built-in public docs endpoints; we re-serve them below behind
@@ -34,6 +34,7 @@ app.include_router(orders_admin.router)
 app.include_router(payments.router)
 app.include_router(provision.router)
 app.include_router(delivery_areas.router)
+app.include_router(settings_router.router)
 
 # Every sync endpoint that touches the datastore must run inside an NDB context.
 # Wrapping here keeps the routers clean of context boilerplate.

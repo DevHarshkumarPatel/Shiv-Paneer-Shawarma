@@ -5,6 +5,7 @@ from .coupon import Coupon
 from .order import Order, OrderItem, CustomerInfo, PaymentInfo, StatusEvent
 from .counter import Counter
 from .delivery_area import DeliveryArea
+from .setting import Setting
 
 __all__ = [
     "User",
@@ -21,4 +22,5 @@ __all__ = [
     "PaymentInfo",
     "StatusEvent",
     "Counter",
+    "Setting",
 ]

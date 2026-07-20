@@ -119,3 +119,12 @@
 .ms-opt:last-child { border-bottom: none; }
 .ms-opt:hover { background: var(--surface-2); }
 .ms-opt input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--brand); margin: 0; flex: none; cursor: pointer; }
+
+/* ---- Toggle switch (settings) ---- */
+.switch { position: relative; display: inline-flex; align-items: center; flex: none; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch-track { width: 48px; height: 28px; border-radius: 999px; background: var(--ink-3); transition: background .18s ease; display: inline-block; }
+.switch-thumb { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: var(--shadow-md); transition: transform .18s ease; }
+.switch input:checked + .switch-track { background: var(--ok); }
+.switch input:checked + .switch-track .switch-thumb { transform: translateX(20px); }
+.switch input:disabled + .switch-track { opacity: .6; cursor: default; }

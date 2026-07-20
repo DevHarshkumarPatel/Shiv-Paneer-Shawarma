@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..models import (
-    Order, OrderItem, CustomerInfo, PaymentInfo, StatusEvent, Coupon,
+    Order, OrderItem, CustomerInfo, PaymentInfo, StatusEvent, Coupon, Setting,
 )
 from ..schemas.models import CreateOrderRequest, QuoteRequest
 from ..services.order_ids import generate_order_id
@@ -23,6 +23,10 @@ def quote(body: QuoteRequest):
 
 @router.post("")
 def create_order(body: CreateOrderRequest):
+    # Owner master switch: when ordering is turned off, reject new orders.
+    if not Setting.singleton().ordering_enabled:
+        raise HTTPException(status.HTTP_403_FORBIDDEN,
+                            "Online ordering is currently closed. Please try again later.")
     if body.order_type not in ("dine_in", "takeaway", "delivery"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid order type")
 

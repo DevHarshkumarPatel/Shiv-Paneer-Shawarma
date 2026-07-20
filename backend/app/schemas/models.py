@@ -127,6 +127,11 @@ class DeliveryAreaPayload(BaseModel):
     sort_order: int = 0
 
 
+# ---- Store settings ----
+class SettingsPayload(BaseModel):
+    ordering_enabled: bool = True
+
+
 class CouponPayload(BaseModel):
     code: str
     ctype: str          # percent | flat

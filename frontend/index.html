@@ -26,6 +26,7 @@
 </header>
 
 <main>
+  <div class="container" id="closedNoticeWrap" hidden style="padding-top:var(--sp-4);"></div>
   <section class="hero">
     <div class="container">
       <img class="hero-logo" src="assets/img/logo.jpeg" alt="Shiv Paneer Shawarma" />
@@ -74,7 +75,7 @@
         </div>
       </div>
       <div class="text-center" style="margin-top:var(--sp-5);">
-        <a class="btn btn-primary btn-lg" href="menu.html">Start your order →</a>
+        <a class="btn btn-primary btn-lg" id="startOrderCta" href="menu.html">Start your order →</a>
       </div>
     </div>
   </section>
@@ -100,11 +101,28 @@
 </footer>
 
 <script src="js/config.js"></script>
+<script src="js/api.js"></script>
 <script src="js/store.js"></script>
 <script>
   // Remember the chosen order mode when entering from a landing card.
   document.querySelectorAll(".ot-card").forEach((c) => {
     c.addEventListener("click", () => Store.setMode(c.dataset.mode));
   });
+
+  // Reflect the owner's ordering switch on the landing page, so customers
+  // learn up-front (not at checkout) when online ordering is paused.
+  (async () => {
+    let open = true;
+    try { open = (await API.get("/api/settings")).ordering_enabled !== false; } catch { /* assume open */ }
+    if (open) return;
+    const wrap = document.getElementById("closedNoticeWrap");
+    if (wrap) {
+      wrap.innerHTML = `<div class="notice-banner">🔔 <strong>We're not accepting online orders right now.</strong>
+        You're welcome to explore our menu — please check back a little later to place your order.</div>`;
+      wrap.hidden = false;
+    }
+    const cta = document.getElementById("startOrderCta");
+    if (cta) cta.textContent = "Browse the menu →";
+  })();
 </script>
 <script src="js/tour.js"></script>
