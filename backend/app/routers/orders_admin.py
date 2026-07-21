@@ -52,6 +52,23 @@ def list_orders(
     return {"orders": orders}
 
 
+@router.get("/latest")
+def latest_order(user=Depends(get_current_user)):
+    """Cheap probe for new-order alerts: just the newest order's id + timestamp.
+
+    Deliberately tiny (no full serialization, single get) so the owner dashboard
+    can poll it frequently without the Cloud Run cost of listing every order.
+    Declared before ``/{public_id}`` so 'latest' isn't captured as a public_id.
+    """
+    o = Order.query().order(-Order.created_at).get()
+    if not o:
+        return {"latest_id": None, "latest_created_at": None}
+    return {
+        "latest_id": o.public_id,
+        "latest_created_at": o.created_at.isoformat() if o.created_at else None,
+    }
+
+
 @router.get("/{public_id}")
 def get_one(public_id: str, user=Depends(get_current_user)):
     order = Order.by_public_id(public_id)

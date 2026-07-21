@@ -35,6 +35,19 @@
         <button class="btn btn-ghost btn-sm" id="allDatesBtn">All dates</button>
       </div>
       <button class="btn btn-outline btn-sm" id="refreshBtn">↻ Refresh</button>
+      <button class="btn btn-ghost btn-sm" id="alertsBtn" title="Play a sound when a new order arrives (only while this page is open)">🔕 Alerts off</button>
+      <span class="alert-sound" id="alertSoundCtl" title="New-order alert sound — saved on this device">
+        <select class="select" id="alertSound">
+          <option value="notify">Notify</option>
+          <option value="alarm">Alarm</option>
+          <option value="chime">Chime</option>
+          <option value="bell">Bell</option>
+          <option value="ding">Ding</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" id="alertPreview" title="Preview sound">▶</button>
+        <input type="range" id="alertVol" min="0" max="1" step="0.05" title="Alert volume" />
+        <label class="btn btn-ghost btn-sm" id="alertUploadBtn" title="Use your own sound file (this device only)">🎵 Upload<input type="file" id="alertUpload" accept="audio/*" hidden /></label>
+      </span>
       <span class="text-sm text-muted" id="lastUpdated"></span>
       <span class="spacer"></span>
       <div class="chips" style="padding:0;overflow:visible;">
