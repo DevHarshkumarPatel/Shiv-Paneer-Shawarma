@@ -197,44 +197,32 @@ You want each to reach **`Ready: True`** (cert `CertificateProvisioned`). While 
 
 ## 7. Point the app at the custom domains (two config changes)
 
-Right now the frontend was built to call the backend's `*.run.app` URL, and the backend
-only trusts the frontend's `*.run.app` origin. Update both to the custom domains.
+Right now the backend only trusts the frontend's `*.run.app` origin. The frontend
+already points itself at the right API host (7a explains how); the backend needs
+one config change (7b).
 
-### 7a. Frontend `API_BASE` → `https://api.shivpaneershawarma.com`
+### 7a. Frontend `API_BASE` → `https://api.shivpaneershawarma.com` (automatic)
 
-The frontend's `API_BASE` is **baked into the image** at deploy time by `deploy.sh`
-(section 9, it overwrites `frontend/js/config.js`). So a plain redeploy would overwrite
-any manual change. Make it durable by editing **`deploy.sh`**:
+**Nothing to change.** `frontend/js/config.js` derives `API_BASE` from the hostname
+the page was opened on:
 
-Find this block (~line 402):
+| Page opened on | `API_BASE` becomes |
+|---|---|
+| `localhost` / `127.0.0.1` / a LAN IP | `http://<same host>:8000` |
+| `sps-frontend-….run.app` | the backend `*.run.app` URL baked in by `deploy.sh` |
+| `shivpaneershawarma.com` or `www.shivpaneershawarma.com` | `https://api.shivpaneershawarma.com` |
 
-```bash
-window.SPS_CONFIG = {
-  API_BASE: "$BACKEND_URL",
-  CURRENCY: "₹",
-  runtime: {},
-};
-```
+So once the DNS + Cloud Run mapping from steps 3–6 is live, the site calls the
+`api.` subdomain on its own. Any future domain works the same way with no code
+change — the rule is always `api.<the domain the site is served from>`.
 
-Change `API_BASE` to prefer a custom URL when set:
+`deploy.sh` (section 9) patches only the `window.SPS_BACKEND_URL = "";` line in
+`config.js` to hold the `*.run.app` fallback; it no longer overwrites the file, so
+the derivation survives every redeploy.
 
-```bash
-window.SPS_CONFIG = {
-  API_BASE: "${PUBLIC_API_URL:-$BACKEND_URL}",
-  CURRENCY: "₹",
-  runtime: {},
-};
-```
-
-Then set the variable and redeploy the frontend:
-
-```bash
-export PUBLIC_API_URL="https://api.shivpaneershawarma.com"
-./deploy.sh          # choose the "frontend only" option when prompted
-```
-
-> Prefer not to touch `deploy.sh`? Alternatively, keep `PUBLIC_API_URL` exported and
-> redeploy — but the durable edit above means you never forget it.
+> **The one requirement:** the API must live at `api.<your domain>`. If you ever put
+> it somewhere else, edit the last line of `_spsApiBase()` in
+> `frontend/js/config.js` and redeploy the frontend.
 
 ### 7b. Backend `CORS_ORIGINS` → the site's custom origins
 
@@ -317,7 +305,7 @@ Then in a **browser**:
 | Menu empty / console shows **CORS error** | `CORS_ORIGINS` missing the site origin | Re-run step **7b** with the exact origin from the browser error |
 | Staff **login fails / immediately logged out** | Cookie blocked | Confirm both hosts are HTTPS and on `shivpaneershawarma.com`; backend cookie is `Secure; SameSite=None`; `credentials:'include'` is already set |
 | `curl https://api…/health` fails but `*.run.app/health` works | `api` mapping/DNS not ready | Check step 6 status; verify the `api` CNAME → `ghs.googlehosted.com` |
-| Site loads but calls still hit `*.run.app` | Frontend image still has old `API_BASE` | Redo step **7a** and redeploy the **frontend** |
+| Site loads but calls still hit `*.run.app` | You are browsing the `*.run.app` frontend URL, not the custom domain — `API_BASE` follows the address bar | Open `https://shivpaneershawarma.com`; if it still happens there, check `_spsApiBase()` in `frontend/js/config.js` shipped in the image |
 
 ---
 
