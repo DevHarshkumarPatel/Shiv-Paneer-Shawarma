@@ -456,8 +456,23 @@ server {
     location / {
         try_files $uri $uri/ =404;
     }
-    location /assets/ {
-        expires 1h;
+    # Asset filenames are NOT content-hashed, so whatever is cached hard here
+    # stays pinned in browsers until it expires. Split by how often each type
+    # actually changes.
+
+    # HTML/CSS/JS change on most deploys => revalidate on every load. A 304 is
+    # a few hundred bytes, whereas a stale stylesheet is a visibly broken site
+    # for the whole cache lifetime. ("expires 1h" on /assets/ used to do
+    # exactly that: CSS edits took up to an hour to show up.)
+    location ~* \.(html|css|js)$ {
+        add_header Cache-Control "no-cache";
+    }
+
+    # Media is heavy and rarely edited => cache hard. To push a replacement out
+    # before 30d, rename the file and update the reference in the HTML.
+    location ~* \.(jpe?g|png|gif|svg|webp|ico|mp3|mp4|webm)$ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
         access_log off;
     }
 }

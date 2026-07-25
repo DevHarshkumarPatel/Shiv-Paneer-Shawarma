@@ -10,6 +10,31 @@
 .hero .pills { display: flex; gap: 10px; flex-wrap: wrap; margin-top: var(--sp-4); }
 .hero .pills span { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.18); padding: 6px 14px; border-radius: var(--r-pill); font-size: var(--fs-sm); font-weight: 600; }
 
+/* Hero backdrop video. The hero is already a dark band with white copy,
+   overflow:hidden, and .hero .container lifted to z-index 1 — so the video
+   only has to fill the box underneath. The radial gradient on .hero stays as
+   the fallback whenever the video is not loaded (see js/bgvideo.js). */
+.hero-video { position: absolute; inset: 0; overflow: hidden; }
+.hero-video video { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Scrim. The hero copy is white and has to stay readable over any frame of a
+   bright, high-contrast food clip. */
+.hero-video::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(180deg, rgba(23,17,12,.58) 0%, rgba(23,17,12,.80) 100%);
+}
+/* On phones the hero box is roughly 3x taller than it is wide, so stretching a
+   16:9 clip over all of it with object-fit:cover zooms in ~3x and shows a
+   smeared centre crop. Pin the video to the top of the hero at its own aspect
+   ratio instead — the whole frame stays visible, uncropped — and fade it down
+   into the hero gradient so there is no hard edge where it ends. */
+@media (max-width: 700px) {
+  .hero-video { bottom: auto; height: auto; aspect-ratio: 16 / 9; }
+  .hero-video::after {
+    background: linear-gradient(180deg,
+      rgba(23,17,12,.40) 0%, rgba(23,17,12,.62) 55%, var(--dark) 100%);
+  }
+}
+
 /* Order-type selector cards */
 .ordertypes { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-3); margin-top: var(--sp-5); }
 .ot-card {

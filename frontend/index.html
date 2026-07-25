@@ -28,6 +28,17 @@
 <main>
   <div class="container" id="closedNoticeWrap" hidden style="padding-top:var(--sp-4);"></div>
   <section class="hero">
+    <!-- Decorative backdrop for the hero copy. muted + playsinline are both
+         required for mobile browsers to autoplay without a tap. The <source>
+         tags are attached by bgvideo.js, never in markup, so the file is not
+         downloaded when only the poster should show (reduced-motion,
+         Save-Data) — and phones get a smaller encode. -->
+    <div class="hero-video" aria-hidden="true">
+      <video data-bgvideo autoplay muted loop playsinline preload="none"
+             poster="assets/img/hero-poster.jpg"
+             data-mp4="assets/video/hero.mp4"
+             data-mp4-sm="assets/video/hero-sm.mp4"></video>
+    </div>
     <div class="container">
       <img class="hero-logo" src="assets/img/logo.jpeg" alt="Shiv Paneer Shawarma" />
       <h1>Paneer Shawarma, done right.</h1>
@@ -100,6 +111,7 @@
   </div>
 </footer>
 
+<script src="js/bgvideo.js"></script>
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
 <script src="js/store.js"></script>
