@@ -228,3 +228,47 @@
 /* The closing CTA already ends the page on a dark band; the shared top margin
    would just add a gap between two identical colours. */
 .site-footer { margin-top: 0; }
+
+/* ------------------------------------------------------------ find us / faq ---
+   Local-SEO block. Reuses the .lp-info card look (same .card + .ico shape) but
+   needs its own grid because these three cards hold links and an <address>,
+   not one line of copy each. */
+.lp-visit { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.lp-visit .card { padding: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-2); align-items: flex-start; }
+.lp-visit .ico { color: var(--brand); }
+.lp-visit .ico svg { width: 26px; height: 26px; }
+.lp-visit h3 { margin: 0; font-size: var(--fs-md); }
+.lp-visit p, .lp-visit address {
+  margin: 0; font-style: normal; font-size: var(--fs-sm);
+  color: var(--ink-2); line-height: 1.55;
+}
+.lp-visit .muted { color: var(--ink-3); }
+.lp-visit .btn { margin-top: auto; }
+/* Delivery-area list. Pills rather than a bullet list: 20 areas as bullets is a
+   wall, as pills it scans in one pass and each one is still plain text. */
+.lp-areas { margin: var(--sp-6) 0 0; }
+.lp-areas h3 { margin: 0; font-size: var(--fs-md); }
+.lp-areas p { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--ink-2); }
+.lp-areas .note { color: var(--ink-3); max-width: 70ch; line-height: 1.6; }
+.lp-area-list {
+  list-style: none; margin: var(--sp-3) 0 var(--sp-3); padding: 0;
+  display: flex; flex-wrap: wrap; gap: var(--sp-2);
+}
+.lp-area-list li {
+  padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--r-pill);
+  background: var(--surface); font-size: var(--fs-xs); font-weight: 600; color: var(--ink-2);
+}
+
+/* <details> so the answers do not push the closing CTA off the page, while
+   still being real crawlable text (required for the FAQPage rich result). */
+.lp-faq { display: grid; gap: var(--sp-2); max-width: 78ch; }
+.lp-faq details { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.lp-faq details[open] { border-color: var(--brand); }
+.lp-faq summary {
+  cursor: pointer; padding: var(--sp-4); font-weight: 700; font-size: var(--fs-sm);
+  list-style: none; display: flex; justify-content: space-between; gap: var(--sp-3);
+}
+.lp-faq summary::-webkit-details-marker { display: none; }
+.lp-faq summary::after { content: "+"; color: var(--brand); font-weight: 800; flex: 0 0 auto; }
+.lp-faq details[open] summary::after { content: "–"; }
+.lp-faq details p { margin: 0; padding: 0 var(--sp-4) var(--sp-4); font-size: var(--fs-sm); color: var(--ink-2); line-height: 1.6; }

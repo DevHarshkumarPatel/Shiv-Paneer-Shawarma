@@ -1,0 +1,12 @@
+# Shiv Paneer Shawarma — https://shivpaneershawarma.com
+# Only two pages are worth crawling: the landing page and the menu. Everything
+# else is a logged-in tool or a per-order view with nothing to rank for.
+
+User-agent: *
+Allow: /
+Disallow: /staff/
+Disallow: /provision.html
+Disallow: /checkout.html
+Disallow: /track.html
+
+Sitemap: https://shivpaneershawarma.com/sitemap.xml

@@ -452,10 +452,29 @@ server {
     root   /usr/share/nginx/html;
     index  index.html;
 
+    # Compress the text payloads. Page speed is a ranking input and this is the
+    # cheapest win available: the landing page HTML + CSS is mostly prose and
+    # shrinks ~70%. Media below is already compressed, so it is left out.
+    gzip              on;
+    gzip_comp_level   5;
+    gzip_min_length   256;
+    gzip_vary         on;
+    gzip_proxied      any;
+    gzip_types        text/plain text/css text/xml application/javascript
+                      application/json application/xml application/ld+json
+                      image/svg+xml application/rss+xml;
+
     # No client-side router: serve files as-is, 404 when missing.
     location / {
         try_files $uri $uri/ =404;
     }
+
+    # Crawler files. Short cache so an edit is picked up on the next crawl
+    # instead of a day later. (nginx's own mime.types already serves these as
+    # text/plain and text/xml, which is what Search Console expects.)
+    location = /robots.txt  { add_header Cache-Control "public, max-age=3600"; }
+    location = /sitemap.xml { add_header Cache-Control "public, max-age=3600"; }
+
     # Asset filenames are NOT content-hashed, so whatever is cached hard here
     # stays pinned in browsers until it expires. Split by how often each type
     # actually changes.

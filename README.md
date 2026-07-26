@@ -143,10 +143,23 @@ backend/
   inspect_db.py        # read-only DB viewer (summary/menu/orders/users/coupons)
 frontend/
   index.html menu.html checkout.html track.html
+  robots.txt sitemap.xml   # crawler files; only / and /menu.html are indexable
   staff/ (login, orders, menu-admin)
   assets/css/ (tokens, base, components, menu, checkout, staff)
   js/ (config, api, ui, store, menu, checkout, track) + js/staff/ (auth, orders, menu-admin)
 ```
+
+## Search / local SEO
+
+The site is marked up to rank in Surat for "best shawarma in Surat" and
+"veg shawarma in Surat" — city in the titles/H1s, `Restaurant` + `FAQPage`
+JSON-LD, canonicals, `robots.txt` and `sitemap.xml`.
+
+The address, phone, hours and coordinates are still **placeholders**. Find them
+with `grep -rn "TODO(SEO)" frontend/` and read
+[SEO-CHECKLIST.md](SEO-CHECKLIST.md) — it also covers the off-page half (Google
+Business Profile, reviews, citations), which is what actually decides the local
+ranking.
 
 ## Order status flow
 

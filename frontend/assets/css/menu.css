@@ -177,3 +177,10 @@
 .cl-act { padding: 6px 11px; font-size: .72rem; }
 .cart-gone { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; }
 .cart-gone .btn { flex: 0 0 auto; }
+
+/* --------------------------------------------------------------- menu intro ---
+   Static heading + copy above the API-rendered list. Small on purpose: the
+   customer came here for the items, this is mainly what a crawler reads. */
+.menu-intro { padding: var(--sp-5) 0 var(--sp-4); max-width: 72ch; }
+.menu-intro h1 { font-size: clamp(1.4rem, 5vw, 2rem); margin: 0; }
+.menu-intro p { margin: var(--sp-2) 0 0; font-size: var(--fs-sm); color: var(--ink-2); line-height: 1.6; }
