@@ -43,6 +43,31 @@ const Store = (() => {
   }
 
   function remove(key) { state.lines = state.lines.filter((l) => lineKey(l) !== key); persist(); }
+
+  /* Replace one line with a different variant, keeping its position and quantity.
+     Used when something sells out and the customer takes the offered swap — as
+     remove()+add() it would notify subscribers twice (re-quoting an intermediate
+     cart) and send the line to the bottom of the list. */
+  function swap(key, line) {
+    const idx = state.lines.findIndex((l) => lineKey(l) === key);
+    if (idx < 0) return;
+    const next = { ...line, quantity: line.quantity || state.lines[idx].quantity };
+    state.lines.splice(idx, 1, next);
+    // If the customer already had that variant in the cart, fold the two into
+    // one line rather than leaving two rows of the same thing.
+    const dupe = state.lines.findIndex((l, i) => i !== idx && lineKey(l) === lineKey(next));
+    if (dupe >= 0) {
+      state.lines[idx].quantity += state.lines[dupe].quantity;
+      state.lines.splice(dupe, 1);
+    }
+    persist();
+  }
+
+  function removeMany(keys) {
+    const drop = new Set(keys);
+    state.lines = state.lines.filter((l) => !drop.has(lineKey(l)));
+    persist();
+  }
   function clear() { state.lines = []; state.coupon = ""; persist(); }
   function setMode(mode) { state.mode = mode; persist(); }
   // No-op when unchanged: requestQuote() calls this from inside a Store
@@ -61,5 +86,5 @@ const Store = (() => {
 
   function subscribe(fn) { subs.add(fn); return () => subs.delete(fn); }
 
-  return { get: () => state, add, setQty, remove, clear, setMode, setCoupon, count, lineKey, toCartPayload, subscribe };
+  return { get: () => state, add, setQty, remove, removeMany, swap, clear, setMode, setCoupon, count, lineKey, toCartPayload, subscribe };
 })();

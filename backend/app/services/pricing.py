@@ -39,6 +39,14 @@ class PricingResult:
     delivery_area_id: int = 0
     delivery_area_name: str = ""
     delivery_area_required: bool = False   # delivery order with no valid area chosen
+    # Lines dropped because the item or that exact base/size ran out. Reported
+    # rather than silently removed: a cart in localStorage outlives the day it
+    # was filled, and a total that quietly shrinks looks like a pricing bug.
+    #
+    # Structured, not just names, so the client can match the dead line exactly
+    # and offer to remove it or swap it for a variant that is still on — a name
+    # alone leaves the customer to work out which row to fix.
+    unavailable: list[dict] = field(default_factory=list)
     total: float = 0.0
 
     def to_dict(self) -> dict:
@@ -61,6 +69,8 @@ class PricingResult:
             "delivery_area_id": self.delivery_area_id,
             "delivery_area_name": self.delivery_area_name,
             "delivery_area_required": self.delivery_area_required,
+            "unavailable": list(self.unavailable),
+            "unavailable_labels": [u["label"] for u in self.unavailable],
             "total": round(self.total, 2),
         }
 
@@ -75,12 +85,19 @@ def _load_active_promos() -> dict[tuple[str, int], Promo]:
 
 
 def _match_variant(item: Item, base: str, size: str):
+    """Resolve a cart line to a sellable variant, or None.
+
+    Availability is enforced here rather than at the call site because this is
+    the one place both /quote and order creation resolve a variant — an
+    unavailable combination must be unsellable on both paths, not just hidden in
+    the menu UI.
+    """
     for v in item.variants:
         if v.base == base and v.size == size:
-            return v
+            return v if v.is_available() else None
     # Fall back to the first variant if the client sent nothing / a stale combo
     # but only when the item genuinely has a single variant.
-    if len(item.variants) == 1:
+    if len(item.variants) == 1 and item.variants[0].is_available():
         return item.variants[0]
     return None
 
@@ -150,8 +167,22 @@ def price_cart(cart: list[dict], order_type: str, coupon_code: str = "",
         item = Item.get_by_id(item_id)
         if not item or not item.active:
             continue
-        variant = _match_variant(item, raw.get("base", ""), raw.get("size", ""))
+        base, size = raw.get("base", ""), raw.get("size", "")
+        variant_label = " · ".join(p for p in (base, size) if p)
+        if not item.is_available():
+            result.unavailable.append({
+                "item_id": item_id, "base": base, "size": size, "name": item.name,
+                "variant_label": variant_label, "whole_item": True,
+                "label": item.name,
+            })
+            continue
+        variant = _match_variant(item, base, size)
         if not variant:
+            result.unavailable.append({
+                "item_id": item_id, "base": base, "size": size, "name": item.name,
+                "variant_label": variant_label, "whole_item": False,
+                "label": f"{item.name}{f' ({variant_label})' if variant_label else ''}",
+            })
             continue
 
         unit_price = float(variant.price)

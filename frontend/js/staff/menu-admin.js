@@ -113,13 +113,28 @@
   function itemRow(i) {
     const prices = i.variants.map((v) => v.price);
     const range = prices.length ? (Math.min(...prices) === Math.max(...prices) ? money(prices[0]) : `${money(Math.min(...prices))}–${money(Math.max(...prices))}`) : "—";
+    // How many variants are actually sellable — the number the kitchen cares
+    // about mid-service, not just whether the item exists.
+    const offCount = i.variants.filter((v) => v.available === false).length;
+    const soldOut = i.available === false;
+    const stock = soldOut
+      ? `<span class="pill-out">Sold out</span>`
+      : offCount
+        ? `<span class="pill-part">${i.variants.length - offCount}/${i.variants.length} in stock</span>`
+        : `<span class="pill-in">In stock</span>`;
     return `<tr draggable="true" data-id="${i.id}">
       <td class="drag-handle text-muted" title="Drag to reorder" style="cursor:grab;user-select:none;width:1%;">⠿</td>
+      <td style="width:1%;">${i.image_url
+        ? `<img class="row-thumb" src="${esc(API.assetUrl(i.image_url))}" alt="" loading="lazy" />`
+        : `<span class="row-thumb row-thumb-empty" title="No photo">＋</span>`}</td>
       <td><strong>${esc(i.name)}</strong>${i.tags.length ? `<br/><span class="text-sm text-muted">${esc(i.tags.join(", "))}</span>` : ""}</td>
       <td>${i.variants.length} variant(s)</td>
       <td>${range}</td>
       <td>${i.active ? "✅" : "⛔"}</td>
-      <td class="row"><button class="btn btn-sm btn-outline" data-edit="${i.id}">Edit</button>
+      <td>${stock}</td>
+      <td class="row"><button class="btn btn-sm ${soldOut ? "btn-primary" : "btn-outline"}" data-stock="${i.id}"
+            title="Toggle sold out for the whole item">${soldOut ? "Back in stock" : "Sold out"}</button>
+        <button class="btn btn-sm btn-outline" data-edit="${i.id}">Edit</button>
         <button class="btn btn-sm btn-danger" data-del="${i.id}">Delete</button></td>
     </tr>`;
   }
@@ -137,20 +152,34 @@
     if (orphans.length) groups.push({ cat: { id: 0, name: "Uncategorized" }, items: orphans });
 
     if (!data.items.length) {
-      body.insertAdjacentHTML("beforeend", `<div class="table-wrap"><table class="admin-table"><tbody>${emptyRow(6)}</tbody></table></div>`);
+      body.insertAdjacentHTML("beforeend", `<div class="table-wrap"><table class="admin-table"><tbody>${emptyRow(8)}</tbody></table></div>`);
     }
     groups.forEach(({ cat, items }) => {
       if (!items.length) return;
       const rows = items.map(itemRow).join("");
       body.insertAdjacentHTML("beforeend", `
         <h3 style="margin:var(--sp-4) 0 var(--sp-2);">${esc(cat.name)}</h3>
-        <div class="table-wrap"><table class="admin-table"><thead><tr><th></th><th>Item</th><th>Variants</th><th>Price</th><th>Active</th><th></th></tr></thead>
+        <div class="table-wrap"><table class="admin-table"><thead><tr><th></th><th></th><th>Item</th><th>Variants</th><th>Price</th><th>Active</th><th>Stock</th><th></th></tr></thead>
           <tbody data-cat="${cat.id}">${rows}</tbody></table></div>`);
     });
 
     el("#addBtn").addEventListener("click", () => itemForm());
     els("[data-edit]", body).forEach((b) => b.addEventListener("click", () => itemForm(data.items.find((i) => i.id == b.dataset.edit))));
     els("[data-del]", body).forEach((b) => b.addEventListener("click", () => del(`/api/admin/menu/items/${b.dataset.del}`, "Delete this item?")));
+    // Quick sold-out switch. PATCHes only the flag, so it can never overwrite a
+    // price with whatever this page last loaded.
+    els("[data-stock]", body).forEach((b) => b.addEventListener("click", async () => {
+      const it = data.items.find((x) => x.id == b.dataset.stock);
+      if (!it) return;
+      b.disabled = true;
+      try {
+        const updated = await API.patch(`/api/admin/menu/items/${it.id}/availability`,
+                                        { available: it.available === false });
+        Object.assign(it, updated);
+        toast(`${it.name} is ${it.available === false ? "sold out" : "back in stock"}`, "ok");
+        renderItems();
+      } catch (e) { toast(e.message, "err"); b.disabled = false; }
+    }));
     els("tbody[data-cat]", body).forEach((tbody) => makeSortable(tbody, () => persistItemOrder(tbody)));
   }
 
@@ -214,7 +243,7 @@
     `<option value="${NEW_CAT}">＋ New category…</option>`;
 
   function itemForm(item) {
-    const it = item || { name: "", category_id: data.categories[0] && data.categories[0].id, subcategory_id: 0, description: "", tags: [], veg: true, active: true, sort_order: 0, variants: [{ base: "", size: "", price: 0 }] };
+    const it = item || { name: "", category_id: data.categories[0] && data.categories[0].id, subcategory_id: 0, description: "", tags: [], veg: true, active: true, available: true, sort_order: 0, variants: [{ base: "", size: "", price: 0 }] };
     const m = modal({
       title: item ? "Edit item" : "Add item",
       bodyHTML: `
@@ -222,6 +251,7 @@
         <div class="input-row">
           <div class="field grow"><label>Category</label><select class="select" id="fCat">${catOptionsHTML(it.category_id)}</select></div>
           <div class="field grow"><label>Active</label><select class="select" id="fActive"><option value="true" ${it.active ? "selected" : ""}>Active</option><option value="false" ${!it.active ? "selected" : ""}>Hidden</option></select></div>
+          <div class="field grow"><label>Stock</label><select class="select" id="fAvail"><option value="true" ${it.available !== false ? "selected" : ""}>In stock</option><option value="false" ${it.available === false ? "selected" : ""}>Sold out</option></select></div>
         </div>
         <div class="field" id="newCatWrap" style="display:none;">
           <label>New category name</label>
@@ -233,6 +263,22 @@
         </div>
         <div class="field"><label>Description (optional)</label><input class="input" id="fDesc" value="${esc(it.description)}" /></div>
         <div class="field"><label>Tags (comma separated)</label><input class="input" id="fTags" value="${esc(it.tags.join(", "))}" placeholder="Whole Wheat, Millets" /></div>
+        <div class="opt-label">Photo</div>
+        <div class="img-field">
+          <div class="img-preview" id="imgPreview">${it.image_url
+            ? `<img src="${esc(API.assetUrl(it.image_url))}" alt="" />`
+            : `<span class="img-empty">No photo</span>`}</div>
+          <div class="img-actions">
+            <!-- capture lets a phone open the camera straight away, which is how
+                 a photo of today's plate actually gets taken. -->
+            <input type="file" id="fImg" accept="image/jpeg,image/png,image/webp" capture="environment" hidden />
+            <button class="btn btn-sm btn-outline" id="pickImg" type="button">${it.image_url ? "Replace photo" : "Upload photo"}</button>
+            <button class="btn btn-sm btn-danger ${it.image_url ? "" : "hidden"}" id="rmImg" type="button">Remove</button>
+            <p class="text-muted text-sm" style="margin:6px 0 0;">${item
+              ? "Any JPEG or PNG. Resized and saved as soon as you pick it."
+              : "Save the item first, then add its photo."}</p>
+          </div>
+        </div>
         <div class="opt-label">Variants &amp; prices</div>
         <div id="variantRows"></div>
         <button class="btn btn-sm btn-outline" id="addVar" type="button" style="margin-top:8px;">＋ Add variant</button>`,
@@ -274,25 +320,96 @@
     });
 
     const rowsWrap = el("#variantRows", m.backdrop);
-    const addRow = (v = { base: "", size: "", price: "" }) => {
+    const addRow = (v = { base: "", size: "", price: "", available: true }) => {
       const row = document.createElement("div");
       row.className = "input-row"; row.style.marginBottom = "8px";
+      // The stock toggle is per variant, not just per item: millets can run out
+      // while wheat is still on, and that is the common case mid-service.
+      const off = v.available === false;
       row.innerHTML = `
         <input class="input v-base" placeholder="Base (e.g. Millets)" value="${esc(v.base)}" />
         <input class="input v-size" placeholder="Size (e.g. Regular)" value="${esc(v.size)}" />
         <input class="input v-price" type="number" step="1" placeholder="₹" value="${v.price === "" ? "" : v.price}" style="max-width:90px;" />
+        <button class="btn btn-sm ${off ? "btn-danger" : "btn-outline"} v-stock" type="button"
+          data-off="${off ? "1" : ""}" title="Click to toggle stock">${off ? "Sold out" : "In stock"}</button>
         <button class="icon-btn v-del" type="button" title="Remove">×</button>`;
+      const stock = row.querySelector(".v-stock");
+      stock.addEventListener("click", () => {
+        const nowOff = !stock.dataset.off;
+        stock.dataset.off = nowOff ? "1" : "";
+        stock.textContent = nowOff ? "Sold out" : "In stock";
+        stock.classList.toggle("btn-danger", nowOff);
+        stock.classList.toggle("btn-outline", !nowOff);
+      });
       row.querySelector(".v-del").addEventListener("click", () => row.remove());
       rowsWrap.appendChild(row);
     };
     (it.variants.length ? it.variants : [{ base: "", size: "", price: "" }]).forEach(addRow);
     el("#addVar", m.backdrop).addEventListener("click", () => addRow());
 
+    /* Photo. Uploaded immediately against the saved item rather than held until
+       Save: the bytes go to a different endpoint (multipart, not JSON), and an
+       upload that only landed when the whole form validated would lose the file
+       on any unrelated validation error. A brand-new item has no id yet, so the
+       control asks for a save first. */
+    const fileInput = el("#fImg", m.backdrop);
+    const preview = el("#imgPreview", m.backdrop);
+    const rmBtn = el("#rmImg", m.backdrop);
+    const pickBtn = el("#pickImg", m.backdrop);
+
+    pickBtn.addEventListener("click", () => {
+      if (!item) return toast("Save the item first, then add its photo", "err");
+      fileInput.click();
+    });
+
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (!file || !item) return;
+      const fd = new FormData();
+      fd.append("file", file);
+      pickBtn.disabled = true;
+      const was = pickBtn.textContent;
+      pickBtn.textContent = "Uploading…";
+      try {
+        const res = await API.upload(`/api/admin/menu/items/${item.id}/image`, fd);
+        it.image_url = res.image_url;
+        preview.innerHTML = `<img src="${API.assetUrl(res.image_url)}" alt="" />`;
+        rmBtn.classList.remove("hidden");
+        pickBtn.textContent = "Replace photo";
+        const kb = Math.round(res.bytes / 1024);
+        toast(`Photo saved — ${res.width}×${res.height}, ${kb} KB`, "ok");
+        // Keep the row behind the modal honest about having a photo now.
+        const row = data.items.find((x) => x.id === item.id);
+        if (row) row.image_url = res.image_url;
+      } catch (e) {
+        toast(e.message, "err");
+        pickBtn.textContent = was;
+      } finally {
+        pickBtn.disabled = false;
+        fileInput.value = "";     // so re-picking the same file fires change again
+      }
+    });
+
+    rmBtn.addEventListener("click", async () => {
+      if (!item) return;
+      try {
+        await API.del(`/api/admin/menu/items/${item.id}/image`);
+        it.image_url = "";
+        preview.innerHTML = `<span class="img-empty">No photo</span>`;
+        rmBtn.classList.add("hidden");
+        pickBtn.textContent = "Upload photo";
+        const row = data.items.find((x) => x.id === item.id);
+        if (row) row.image_url = "";
+        toast("Photo removed", "ok");
+      } catch (e) { toast(e.message, "err"); }
+    });
+
     el("#saveBtn", m.backdrop).addEventListener("click", async () => {
       const variants = els(".input-row", rowsWrap).map((r) => ({
         base: r.querySelector(".v-base").value.trim(),
         size: r.querySelector(".v-size").value.trim(),
         price: parseFloat(r.querySelector(".v-price").value),
+        available: !r.querySelector(".v-stock").dataset.off,
       })).filter((v) => !Number.isNaN(v.price));
       if (!variants.length) return toast("Add at least one variant with a price", "err");
       if (el("#fCat", m.backdrop).value === NEW_CAT) return toast("Create the new category first, or pick an existing one", "err");
@@ -304,6 +421,8 @@
         tags: el("#fTags", m.backdrop).value.split(",").map((s) => s.trim()).filter(Boolean),
         veg: true,
         active: el("#fActive", m.backdrop).value === "true",
+        available: el("#fAvail", m.backdrop).value === "true",
+        image_url: it.image_url || "",
         // New items append to the end of their category; edits keep their place. Reorder via drag.
         sort_order: item ? it.sort_order : data.items.filter((i) => i.category_id === +el("#fCat", m.backdrop).value).length,
         variants,
@@ -438,7 +557,7 @@
         <td class="row"><button class="btn btn-sm btn-outline" data-edit="${c.id}">Edit</button>
           <button class="btn btn-sm btn-danger" data-del="${c.id}">Delete</button></td>
       </tr>`).join("");
-    body.insertAdjacentHTML("beforeend", `<div class="table-wrap"><table class="admin-table"><thead><tr><th>Code</th><th>Discount</th><th>Min order</th><th>Used</th><th>Active</th><th></th></tr></thead><tbody>${rows || emptyRow(6)}</tbody></table></div>`);
+    body.insertAdjacentHTML("beforeend", `<div class="table-wrap"><table class="admin-table"><thead><tr><th>Code</th><th>Discount</th><th>Min order</th><th>Used</th><th>Active</th><th></th></tr></thead><tbody>${rows || emptyRow(8)}</tbody></table></div>`);
     el("#addBtn").addEventListener("click", () => couponForm());
     els("[data-edit]", body).forEach((b) => b.addEventListener("click", () => couponForm(data.coupons.find((c) => c.id == b.dataset.edit))));
     els("[data-del]", body).forEach((b) => b.addEventListener("click", () => del(`/api/coupons/${b.dataset.del}`, "Delete this coupon?")));

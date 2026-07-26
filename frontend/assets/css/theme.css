@@ -11,6 +11,11 @@
  */
 
 :root {
+  /* Tells the browser this page is dark, so the parts of the UI it draws itself
+     and CSS cannot reach — scrollbars, form-control internals, autofill
+     backgrounds, any native popup — come up dark instead of flashing white. */
+  color-scheme: dark;
+
   /* Dark surfaces. Warm-shifted, not neutral grey — the logo and the hero video
      are both saffron/amber, and a cool grey next to them looks dirty. */
   --bg: #14100c;

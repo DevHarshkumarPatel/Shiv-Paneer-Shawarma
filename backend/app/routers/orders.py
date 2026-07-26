@@ -34,6 +34,15 @@ def create_order(body: CreateOrderRequest):
         [c.model_dump() for c in body.cart], body.order_type, body.coupon_code,
         body.delivery_area_id,
     )
+    # Refuse rather than quietly place a short order. A cart lives in
+    # localStorage and can be days old, so anything that sold out in the
+    # meantime has to be shown to the customer before money changes hands.
+    if priced.unavailable:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Sold out since you added it: " + ", ".join(u["label"] for u in priced.unavailable)
+            + ". Please review your cart and try again.",
+        )
     if not priced.lines:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Your cart is empty or items are unavailable.")
 

@@ -1,6 +1,6 @@
 /* Checkout: summary, customer + address/map, UPI QR payment, place order. */
 (function () {
-  const { money, esc, el, els, toast } = UI;
+  const { money, esc, el, els, toast, modal } = UI;
 
   const state = {
     mode: Store.get().mode,
@@ -67,6 +67,9 @@
     if (state.coupon && state.quote.coupon_error) { toast(state.quote.coupon_error, "err"); state.coupon = ""; Store.setCoupon(""); }
     // Changing the total invalidates any generated QR (amount is baked into it).
     state.qr = null;
+    // A reference typed against a now-void QR would be a reference for the wrong
+    // amount, so it goes with it.
+    state.upiReference = "";
   }
 
   /* ---------------- render ---------------- */
@@ -93,7 +96,8 @@
               <div style="margin-top:var(--sp-3);">${summaryTotals(q)}</div>
             </div>
           </div>
-          <button class="btn btn-primary btn-block btn-lg" id="placeOrder">Place order · ${money(q.total)}</button>
+          <button class="btn btn-primary btn-block btn-lg" id="placeOrder" ${deadList(q).length ? "disabled" : ""}>${
+            deadList(q).length ? "Remove sold-out items to continue" : `Place order · ${money(q.total)}`}</button>
           <p class="text-sm text-muted text-center" style="margin-top:8px;">${placeHint()}</p>
         </aside>
       </div>`;
@@ -115,14 +119,80 @@
     </div></div>`;
   }
 
+  /* Delivery area, without a native <select>.
+   *
+   * A native select draws its option list as an OS popup: CSS cannot reach it, so
+   * it came up in the platform's own light colours over this dark page, and the
+   * browser positions it wherever it likes — a full-screen takeover on a phone,
+   * a panel off to one side in desktop emulation.
+   *
+   * The replacement adapts to how many areas the owner has defined, because that
+   * count is open-ended — an outlet may list twenty or more:
+   *   - up to AREA_INLINE_MAX: every area inline, each with its fee visible, no
+   *     extra tap and nothing hidden;
+   *   - beyond it: a summary row that opens a searchable sheet, because thirty
+   *     inline rows would be longer than the rest of the form and scrolling to
+   *     find a neighbourhood is worse than typing three letters of it.
+   */
+  const AREA_INLINE_MAX = 6;
+
+  const areaById = (id) => state.areas.find((a) => String(a.id) === String(id));
+
+  const areaOptHTML = (a) => `
+    <button type="button" class="area-opt ${String(a.id) === String(state.deliveryAreaId) ? "active" : ""}"
+            data-area="${a.id}">
+      <span class="an">${esc(a.name)}</span>
+      <span class="af">${money(a.fee)}</span>
+    </button>`;
+
   function areaSelectHTML() {
     if (!state.areas.length) {
-      return `<select class="select" id="custArea" disabled><option>No delivery areas available yet</option></select>`;
+      return `<p class="text-muted text-sm" style="margin:0;">No delivery areas available yet — please pick dine-in or takeaway.</p>`;
     }
-    const opts = [`<option value="" ${state.deliveryAreaId ? "" : "selected"} disabled>Select your area…</option>`]
-      .concat(state.areas.map((a) =>
-        `<option value="${a.id}" ${String(a.id) === String(state.deliveryAreaId) ? "selected" : ""}>${esc(a.name)} · ${money(a.fee)}</option>`));
-    return `<select class="select" id="custArea">${opts.join("")}</select>`;
+    if (state.areas.length <= AREA_INLINE_MAX) {
+      // Few enough to show at once: every fee visible, no extra tap.
+      return `<div class="area-grid" id="custArea">${state.areas.map(areaOptHTML).join("")}</div>`;
+    }
+    // Many areas: a summary row that opens a searchable sheet. Typing beats
+    // scrolling a list of thirty neighbourhoods on a phone.
+    const chosen = areaById(state.deliveryAreaId);
+    return `<button type="button" class="area-picker ${chosen ? "chosen" : ""}" id="areaPicker">
+        <span class="ap-label">${chosen ? esc(chosen.name) : "Select your area…"}</span>
+        ${chosen ? `<span class="af">${money(chosen.fee)}</span>` : ""}
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </button>`;
+  }
+
+  /* Searchable area sheet. Only used past AREA_INLINE_MAX. */
+  function openAreaPicker() {
+    const m = modal({
+      title: "Delivery area",
+      bodyHTML: `
+        <input class="input" id="areaSearch" placeholder="Search your area or pin code…" autocomplete="off" />
+        <div class="area-list" id="areaList">${state.areas.map(areaOptHTML).join("")}</div>
+        <p class="text-muted text-sm" id="areaNone" style="display:none;margin:var(--sp-3) 0 0;">
+          No area matches that. Try fewer letters.</p>`,
+    });
+
+    const list = el("#areaList", m.backdrop);
+    const none = el("#areaNone", m.backdrop);
+    const search = el("#areaSearch", m.backdrop);
+
+    const bindRows = () => els("[data-area]", list).forEach((b) => b.addEventListener("click", async () => {
+      state.deliveryAreaId = b.dataset.area;
+      m.close();
+      await refreshQuote();
+      render();
+    }));
+    bindRows();
+
+    search.addEventListener("input", () => {
+      const q = search.value.trim().toLowerCase();
+      const hits = state.areas.filter((a) => a.name.toLowerCase().includes(q));
+      list.innerHTML = hits.map(areaOptHTML).join("");
+      none.style.display = hits.length ? "none" : "block";
+      bindRows();
+    });
   }
 
   function stepDetails() {
@@ -160,6 +230,14 @@
   }
 
   function upiArea() {
+    /* Paying is blocked while any line is sold out. Without this the customer
+       could scan, pay, and only then be refused at order creation — the total is
+       still positive whenever at least one line survives, so "nothing to pay
+       for" never catches it. The backend refuses the QR too; this is the part
+       that explains why. */
+    if (deadList(state.quote).length) {
+      return `<div class="notice-banner" style="margin:0;">Remove the sold-out items from your order summary first — we can't take payment for an order we can't make.</div>`;
+    }
     if (!state.qr) {
       return `<button class="btn btn-dark btn-block" id="genQr" type="button">Show UPI QR to pay ${money(state.quote.total)}</button>`;
     }
@@ -176,13 +254,31 @@
       </div>`;
   }
 
+  const deadKey = (u) => `${u.item_id}|${u.base}|${u.size}`;
+  const deadList = (q) => (q && q.unavailable) || [];
+
   function summaryItems(q) {
-    return q.lines.map((l) => `
+    const priced = q.lines.map((l) => `
       <div class="summary-item">
         <div><div class="si-name">${esc(l.name)} × ${l.quantity}</div>
           <div class="si-sub">${esc(l.variant_label || "")}${l.free_quantity ? ` · 🎉 ${l.free_quantity} free` : ""}</div></div>
         <div class="si-name">${money(l.line_total)}</div>
       </div>`).join("");
+
+    /* Anything that sold out between filling the cart and reaching checkout.
+       Listed as its own row with a Remove, because the order is blocked until it
+       is dealt with and "review your cart" is not an instruction anyone can act
+       on without being told which row is the problem. Switching variants happens
+       on the menu, where the alternatives and their prices are — from here the
+       useful action is to drop it or go back. */
+    const gone = deadList(q).map((u) => `
+      <div class="summary-item dead">
+        <div><div class="si-name">${esc(u.name)} <span class="badge badge-out">Sold out</span></div>
+          <div class="si-sub">${esc(u.variant_label || "")} · not charged</div></div>
+        <button class="btn btn-sm btn-outline" data-drop="${esc(deadKey(u))}">Remove</button>
+      </div>`).join("");
+
+    return priced + gone;
   }
   function summaryTotals(q) {
     const rows = [`<div class="summary-line"><span>Subtotal</span><span>${money(q.subtotal)}</span></div>`];
@@ -198,6 +294,10 @@
     } else if (q.delivery_fee > 0) {
       rows.push(`<div class="summary-line"><span>Delivery fee</span><span>${money(q.delivery_fee)}</span></div>`);
     }
+    // No footnote here: summaryItems() now lists each sold-out line above with
+    // its own "not charged" note and a Remove, which is both clearer and
+    // actionable. (This used to join q.unavailable, which became a list of
+    // objects when it gained the fields needed to identify a line.)
     rows.push(`<div class="summary-line grand"><span>Total</span><span>${money(q.total)}</span></div>`);
     return rows.join("");
   }
@@ -216,11 +316,21 @@
     const nameEl = el("#custName"); if (nameEl) nameEl.addEventListener("input", (e) => state.customer.name = e.target.value);
     const phoneEl = el("#custPhone"); if (phoneEl) phoneEl.addEventListener("input", (e) => state.customer.phone = e.target.value.replace(/[^0-9]/g, "").slice(0, 10));
     const addrEl = el("#custAddress"); if (addrEl) addrEl.addEventListener("input", (e) => state.customer.address = e.target.value);
-    const areaEl = el("#custArea");
-    if (areaEl) areaEl.addEventListener("change", async (e) => {
-      state.deliveryAreaId = e.target.value;
+    els("[data-area]").forEach((b) => b.addEventListener("click", async () => {
+      state.deliveryAreaId = b.dataset.area;
+      // Paint the selection immediately; the quote round-trip re-renders after.
+      els("[data-area]").forEach((x) => x.classList.toggle("active", x === b));
       await refreshQuote(); render();
-    });
+    }));
+    const picker = el("#areaPicker");
+    if (picker) picker.addEventListener("click", openAreaPicker);
+
+    els("[data-drop]").forEach((b) => b.addEventListener("click", async () => {
+      Store.remove(b.dataset.drop);
+      if (!Store.count()) { renderEmpty(); return; }
+      await refreshQuote();
+      render();
+    }));
 
     els("[data-pay]").forEach((o) => o.addEventListener("click", () => {
       state.payment = o.dataset.pay;
@@ -241,6 +351,7 @@
   function bindUpi() {
     const gen = el("#genQr");
     if (gen) gen.addEventListener("click", async () => {
+      if (deadList(state.quote).length) return toast("Remove the sold-out items before paying", "err");
       if (state.mode === "delivery" && !state.deliveryAreaId) return toast("Please select your delivery area first", "err");
       gen.disabled = true; gen.textContent = "Generating…";
       try {

@@ -134,3 +134,27 @@
 .switch input:checked + .switch-track { background: var(--ok); }
 .switch input:checked + .switch-track .switch-thumb { transform: translateX(20px); }
 .switch input:disabled + .switch-track { opacity: .6; cursor: default; }
+
+/* ---- Item photo field (item form) ---- */
+.img-field { display: flex; gap: var(--sp-4); align-items: flex-start; margin-bottom: var(--sp-3); }
+.img-preview {
+  width: 104px; height: 104px; flex: 0 0 auto; border-radius: var(--r-md);
+  border: 1px dashed var(--line); background: var(--surface-2);
+  display: grid; place-items: center; overflow: hidden;
+}
+.img-preview img { width: 100%; height: 100%; object-fit: cover; }
+.img-empty { font-size: var(--fs-xs); color: var(--ink-3); font-weight: 700; }
+.img-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+
+/* ---- Item list: photo thumb + stock state ---- */
+.row-thumb { width: 44px; height: 44px; border-radius: var(--r-sm); object-fit: cover; display: block; background: var(--surface-2); }
+.row-thumb-empty { display: grid; place-items: center; border: 1px dashed var(--line); color: var(--ink-3); font-size: 15px; }
+.pill-in, .pill-out, .pill-part {
+  display: inline-block; font-size: var(--fs-xs); font-weight: 800;
+  padding: 3px 9px; border-radius: var(--r-pill); white-space: nowrap;
+}
+.pill-in { background: #e7f6eb; color: #12692e; }
+/* Sold out has to be the loudest state in this table — it is the one that stops
+   money coming in, so it must be obvious at a glance during service. */
+.pill-out { background: #fdecea; color: #a5261a; }
+.pill-part { background: #fff4e0; color: #8a5300; }

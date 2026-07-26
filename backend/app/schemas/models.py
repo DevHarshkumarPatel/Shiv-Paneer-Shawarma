@@ -75,6 +75,7 @@ class VariantPayload(BaseModel):
     base: str = ""
     size: str = ""
     price: float
+    available: bool = True
 
 
 class CategoryPayload(BaseModel):
@@ -103,7 +104,20 @@ class ItemPayload(BaseModel):
     tags: list[str] = []
     variants: list[VariantPayload]
     active: bool = True
+    available: bool = True
     sort_order: int = 0
+
+
+class AvailabilityPayload(BaseModel):
+    """Quick stock toggle, so flipping "sold out" does not require resending the
+    whole item (and cannot accidentally overwrite prices while doing it).
+
+    `variants` is positional against Item.variants when present; omit it to
+    change only the item-level switch.
+    """
+
+    available: bool = True
+    variants: list[bool] | None = None
 
 
 class ReorderPayload(BaseModel):

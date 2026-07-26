@@ -1,9 +1,30 @@
 """Public menu tree: categories -> subcategories -> items(+variants) + active promos."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-from ..models import Category, Subcategory, Item, Promo
+from ..models import Category, Subcategory, Item, ItemImage, Promo
 
 router = APIRouter(prefix="/api", tags=["menu"])
+
+
+@router.get("/menu/items/{item_id}/image")
+def get_item_image(item_id: int, request: Request):
+    """Serve an uploaded item photo.
+
+    Cached hard and revalidated with an ETag: the bytes for a given ?v= stamp
+    never change (a replacement upload mints a new stamp), so a repeat visitor
+    should not be re-downloading the whole menu's photography.
+    """
+    img = ItemImage.get_by_id(item_id)
+    if not img:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No image for this item.")
+
+    stamp = int(img.updated_at.timestamp()) if img.updated_at else 0
+    etag = f'W/"{item_id}-{stamp}-{len(img.data)}"'
+    headers = {"Cache-Control": "public, max-age=86400", "ETag": etag}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+    return Response(content=img.data, media_type=img.content_type or "image/jpeg",
+                    headers=headers)
 
 
 @router.get("/menu")

@@ -23,6 +23,22 @@
 .pay-opt .pi { width: 20px; height: 20px; display: block; margin: 0 auto 6px; color: var(--brand); }
 .pay-opt.active { color: var(--ink); }
 
+/* Delivery areas: one row per area, fee on the right. Replaces a native <select>
+   whose OS-drawn popup could be neither styled to match this page nor positioned
+   sensibly — and which hid the fees until opened. */
+.area-grid { display: grid; gap: var(--sp-2); }
+.area-opt {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  border: 1.5px solid var(--line); border-radius: var(--r-md); background: var(--surface);
+  color: var(--ink); font-family: inherit; font-size: var(--fs-sm); font-weight: 700;
+  padding: 13px 15px; text-align: left; width: 100%;
+  transition: border-color .14s ease, background .14s ease;
+}
+.area-opt:hover { border-color: var(--ink-3); }
+.area-opt.active { border-color: var(--brand); background: var(--brand-soft); }
+.area-opt .af { font-family: var(--font-display); font-weight: 700; color: var(--gold); white-space: nowrap; }
+.area-opt.active .af { color: var(--gold); }
+
 .qr-box { text-align: center; padding: var(--sp-4); background: var(--surface-2); border-radius: var(--r-md); }
 .qr-box img { width: 208px; height: 208px; margin: 0 auto var(--sp-3); background: #fff; border-radius: var(--r-md); padding: 8px; }
 /* On the dark theme --brand-700 is too dim to be the biggest number on the
@@ -51,3 +67,24 @@
 .tl-step .tl-title { font-weight: 700; text-transform: capitalize; }
 .tl-step.pending .tl-title { color: var(--ink-3); }
 .tl-step .tl-time { font-size: var(--fs-xs); color: var(--ink-3); }
+
+/* Area picker used past AREA_INLINE_MAX — a summary row plus a searchable sheet. */
+.area-picker {
+  display: flex; align-items: center; gap: var(--sp-3); width: 100%;
+  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface);
+  color: var(--ink-3); font-family: inherit; font-size: var(--fs-md); font-weight: 600;
+  padding: 12px 14px; text-align: left;
+}
+.area-picker.chosen { color: var(--ink); font-weight: 700; border-color: var(--brand); }
+.area-picker .ap-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.area-picker .af { font-family: var(--font-display); font-weight: 700; color: var(--gold); white-space: nowrap; }
+.area-picker svg { width: 18px; height: 18px; flex: 0 0 auto; opacity: .7; }
+/* Capped height so a long list scrolls inside the sheet instead of pushing the
+   search field off the top of it. */
+.area-list { display: grid; gap: var(--sp-2); max-height: 46vh; overflow-y: auto; margin-top: var(--sp-3); }
+
+/* Sold-out row in the checkout summary: it blocks the order, so it needs its own
+   Remove rather than sending the customer back to the menu to hunt for it. */
+.summary-item.dead { align-items: center; }
+.summary-item.dead .si-name { color: var(--ink-2); }
+.summary-item.dead .btn { flex: 0 0 auto; }

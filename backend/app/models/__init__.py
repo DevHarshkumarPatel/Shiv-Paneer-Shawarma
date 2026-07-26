@@ -1,6 +1,6 @@
 """NDB entity models for Shiv Paneer Shawarma."""
 from .user import User
-from .menu import Category, Subcategory, Item, Variant, Promo
+from .menu import Category, Subcategory, Item, ItemImage, Variant, Promo
 from .coupon import Coupon
 from .order import Order, OrderItem, CustomerInfo, PaymentInfo, StatusEvent
 from .counter import Counter
@@ -12,6 +12,7 @@ __all__ = [
     "Category",
     "Subcategory",
     "Item",
+    "ItemImage",
     "Variant",
     "Promo",
     "Coupon",

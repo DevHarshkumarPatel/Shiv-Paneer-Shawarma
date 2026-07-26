@@ -54,77 +54,80 @@
 @media (min-width: 940px) { .item-grid { grid-template-columns: 1fr; } }
 @media (min-width: 1180px) { .item-grid { grid-template-columns: 1fr 1fr; } }
 
+/* A scannable row: photo, name, one line of description, price, Add. Nothing
+   else. Everything the card used to carry — base line, priced tier pills, tags —
+   now lives in the detail sheet a tap away, because three rows of controls per
+   card wrapped the dish name, stacked the tags, and pushed each card past 260px
+   on a phone. */
 .item-card {
-  display: flex; align-items: stretch; gap: var(--sp-4);
-  padding: var(--sp-4); transition: border-color .16s ease, background .16s ease;
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4); cursor: pointer;
+  transition: border-color .16s ease, background .16s ease;
 }
 .item-card:hover { border-color: var(--brand); background: var(--surface-2); }
-.item-card .thumb { flex: 0 0 auto; width: 76px; height: 76px; border-radius: var(--r-md); overflow: hidden; background: var(--surface-2); }
+.item-card .thumb { flex: 0 0 auto; width: 68px; height: 68px; border-radius: var(--r-md); overflow: hidden; background: var(--surface-2); }
 .item-card .thumb img { width: 100%; height: 100%; object-fit: cover; }
-.item-card .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.item-card .title-row { display: flex; align-items: center; gap: 8px; }
+.item-card .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.item-card .title-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .item-card h3 { margin: 0; font-size: var(--fs-md); font-weight: 700; }
-.item-card .desc { font-size: var(--fs-xs); color: var(--ink-2); margin: 0; line-height: 1.45; }
-.item-card .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
-.item-card .tags .badge { font-size: .68rem; padding: 2px 8px; }
-.item-card .offer-tag { align-self: flex-start; }
-
-/* The current base/size as one quiet line. Two rows of pills put four small
-   targets on every card, top-left, which is both busy to read and the hardest
-   part of a phone screen to reach one-handed. This states the default and opens
-   the options sheet; the default path never touches it. */
-.variant-btn {
-  align-self: flex-start; display: inline-flex; align-items: center; gap: 5px;
-  background: transparent; border: 1px solid var(--line); border-radius: var(--r-pill);
-  padding: 5px 8px 5px 12px; margin-top: 3px;
-  font-size: .74rem; font-weight: 700; color: var(--ink-2); font-family: inherit;
-  transition: border-color .14s ease, color .14s ease;
+/* One line, clipped. A description is a teaser here; the sheet shows all of it. */
+.item-card .desc {
+  font-size: var(--fs-xs); color: var(--ink-2); margin: 0; line-height: 1.4;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.variant-btn:hover { border-color: var(--brand); color: var(--ink); }
-.variant-btn svg { width: 14px; height: 14px; flex: 0 0 auto; opacity: .8; }
+.item-card .offer-tag { font-size: .64rem; padding: 2px 7px; }
 
-/* The priced axis, always on the card. The upgrade and what it costs are visible
-   without opening anything — hiding it behind a dropdown meant the only price
-   anyone ever saw was the cheapest, and the kitchen never got asked for the
-   dearer one. The premium is shown as a delta so the eye compares options
-   rather than re-reading two full prices. */
-.tiers { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 5px; }
-.tier {
-  display: inline-flex; align-items: center; gap: 6px;
-  border: 1px solid var(--line); background: transparent; color: var(--ink-2);
-  border-radius: var(--r-md); padding: 7px 11px; font-size: .76rem; font-weight: 700;
-  font-family: inherit; transition: border-color .14s ease, color .14s ease, background .14s ease;
-}
-.tier b { font-weight: 800; color: var(--gold); font-size: .72rem; }
-.tier:hover { border-color: var(--ink-3); color: var(--ink); }
-.tier.active { border-color: var(--brand); background: var(--brand-soft); color: var(--ink); }
-.tier.active b { color: var(--gold); }
-/* Two lines max. A long description must not be able to push the price and the
-   Add button apart down the page. */
-.item-card .desc { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-
-/* Price + action column. Centred, not space-between: stretching the two apart
-   was padding every card out to ~200px tall for no information gained. The
-   controls live on the right edge — the natural arc of a thumb — and are sized
-   to the 44px minimum so they are hittable without aiming. */
-.item-card .side { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: var(--sp-2); }
-.item-card .add-btn { min-width: 76px; min-height: 40px; font-size: var(--fs-sm); }
-/* Once an item is in the cart the button becomes its quantity control, in place
-   — no dialog, and no hunting in the cart to change your mind. */
+/* Price + Add, right edge — the natural arc of a thumb. */
+.item-card .side { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.price-single { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; color: var(--gold); white-space: nowrap; line-height: 1.1; }
+.price-single .dash { color: var(--ink-3); margin: 0 1px; }
+.item-card .add-btn { min-width: 64px; min-height: 38px; font-size: var(--fs-sm); padding: 8px 14px; }
 .card-stepper { border-color: var(--brand); }
-.card-stepper button { background: var(--brand-soft); color: var(--brand); width: 38px; height: 38px; font-size: 17px; }
-.card-stepper span { min-width: 30px; font-size: var(--fs-sm); }
+.card-stepper button { background: var(--brand-soft); color: var(--brand); width: 36px; height: 36px; font-size: 17px; }
+.card-stepper span { min-width: 26px; font-size: var(--fs-sm); }
 
-/* The options sheet's own targets, for the same reason. */
-.opt { padding: 15px 12px; }
-.price-single { font-family: var(--font-display); font-size: 1.25rem; font-weight: 700; color: var(--gold); white-space: nowrap; text-align: right; line-height: 1.1; }
-.price-single .from { display: block; font-family: var(--font); font-size: .62rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
-.item-card .add-btn { white-space: nowrap; }
-@media (max-width: 420px) {
-  .item-card { padding: var(--sp-3); gap: var(--sp-3); }
-  .item-card .thumb { width: 60px; height: 60px; }
-  .item-card .add-btn { padding: 6px 12px; }
+@media (max-width: 400px) {
+  .item-card { gap: var(--sp-2); padding: var(--sp-3); }
+  .item-card .thumb { width: 58px; height: 58px; }
+  .price-single { font-size: 1rem; }
+  .item-card .add-btn { min-width: 56px; padding: 8px 10px; }
 }
+
+/* -------------------------------------------------------------- item sheet ---
+   Tapping a card opens this. The card is a dense row by necessity; the sheet is
+   where the dish gets to look like food — photo at full width, description
+   unclipped, every option priced. */
+.sheet-hero {
+  /* Bleeds to the sheet's edges: .modal-body has its own padding, and a photo
+     inset on all four sides reads as a thumbnail rather than as the subject. */
+  margin: calc(var(--sp-4) * -1) calc(var(--sp-4) * -1) var(--sp-4);
+  aspect-ratio: 16 / 10; background: var(--surface-2); overflow: hidden;
+}
+.sheet-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sheet-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: var(--sp-2); }
+.sheet-desc { color: var(--ink-2); font-size: var(--fs-sm); line-height: 1.55; margin: 0 0 var(--sp-3); }
+.sheet-tags { margin-bottom: var(--sp-2); }
+/* Quantity and Add share the footer so both are in the thumb zone. */
+.sheet-foot { display: flex; align-items: center; gap: var(--sp-3); }
+.sheet-foot .stepper { flex: 0 0 auto; }
+.sheet-foot .stepper button { width: 42px; height: 42px; font-size: 18px; }
+.sheet-foot .btn { min-height: 46px; }
+/* Prices under the option labels — the whole range readable at once. */
+.opt small { color: var(--brand); }
+.opt.active small { color: var(--gold); }
+.opt:disabled { opacity: .4; cursor: not-allowed; }
+.opt:disabled small { color: var(--ink-3); }
+
+/* ---------------------------------------------------------------- sold out ---
+   Dimmed and unorderable, but still listed with its price. Hiding it would make
+   the menu look different every day and lose the "ask me tomorrow" signal. */
+.badge-out { background: rgba(211, 59, 44, .16); color: #ff8b7d; border: 1px solid rgba(211, 59, 44, .4); }
+.item-card.sold-out { opacity: .62; }
+.item-card.sold-out:hover { border-color: var(--line); background: var(--surface); }
+.item-card.sold-out .thumb img { filter: grayscale(1); }
+.item-card.sold-out .price-single { color: var(--ink-3); }
+.opt small { display: block; font-size: .66rem; font-weight: 700; margin-top: 3px; }
+.cart-gone { font-size: var(--fs-xs); color: #ff8b7d; background: rgba(211, 59, 44, .12); border: 1px solid rgba(211, 59, 44, .32); border-radius: var(--r-md); padding: 8px 10px; margin-bottom: var(--sp-3); line-height: 1.45; }
 
 /* ------------------------------------------------------------------- cart ---*/
 .cart-panel { position: sticky; top: calc(var(--header-h) + 74px); }
@@ -163,3 +166,14 @@
 /* Cart count pill in header */
 .cart-pill { position: relative; }
 .cart-pill .count { position: absolute; top: -6px; right: -6px; background: var(--accent-red); color: #fff; font-size: 0.65rem; font-weight: 800; min-width: 18px; height: 18px; border-radius: var(--r-pill); display: grid; place-items: center; padding: 0 4px; }
+
+/* ------------------------------------------------- sold-out cart lines ---
+   A dead row states its own state and carries its own fix. Previously the only
+   signal was a footnote under the list, leaving the customer to match it to a
+   row and tap − until it went away. */
+.cart-line.dead .cl-name { color: var(--ink-2); }
+.cart-line.dead .cl-price.struck { color: var(--ink-3); text-decoration: line-through; }
+.cl-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.cl-act { padding: 6px 11px; font-size: .72rem; }
+.cart-gone { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; }
+.cart-gone .btn { flex: 0 0 auto; }
