@@ -126,9 +126,14 @@ def _apply_cart_b1g1(result: PricingResult, promo: Promo, line_indices: list[int
     """Buy 1 Get 1 across the promo's eligible items, mix and match.
 
     Only the given lines (those covered by an active b1g1 promo for their item
-    or category) take part. Their units are pooled and paired by price, highest
-    first; the cheaper unit of each pair is free, so the customer is billed the
-    higher-priced eligible items. Mutates `result` in place.
+    or category) take part. Their units are pooled: every 2 eligible units earn
+    1 free, and the free ones are always the cheapest units in the pool, so the
+    customer is billed the higher-priced eligible items. Mutates `result` in
+    place.
+
+    Cheapest-first, not pair-by-pair: with 159 + 179 + 179 the pool earns one
+    free unit and it is the 159, not the second 179. Walking sorted pairs would
+    free the 179 and leave the cheapest unit paying full price.
     """
     label = promo.label or "Buy 1 Get 1 Free"
     # Expand every eligible unit, remembering which line it came from.
@@ -137,9 +142,8 @@ def _apply_cart_b1g1(result: PricingResult, promo: Promo, line_indices: list[int
         for idx in line_indices
         for _ in range(result.lines[idx].quantity)
     ]
-    # Highest price first; index 1, 3, 5, ... is the cheaper unit of each pair.
-    units.sort(key=lambda u: u[0], reverse=True)
-    for pos in range(1, len(units), 2):
+    units.sort(key=lambda u: u[0])          # cheapest units are the free ones
+    for pos in range(len(units) // 2):
         price, idx = units[pos]
         line = result.lines[idx]
         line.free_quantity += 1
