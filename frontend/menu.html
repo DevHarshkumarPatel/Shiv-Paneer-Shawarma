@@ -1,12 +1,31 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Menu — Shiv Paneer Shawarma</title>
+<meta name="theme-color" content="#14100c" />
 <link rel="icon" href="assets/img/logo.jpeg" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
 <link rel="stylesheet" href="assets/css/tokens.css" />
 <link rel="stylesheet" href="assets/css/base.css" />
 <link rel="stylesheet" href="assets/css/components.css" />
-<link rel="stylesheet" href="assets/css/menu.css" />
 <link rel="stylesheet" href="assets/css/tour.css" />
+<!-- theme.css re-points the shared tokens at the dark palette; after
+     components.css, before the page stylesheet. -->
+<link rel="stylesheet" href="assets/css/theme.css" />
+<link rel="stylesheet" href="assets/css/menu.css" />
+
+<!-- Icon sprite. Inline so the icons cost no request and inherit currentColor. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol viewBox="0 0 24 24" id="i-dine" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 3v8a2 2 0 0 0 4 0V3M9 11v10"/><path d="M16 3c-1.2 1.2-1.6 3-1.6 5.5 0 1.4.6 2.5 1.6 2.5s1.6-1.1 1.6-2.5C17.6 6 17.2 4.2 16 3ZM16 11v10"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-bag" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 8h14l-1.2 12.2a1 1 0 0 1-1 .8H7.2a1 1 0 0 1-1-.8L5 8Z"/><path d="M9 8V5.5A2.5 2.5 0 0 1 11.5 3h1A2.5 2.5 0 0 1 15 5.5V8"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-scooter" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="6" cy="17.5" r="2.5"/><circle cx="18" cy="17.5" r="2.5"/><path d="M8.5 17.5h7M15.5 17.5 13 7h-2M13 7h4l1.6 8"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-cart" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 4h2.2l2.4 10.4a1 1 0 0 0 1 .8h8.6a1 1 0 0 0 1-.75L20 7H6"/><circle cx="9.5" cy="19.5" r="1.4"/><circle cx="17" cy="19.5" r="1.4"/></symbol>
+  </defs>
+</svg>
 
 <header class="site-header">
   <div class="container">
@@ -20,22 +39,24 @@
     <div class="header-actions">
       <a class="btn btn-ghost btn-sm" href="track.html">Track</a>
       <button class="btn btn-outline btn-sm cart-pill" id="headerCart" aria-label="Cart">
-        🛒 <span class="count hidden" id="headerCartCount">0</span>
+        <svg width="18" height="18"><use href="#i-cart"/></svg>
+        <span class="count hidden" id="headerCartCount">0</span>
       </button>
     </div>
   </div>
 </header>
 
-<div class="site-header" style="position:sticky; top:var(--header-h); background:var(--surface); color:var(--ink); box-shadow:var(--shadow-sm); z-index:39;">
-  <div class="container" style="min-height:auto; display:block; padding-top:8px; padding-bottom:0;">
+<!-- Second sticky row: order type + category jump chips. -->
+<div class="menu-bar">
+  <div class="container">
     <div class="order-mode">
-      <span class="text-sm text-muted">Order type:</span>
+      <span class="lbl">Order type</span>
       <div class="seg" id="modeSeg">
-        <button data-mode="dine_in">🍽️ Dine-in</button>
-        <button data-mode="takeaway">🥡 Takeaway</button>
-        <button data-mode="delivery">🛵 Delivery</button>
+        <button data-mode="dine_in"><svg><use href="#i-dine"/></svg> Dine-in</button>
+        <button data-mode="takeaway"><svg><use href="#i-bag"/></svg> Takeaway</button>
+        <button data-mode="delivery"><svg><use href="#i-scooter"/></svg> Delivery</button>
       </div>
-      <span class="text-sm text-muted" id="modeHint"></span>
+      <span class="hint" id="modeHint"></span>
     </div>
     <div class="chips" id="catChips"></div>
   </div>

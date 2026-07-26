@@ -101,11 +101,13 @@
   }
 
   function stepOrderType() {
-    const opt = (m, ico) => `<button data-mode="${m}" class="${state.mode === m ? "active" : ""}">${ico} ${MODE_LABEL[m]}</button>`;
+    // .seg is styled in components.css; icons come from the sprite in checkout.html.
+    const opt = (m, ico) => `<button data-mode="${m}" class="${state.mode === m ? "active" : ""}">
+      <svg><use href="#${ico}"/></svg> ${MODE_LABEL[m]}</button>`;
     return `<div class="card step-card"><div class="card-pad">
       <div class="step-head"><span class="step-num">1</span><h3>Order type</h3></div>
-      <div class="seg" id="coMode" style="display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-pill);padding:3px;">
-        ${opt("dine_in", "🍽️")}${opt("takeaway", "🥡")}${opt("delivery", "🛵")}
+      <div class="seg" id="coMode">
+        ${opt("dine_in", "i-dine")}${opt("takeaway", "i-bag")}${opt("delivery", "i-scooter")}
       </div>
       <p class="text-sm text-muted" style="margin:10px 0 0;">${state.mode === "delivery"
         ? "Delivery fee applies and payment is collected online before we start."
@@ -147,8 +149,8 @@
     const delivery = state.mode === "delivery";
     const methods = delivery ? "" : `
       <div class="pay-methods" id="payMethods">
-        <div class="pay-opt ${state.payment === "cash" ? "active" : ""}" data-pay="cash">💵 Pay at counter<div class="sub">Cash / UPI on arrival</div></div>
-        <div class="pay-opt ${state.payment === "upi" ? "active" : ""}" data-pay="upi">📱 Pay now (UPI)<div class="sub">GPay · PhonePe · Paytm</div></div>
+        <div class="pay-opt ${state.payment === "cash" ? "active" : ""}" data-pay="cash"><svg class="pi"><use href="#i-cash"/></svg>Pay at counter<div class="sub">Cash / UPI on arrival</div></div>
+        <div class="pay-opt ${state.payment === "upi" ? "active" : ""}" data-pay="upi"><svg class="pi"><use href="#i-phone"/></svg>Pay now (UPI)<div class="sub">GPay · PhonePe · Paytm</div></div>
       </div>`;
     return `<div class="card step-card" id="payStep"><div class="card-pad">
       <div class="step-head"><span class="step-num">3</span><h3>Payment</h3></div>

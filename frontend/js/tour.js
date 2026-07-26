@@ -51,7 +51,7 @@
       { target: "#catChips", title: "Browse the menu", wait: 6000,
         bodyHTML: "Tap a category to jump to it. A <b>B1G1</b> tag means <b>Buy 1 Get 1 Free</b> on those items." },
       { target: () => document.querySelector(".add-btn"), title: "Add an item", wait: 6000,
-        bodyHTML: "Tap <b>＋ Choose &amp; Add</b> to pick your base (wheat / millet), size and quantity, then add it to your cart." },
+        bodyHTML: "One tap on <b>Add</b> and it's in your cart. Want the millet base or the exotic size? Tap those pills on the card first — the price updates as you do. Added items turn into a <b>− 1 ＋</b> counter you can adjust right here." },
       { target: "#headerCart", title: "Your cart", placement: "bottom",
         bodyHTML: "Everything you add collects here. Add <b>2 of the same</b> item and one is free automatically." },
       { target: "#headerCart", title: "Checkout when ready", placement: "bottom",

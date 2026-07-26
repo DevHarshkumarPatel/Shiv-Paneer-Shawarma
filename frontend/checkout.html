@@ -1,13 +1,30 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Checkout — Shiv Paneer Shawarma</title>
+<meta name="theme-color" content="#14100c" />
 <link rel="icon" href="assets/img/logo.jpeg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="assets/css/tokens.css" />
 <link rel="stylesheet" href="assets/css/base.css" />
 <link rel="stylesheet" href="assets/css/components.css" />
+<link rel="stylesheet" href="assets/css/theme.css" />
 <link rel="stylesheet" href="assets/css/menu.css" />
 <link rel="stylesheet" href="assets/css/checkout.css" />
 <link rel="stylesheet" href="assets/css/tour.css" />
+
+<!-- Icon sprite for the order-type segment and the payment options (checkout.js
+     references these ids). Inline so they cost no request. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol viewBox="0 0 24 24" id="i-dine" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 3v8a2 2 0 0 0 4 0V3M9 11v10"/><path d="M16 3c-1.2 1.2-1.6 3-1.6 5.5 0 1.4.6 2.5 1.6 2.5s1.6-1.1 1.6-2.5C17.6 6 17.2 4.2 16 3ZM16 11v10"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-bag" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 8h14l-1.2 12.2a1 1 0 0 1-1 .8H7.2a1 1 0 0 1-1-.8L5 8Z"/><path d="M9 8V5.5A2.5 2.5 0 0 1 11.5 3h1A2.5 2.5 0 0 1 15 5.5V8"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-scooter" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="6" cy="17.5" r="2.5"/><circle cx="18" cy="17.5" r="2.5"/><path d="M8.5 17.5h7M15.5 17.5 13 7h-2M13 7h4l1.6 8"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-cash" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 12h.01M18 12h.01"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-phone" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></symbol>
+  </defs>
+</svg>
 
 <header class="site-header">
   <div class="container">

@@ -1,15 +1,41 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Shiv Paneer Shawarma — Authentic Paneer Shawarma, Bowls & Kullad</title>
-<meta name="description" content="Order Shiv Paneer Shawarma online. 100% veg paneer shawarma, cheese delights, kullad and bowls. Dine-in, takeaway or home delivery." />
+<title>Shiv Paneer Shawarma — Authentic Paneer Shawarma, Bowls &amp; Kullad</title>
+<meta name="description" content="Order Shiv Paneer Shawarma online. 100% veg paneer shawarma, cheese delights, kullad and bowls. Whole wheat &amp; millet wraps, ~35g protein. Dine-in, takeaway or home delivery." />
+<meta name="theme-color" content="#14100c" />
 <link rel="icon" href="assets/img/logo.jpeg" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
 <link rel="stylesheet" href="assets/css/tokens.css" />
 <link rel="stylesheet" href="assets/css/base.css" />
 <link rel="stylesheet" href="assets/css/components.css" />
-<link rel="stylesheet" href="assets/css/menu.css" />
 <link rel="stylesheet" href="assets/css/tour.css" />
+<!-- theme.css re-points the shared tokens at the dark palette; it must come
+     after components.css and before the page stylesheet. -->
+<link rel="stylesheet" href="assets/css/theme.css" />
+<link rel="stylesheet" href="assets/css/landing.css" />
 
-<header class="site-header">
+<!-- Icon sprite. Inline so the icons cost no extra request and inherit
+     currentColor; emoji were being used for these and read as placeholder. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol viewBox="0 0 24 24" id="i-bolt"><path d="M13 2 4.5 13.5H11l-1 8.5 8.5-11.5H12z" fill="currentColor"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-wheat" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21V9"/><path d="M12 9c0-2.2 1.3-4 3-4 0 2.2-1.3 4-3 4Zm0 0c0-2.2-1.3-4-3-4 0 2.2 1.3 4 3 4Zm0 4.5c0-2.2 1.3-4 3-4 0 2.2-1.3 4-3 4Zm0 0c0-2.2-1.3-4-3-4 0 2.2 1.3 4 3 4Zm0 4.5c0-2.2 1.3-4 3-4 0 2.2-1.3 4-3 4Zm0 0c0-2.2-1.3-4-3-4 0 2.2 1.3 4 3 4Z"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-leaf" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20c0-8 5-14 16-15 1 11-5 16-13 16H4Z"/><path d="M9 18c2-4 5-7 9-9"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-flame" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3s5 4.2 5 9a5 5 0 0 1-10 0c0-2 1-3.3 2-4.3 0 1.6.8 2.6 2 2.6 0-3 1-5.6 1-7.3Z"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-dine" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M7 3v8a2 2 0 0 0 4 0V3M9 11v10"/><path d="M16 3c-1.2 1.2-1.6 3-1.6 5.5 0 1.4.6 2.5 1.6 2.5s1.6-1.1 1.6-2.5C17.6 6 17.2 4.2 16 3ZM16 11v10"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-bag" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 8h14l-1.2 12.2a1 1 0 0 1-1 .8H7.2a1 1 0 0 1-1-.8L5 8Z"/><path d="M9 8V5.5A2.5 2.5 0 0 1 11.5 3h1A2.5 2.5 0 0 1 15 5.5V8"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-scooter" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="6" cy="17.5" r="2.5"/><circle cx="18" cy="17.5" r="2.5"/><path d="M8.5 17.5h7M15.5 17.5 13 7h-2M13 7h4l1.6 8"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-gift" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 10h16v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V10Z"/><path d="M3 7h18v3H3zM12 7v14"/><path d="M12 7C10.5 4 6 4 7 7M12 7c1.5-3 6-3 5 0"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-pin" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 21c4-4.6 6-7.7 6-10.4A6 6 0 0 0 6 10.6C6 13.3 8 16.4 12 21Z"/><circle cx="12" cy="10.4" r="2.3"/></symbol>
+    <symbol viewBox="0 0 24 24" id="i-pay" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18M7 15h4"/></symbol>
+  </defs>
+</svg>
+
+<header class="site-header" id="siteHeader">
   <div class="container">
     <a class="brand" href="index.html">
       <img src="assets/img/logo.jpeg" alt="Shiv Paneer Shawarma logo" />
@@ -26,68 +52,128 @@
 </header>
 
 <main>
-  <div class="container" id="closedNoticeWrap" hidden style="padding-top:var(--sp-4);"></div>
-  <section class="hero">
-    <!-- Decorative backdrop for the hero copy. muted + playsinline are both
-         required for mobile browsers to autoplay without a tap. The <source>
-         tags are attached by bgvideo.js, never in markup, so the file is not
-         downloaded when only the poster should show (reduced-motion,
-         Save-Data) — and phones get a smaller encode. -->
+  <!-- Hero: the video IS the hero, not a band above it. On a phone the first
+       screen is moving food, the dish name, and one button — nothing else. -->
+  <section class="lp-hero">
+    <!-- Decorative backdrop. muted + playsinline are both required for mobile
+         browsers to autoplay without a tap. The <source> tags are attached by
+         bgvideo.js, never in markup, so the file is not downloaded when only
+         the poster should show (reduced-motion, Save-Data) — and phones get a
+         smaller encode. -->
     <div class="hero-video" aria-hidden="true">
       <video data-bgvideo autoplay muted loop playsinline preload="none"
              poster="assets/img/hero-poster.jpg"
              data-mp4="assets/video/hero.mp4"
              data-mp4-sm="assets/video/hero-sm.mp4"></video>
     </div>
-    <div class="container">
-      <img class="hero-logo" src="assets/img/logo.jpeg" alt="Shiv Paneer Shawarma" />
-      <h1>Paneer Shawarma, done right.</h1>
-      <p class="lead">No Maida · No Palm Oil · No Mayonnaise. Whole wheat &amp; millet wraps,
-        ~35g protein per shawarma, loaded kullads and bowls — freshly made to order.</p>
-      <div class="pills">
-        <span>⚡ ~35g Protein</span>
-        <span>🌾 Whole Wheat &amp; Millets</span>
-        <span>🥗 100% Veg</span>
-        <span>🔥 Made fresh</span>
+    <div class="lp-hero-body">
+      <div class="container">
+        <span class="lp-eyebrow">Freshly made to order</span>
+        <h1>Paneer Shawarma,<em>done right.</em></h1>
+        <p class="lp-lead">Whole wheat &amp; millet wraps. ~35g protein a shawarma.
+          No maida, no palm oil, no mayonnaise — ever.</p>
+        <div class="lp-hero-cta">
+          <a class="btn btn-primary" id="heroOrderCta" href="menu.html">Order now →</a>
+          <span class="sub">Dine-in · Takeaway · Delivery</span>
+        </div>
+        <div class="lp-scroll"><span class="line"></span> See the menu</div>
       </div>
+    </div>
+  </section>
 
-      <h2 style="margin-top:var(--sp-6); color:#fff;">How would you like your order?</h2>
+  <!-- The four claims that actually separate this kitchen from the next one. -->
+  <section class="lp-strip">
+    <div class="container">
+      <span class="f"><svg><use href="#i-bolt"/></svg> ~35g protein</span>
+      <span class="f"><svg><use href="#i-wheat"/></svg> Whole wheat &amp; millets</span>
+      <span class="f"><svg><use href="#i-leaf"/></svg> 100% vegetarian</span>
+      <span class="f"><svg><use href="#i-flame"/></svg> Made fresh, never pre-cooked</span>
+    </div>
+  </section>
+
+  <div class="container" id="closedNoticeWrap" hidden style="padding-top:var(--sp-5);"></div>
+
+  <section class="section">
+    <div class="container">
+      <div class="lp-head">
+        <span class="kicker">Step 1</span>
+        <h2>How would you like it?</h2>
+        <p>Pick one and we'll carry it through to checkout — prices and any delivery fee adjust on their own.</p>
+      </div>
       <div class="ordertypes">
         <a class="ot-card" data-mode="dine_in" href="menu.html">
-          <div class="ico">🍽️</div><div class="t">Dine-in</div>
-          <div class="d">Eat at the outlet · no extra charge</div>
+          <span class="ico"><svg><use href="#i-dine"/></svg></span>
+          <span class="t">Dine-in</span>
+          <span class="d">Eat at the outlet · no extra charge</span>
         </a>
         <a class="ot-card" data-mode="takeaway" href="menu.html">
-          <div class="ico">🥡</div><div class="t">Takeaway</div>
-          <div class="d">Pick up yourself · no extra charge</div>
+          <span class="ico"><svg><use href="#i-bag"/></svg></span>
+          <span class="t">Takeaway</span>
+          <span class="d">Pick up yourself · no extra charge</span>
         </a>
         <a class="ot-card" data-mode="delivery" href="menu.html">
-          <div class="ico">🛵</div><div class="t">Delivery</div>
-          <div class="d">To your doorstep · pay online</div>
+          <span class="ico"><svg><use href="#i-scooter"/></svg></span>
+          <span class="t">Delivery</span>
+          <span class="d">To your doorstep · pay online</span>
         </a>
       </div>
     </div>
   </section>
 
+  <!-- Offer. Kept as one loud band instead of the badge-on-every-card noise. -->
+  <section class="section lp-section-tight">
+    <div class="container">
+      <div class="card lp-offer">
+        <div class="t">
+          <span class="tag">Running now</span>
+          <h3>Buy 1 Get 1 Free</h3>
+          <p>On shawarmas, cheese delights, kullads &amp; bowls. Add 2 of the same item —
+            the second one comes off your bill automatically at checkout.</p>
+        </div>
+        <a class="btn lp-btn-gold btn-lg" href="menu.html">Claim it →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Filled from /api/menu; the whole section removes itself if that fails. -->
+  <section class="section" id="picksSection" hidden>
+    <div class="container">
+      <div class="lp-head">
+        <span class="kicker">Most ordered</span>
+        <h2>Start with these</h2>
+      </div>
+      <div class="lp-picks" id="picksGrid"></div>
+    </div>
+  </section>
+
   <section class="section">
     <div class="container">
-      <div class="row wrap" style="gap:var(--sp-4);">
-        <div class="card card-pad grow" style="min-width:240px;">
-          <h3>Buy 1 Get 1 Free</h3>
-          <p class="text-muted text-sm">Running on Shawarma, Cheese Delights, Kullad &amp; Bowls. Add 2 of the same, pay for 1 — applied automatically at checkout.</p>
-        </div>
-        <div class="card card-pad grow" style="min-width:240px;">
+      <div class="lp-info">
+        <div class="card">
+          <div class="ico"><svg><use href="#i-pin"/></svg></div>
           <h3>Live order tracking</h3>
-          <p class="text-muted text-sm">Every order gets an ID. Follow it from <em>Placed</em> to <em>Delivered</em> on the <a href="track.html">track page</a>.</p>
+          <p>Every order gets an ID. Follow it from <em>Placed</em> to <em>Delivered</em> on the
+            <a href="track.html" style="color:var(--brand);">track page</a>.</p>
         </div>
-        <div class="card card-pad grow" style="min-width:240px;">
+        <div class="card">
+          <div class="ico"><svg><use href="#i-pay"/></svg></div>
           <h3>Pay your way</h3>
-          <p class="text-muted text-sm">UPI (GPay / PhonePe / Paytm) for online payment, or pay at the counter for dine-in &amp; takeaway.</p>
+          <p>UPI — GPay, PhonePe or Paytm — or pay at the counter for dine-in and takeaway.</p>
+        </div>
+        <div class="card">
+          <div class="ico"><svg><use href="#i-gift"/></svg></div>
+          <h3>Coupons welcome</h3>
+          <p>Got a code? Apply it in the cart and watch the total drop before you pay a rupee.</p>
         </div>
       </div>
-      <div class="text-center" style="margin-top:var(--sp-5);">
-        <a class="btn btn-primary btn-lg" id="startOrderCta" href="menu.html">Start your order →</a>
-      </div>
+    </div>
+  </section>
+
+  <section class="section lp-close">
+    <div class="container">
+      <h2>Hungry yet?</h2>
+      <p>Under a minute from here to ordered. Freshly rolled, on the counter or at your door.</p>
+      <a class="btn btn-primary btn-lg" id="startOrderCta" href="menu.html">Start your order →</a>
     </div>
   </section>
 </main>
@@ -97,7 +183,7 @@
     <div class="row-between wrap">
       <div>
         <div class="brand" style="color:#fff;">
-          <img src="assets/img/logo.jpeg" alt="" style="height:38px;width:38px;border-radius:8px;background:#fff;padding:2px;" />
+          <img src="assets/img/logo.jpeg" alt="" style="height:38px;width:38px;border-radius:8px;" />
           <strong>Shiv Paneer Shawarma</strong>
         </div>
         <p class="text-sm" style="margin-top:8px;opacity:.8;">Authentic Taste · No Maida · No Palm Oil · No Mayonnaise</p>
@@ -111,6 +197,12 @@
   </div>
 </footer>
 
+<!-- Phones only: one persistent way to order once the hero button is gone. -->
+<div class="lp-sticky" id="stickyBar">
+  <div class="t"><b>Buy 1 Get 1 Free</b>on shawarma, kullad &amp; bowls</div>
+  <a class="btn btn-primary" id="stickyCta" href="menu.html">Order now →</a>
+</div>
+
 <script src="js/bgvideo.js"></script>
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
@@ -121,11 +213,58 @@
     c.addEventListener("click", () => Store.setMode(c.dataset.mode));
   });
 
-  // Reflect the owner's ordering switch on the landing page, so customers
-  // learn up-front (not at checkout) when online ordering is paused.
+  // The header sits on top of the video with no bar of its own; it only gains a
+  // background once there is content behind it that needs separating.
+  const header = document.getElementById("siteHeader");
+  const onScroll = () => header.classList.toggle("scrolled", window.scrollY > 24);
+  addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  // Sticky order bar appears exactly when the hero CTA leaves the screen, so
+  // there is never more than one primary button competing at a time.
+  const bar = document.getElementById("stickyBar");
+  const heroCta = document.getElementById("heroOrderCta");
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver(([e]) => bar.classList.toggle("show", !e.isIntersecting))
+      .observe(heroCta);
+  }
+
+  // Signature picks. Read straight off the live menu so prices can never drift
+  // from the menu page, and drop the section entirely rather than show stale or
+  // half-loaded content.
+  (async () => {
+    const money = (n) => "₹" + Math.round(n);
+    // Item names/descriptions are owner-entered through the admin, so they are
+    // untrusted as far as this template is concerned.
+    const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
+      (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    try {
+      const menu = await API.get("/api/menu");
+      const items = (menu.categories || [])
+        .flatMap((c) => [...(c.items || []), ...(c.subcategories || []).flatMap((s) => s.items || [])])
+        .slice(0, 6);
+      if (!items.length) return;
+      document.getElementById("picksGrid").innerHTML = items.map((it) => {
+        const prices = (it.variants || []).map((v) => v.price).filter((p) => p > 0);
+        const from = prices.length ? Math.min(...prices) : it.base_price;
+        const many = prices.length > 1;
+        return `<a class="lp-pick" href="menu.html">
+            <span class="n">
+              <span class="nm">${esc(it.name)}<span class="dot" title="Pure veg"></span></span>
+              ${it.description ? `<span class="ds">${esc(it.description)}</span>` : ""}
+            </span>
+            <span class="pr">${many ? "<small>from</small>" : ""}${money(from)}</span>
+          </a>`;
+      }).join("");
+      document.getElementById("picksSection").hidden = false;
+    } catch (_) { /* section stays hidden */ }
+  })();
+
+  // Reflect the owner's ordering switch on the landing page, so customers learn
+  // up-front (not at checkout) when online ordering is paused.
   (async () => {
     let open = true;
-    try { open = (await API.get("/api/settings")).ordering_enabled !== false; } catch { /* assume open */ }
+    try { open = (await API.get("/api/settings")).ordering_enabled !== false; } catch (_) { /* assume open */ }
     if (open) return;
     const wrap = document.getElementById("closedNoticeWrap");
     if (wrap) {
@@ -133,8 +272,10 @@
         You're welcome to explore our menu — please check back a little later to place your order.</div>`;
       wrap.hidden = false;
     }
-    const cta = document.getElementById("startOrderCta");
-    if (cta) cta.textContent = "Browse the menu →";
+    ["heroOrderCta", "startOrderCta", "stickyCta"].forEach((id) => {
+      const b = document.getElementById(id);
+      if (b) b.textContent = "Browse the menu →";
+    });
   })();
 </script>
 <script src="js/tour.js"></script>

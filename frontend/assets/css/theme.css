@@ -1,0 +1,97 @@
+/* Dark theme — shared by every customer-facing page.
+ *
+ * Loaded AFTER components.css and BEFORE the per-page stylesheet, so it can
+ * re-point the tokens without any page-level rule having to know about it.
+ * Everything token-driven (cards, buttons, inputs, chips, modal, footer, the
+ * guided-tour tooltip) follows along for free; the handful of components that
+ * hard-coded a light value are corrected at the bottom.
+ *
+ * The staff pages deliberately do NOT load this — they are a back-office tool,
+ * and a light UI is easier to read on a counter tablet all day.
+ */
+
+:root {
+  /* Dark surfaces. Warm-shifted, not neutral grey — the logo and the hero video
+     are both saffron/amber, and a cool grey next to them looks dirty. */
+  --bg: #14100c;
+  --surface: #1d1712;
+  --surface-2: #262019;
+  --ink: #f8f0e7;
+  --ink-2: #c3b2a1;
+  --ink-3: #978676;
+  --line: #372c22;
+
+  /* Gold is the second accent: saffron is the brand and does the CTAs, gold
+     does the "premium / offer" moments so the two never compete. */
+  --gold: #e9b949;
+  --gold-dim: #a57f21;
+
+  /* Was a cream wash for light surfaces; on dark it has to be a tint, and the
+     components that put text on it are re-pointed at --brand below. */
+  --brand-soft: rgba(247, 148, 29, .14);
+
+  --font: "Plus Jakarta Sans", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, .4);
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, .45);
+  --shadow-lg: 0 26px 60px rgba(0, 0, 0, .55);
+}
+
+/* Weight 700, not the base 800: Fraunces is loaded at 600/700, so asking for
+   800 made the browser synthesise a fake bold — which is what smeared the
+   headings. 700 Fraunces is already heavier than 800 of the old system font. */
+h1, h2 { font-family: var(--font-display); font-weight: 700; letter-spacing: -.01em; }
+h3, h4 { font-weight: 700; }
+
+/* ---------------------------------------------------------------- header ---
+   A full-width saffron band was the brightest thing on every page and pulled
+   the eye away from the food and the prices. Dark bar, brand-coloured only
+   where it has to be. (The landing page overrides this to sit transparent on
+   top of the hero video — see landing.css.) */
+.site-header {
+  background: rgba(20, 16, 12, .94);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 1px 0 var(--line);
+  color: var(--ink);
+}
+.site-header .brand img { background: transparent; padding: 0; box-shadow: none; border-radius: 9px; }
+.site-header .brand .name { font-family: var(--font-display); font-weight: 700; }
+.site-header .brand .tagline { color: var(--ink-3); opacity: 1; }
+/* .btn-ghost / .btn-outline were drawn for a coloured header; on a dark bar
+   they need to read as quiet glass instead of as white boxes. */
+.site-header .btn-ghost { border-color: var(--line); color: var(--ink-2); }
+.site-header .btn-ghost:hover { color: var(--ink); border-color: var(--ink-3); }
+.site-header .btn-outline { background: var(--surface-2); border-color: var(--line); color: var(--ink); }
+.site-header .btn-outline:hover { border-color: var(--brand); }
+
+/* Narrow phones: the wordmark and the buttons cannot both fit — the name wrapped
+   onto two or three lines and then collided with "Guide". The logo carries the
+   brand at this width. */
+@media (max-width: 560px) {
+  .site-header .brand > div { display: none; }
+  .site-header .header-actions .btn { padding: 6px 11px; }
+}
+
+.site-footer { background: #100c09; border-top: 1px solid var(--line); color: var(--ink-2); }
+
+.modal-head h3 { font-family: var(--font-display); }
+
+/* --------------------------------------------------- light-value patch-ups ---
+   These three put text on --brand-soft, which used to be cream. Now that it is
+   a dark tint, the text has to move from the dark brand shade to the bright
+   one or it drops below readable contrast. */
+.badge-soft { color: var(--brand); }
+.tour-badge { color: var(--brand); background: var(--brand-soft); }
+.opt small { color: var(--brand); }
+
+/* .opt is a <button> that never set a colour of its own — on the light theme
+   the UA's default black happened to be right, so nothing caught it. On dark it
+   left the base/size labels near-black on a near-black card. */
+.opt { color: var(--ink); }
+.opt:hover { background: var(--surface-2); }
+.opt.active { color: var(--ink); box-shadow: none; }
+
+/* The veg mark is a green square on white in the FSSAI convention; on a dark
+   card it needs its own light plate to stay legible as that mark. */
+.dot { background: #fff; }
