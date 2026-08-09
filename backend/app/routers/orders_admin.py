@@ -1,9 +1,11 @@
 """Staff / owner order management: live board, status updates, payment verify."""
+import csv
+import io
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from ..deps import get_current_user
+from ..deps import get_current_user, require_owner
 from ..models import Order, StatusEvent
 from ..models.order import STATUS_FLOW
 from ..schemas.models import StatusUpdateRequest, VerifyPaymentRequest
@@ -67,6 +69,100 @@ def latest_order(user=Depends(get_current_user)):
         "latest_id": o.public_id,
         "latest_created_at": o.created_at.isoformat() if o.created_at else None,
     }
+
+
+def _csv_cell(value: str) -> str:
+    """One spreadsheet-safe line of text.
+
+    Addresses are free text a customer typed, so two things are fixed here:
+    embedded newlines are flattened (otherwise one order spans several rows in
+    the sheet), and a leading =, +, - or @ is escaped — Excel and Sheets treat
+    those as a formula, which is how a pasted address turns into a live cell.
+    """
+    text = " ".join((value or "").split())
+    return "'" + text if text[:1] in ("=", "+", "-", "@") else text
+
+
+@router.get("/export.csv")
+def export_orders_csv(
+    start: str,
+    end: str,
+    include_items: bool = False,
+    _owner=Depends(require_owner),
+):
+    """Owner-only CSV of the orders placed between two IST dates, inclusive.
+
+    Customer contact details always; the item lines and the bill amount only if
+    asked for, because the usual reason to pull this file is a contact list and
+    not an accounts report. Declared before ``/{public_id}`` so the path is not
+    swallowed as an order id.
+    """
+    start_utc, _ = _ist_day_utc_window(start)
+    _, end_utc = _ist_day_utc_window(end)
+    if end_utc <= start_utc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "End date must not be before the start date.")
+
+    orders = list(
+        Order.query(Order.created_at >= start_utc, Order.created_at < end_utc)
+        .order(Order.created_at)
+    )
+
+    header = ["Order ID", "Date (IST)", "Order type", "Customer name", "Phone", "Address"]
+    if include_items:
+        header += [
+            "Items", "Subtotal (INR)",
+            "Offer applied", "Offer discount (INR)",
+            "Coupon code", "Coupon discount (INR)",
+            "Delivery fee (INR)", "Total paid (INR)",
+        ]
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(header)
+    for o in orders:
+        c = o.customer
+        placed_ist = (o.created_at + IST_OFFSET).strftime("%Y-%m-%d %H:%M") if o.created_at else ""
+        row = [
+            o.public_id,
+            placed_ist,
+            o.order_type.replace("_", "-"),
+            _csv_cell(c.name if c else ""),
+            _csv_cell(c.phone if c else ""),
+            _csv_cell(c.address if c else ""),
+        ]
+        if include_items:
+            items = "; ".join(
+                f"{i.name}"
+                + (f" ({i.variant_label})" if i.variant_label else "")
+                + f" x{i.quantity}"
+                for i in o.items
+            )
+            # The promo is named from the labels frozen on the lines. Orders
+            # placed before those were stored still show a discount, so fall
+            # back to a generic name rather than an empty cell next to an
+            # amount — "none" has to mean no offer, not "we lost the name".
+            labels = list(dict.fromkeys(i.promo_label for i in o.items if i.promo_label))
+            if labels:
+                offer = ", ".join(labels)
+            else:
+                offer = "Offer (name not recorded)" if o.promo_discount > 0 else ""
+            row += [
+                _csv_cell(items), f"{o.subtotal:.2f}",
+                _csv_cell(offer), f"{o.promo_discount:.2f}",
+                _csv_cell(o.coupon_code or ""), f"{o.coupon_discount:.2f}",
+                f"{o.delivery_fee:.2f}", f"{o.total:.2f}",
+            ]
+        writer.writerow(row)
+
+    # utf-8-sig: Excel (and Google Sheets on a phone) reads a plain UTF-8 CSV as
+    # latin-1 without the BOM, which mangles every non-ASCII name and address.
+    body = buf.getvalue().encode("utf-8-sig")
+    filename = f"orders-{start}-to-{end}.csv"
+    return Response(
+        content=body,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{public_id}")

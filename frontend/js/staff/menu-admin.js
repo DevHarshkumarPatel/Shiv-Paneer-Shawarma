@@ -49,11 +49,12 @@
         ${tabBtn("promos", "🎉 Promos")}
         ${tabBtn("coupons", "🏷️ Coupons")}
         ${tabBtn("areas", "🛵 Delivery Areas")}
+        ${tabBtn("export", "📄 Export")}
         ${tabBtn("settings", "⚙️ Settings")}
       </div>
       <div id="tabBody"></div>`;
     els("[data-tab]").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; render(); }));
-    ({ items: renderItems, categories: renderCategories, promos: renderPromos, coupons: renderCoupons, areas: renderAreas, settings: renderSettings }[tab])();
+    ({ items: renderItems, categories: renderCategories, promos: renderPromos, coupons: renderCoupons, areas: renderAreas, export: renderExport, settings: renderSettings }[tab])();
   }
 
   function toolbar(title, addLabel, onAdd) {
@@ -654,6 +655,73 @@
       if (!payload.name) return toast("Area name is required", "err");
       if (payload.fee < 0) return toast("Fee cannot be negative", "err");
       await save(area ? "put" : "post", area ? `/api/admin/delivery-areas/${area.id}` : "/api/admin/delivery-areas", payload, m);
+    });
+  }
+
+  /* ---------------- Export ---------------- */
+  /* Downloads through fetch rather than a plain <a href>: the export is behind
+     the owner session cookie, and a link opened by the phone's downloader would
+     arrive without it and 401. The CSV comes back as text, so it is wrapped in
+     a Blob here and handed to a synthetic <a download>. */
+  function renderExport() {
+    const body = el("#tabBody");
+    // Local date, not toISOString() — that converts to UTC and, after 5:30 am
+    // IST is behind, would offer yesterday as "today" for half the day.
+    const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const today = new Date();
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    body.innerHTML = `
+      <h2 style="margin:0 0 var(--sp-3);">Export orders</h2>
+      <div class="card"><div class="card-pad">
+        <p class="text-muted text-sm" style="margin:0 0 var(--sp-3);max-width:60ch;">
+          Download the orders placed between two dates as a CSV you can open in Excel or
+          Google Sheets. Every row carries the customer's name, phone and address.</p>
+        <div class="input-row">
+          <div class="field grow"><label>From</label><input class="input" id="expFrom" type="date" value="${ymd(monthStart)}" /></div>
+          <div class="field grow"><label>To</label><input class="input" id="expTo" type="date" value="${ymd(today)}" /></div>
+        </div>
+        <label class="row" style="align-items:center;gap:10px;margin:var(--sp-2) 0 var(--sp-3);">
+          <input type="checkbox" id="expItems" />
+          <span>Also include the items, the offer/coupon applied and the amounts</span>
+        </label>
+        <button class="btn btn-primary" id="expBtn">⬇️ Download CSV</button>
+        <p class="text-muted text-sm" id="expHint" style="margin:var(--sp-3) 0 0;max-width:60ch;">
+          Dates are Indian Standard Time, and both days are included. With the box ticked
+          each row also carries the subtotal before discounts, which offer and coupon were
+          applied, what each took off, the delivery fee and the amount actually paid.</p>
+      </div></div>`;
+
+    el("#expBtn").addEventListener("click", async () => {
+      const from = el("#expFrom").value;
+      const to = el("#expTo").value;
+      if (!from || !to) return toast("Pick both dates", "err");
+      if (to < from) return toast("The end date is before the start date", "err");
+      const btn = el("#expBtn");
+      btn.disabled = true;
+      const original = btn.textContent;
+      btn.textContent = "Preparing…";
+      try {
+        const withItems = el("#expItems").checked;
+        const csv = await API.get(
+          `/api/admin/orders/export.csv?start=${encodeURIComponent(from)}&end=${encodeURIComponent(to)}&include_items=${withItems}`);
+        const rows = String(csv).trim().split("\n").length - 1;   // minus the header
+        if (rows < 1) { toast("No orders in that date range", "err"); return; }
+        const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `orders-${from}-to-${to}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        toast(`${rows} order${rows === 1 ? "" : "s"} downloaded`, "ok");
+      } catch (e) {
+        toast(e.message, "err");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = original;
+      }
     });
   }
 
