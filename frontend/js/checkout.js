@@ -280,9 +280,16 @@
 
     return priced + gone;
   }
+  /* Name the offers the discount actually came from, taken off the priced
+     lines, instead of hard-coding "(B1G1)" onto whatever promo is running. */
+  function offerRowLabel(q) {
+    const labels = [...new Set((q.lines || []).map((l) => l.promo_label).filter(Boolean))];
+    return labels.length ? `Offers · ${esc(labels.join(", "))}` : "Offers";
+  }
+
   function summaryTotals(q) {
     const rows = [`<div class="summary-line"><span>Subtotal</span><span>${money(q.subtotal)}</span></div>`];
-    if (q.promo_discount > 0) rows.push(`<div class="summary-line free-note"><span>Offers (B1G1)</span><span>− ${money(q.promo_discount)}</span></div>`);
+    if (q.promo_discount > 0) rows.push(`<div class="summary-line free-note"><span>${offerRowLabel(q)}</span><span>− ${money(q.promo_discount)}</span></div>`);
     if (q.coupon_discount > 0) rows.push(`<div class="summary-line free-note"><span>Coupon ${esc(q.coupon_code)}</span><span>− ${money(q.coupon_discount)}</span></div>`);
     if (state.mode === "delivery") {
       if (q.delivery_area_required) {

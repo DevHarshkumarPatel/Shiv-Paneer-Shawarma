@@ -148,6 +148,8 @@ class Promo(ndb.Model):
     ptype = ndb.StringProperty(choices=["b2g1", "b1g1", "percent", "flat"], required=True)
     value = ndb.FloatProperty(default=0.0)             # percent (0-100) or flat INR; 0 for b2g1/b1g1
     label = ndb.StringProperty(default="")             # e.g. "Buy 2 Get 1 Free"
+    description = ndb.TextProperty(default="")         # customer-facing pitch, shown on the site
+    conditions = ndb.TextProperty(default="")          # the fine print shown under the pitch
     active = ndb.BooleanProperty(default=True)
     created_at = ndb.DateTimeProperty(auto_now_add=True)
 
@@ -157,6 +159,46 @@ class Promo(ndb.Model):
         if self.target_id and self.target_id not in ids:
             ids.append(self.target_id)
         return ids
+
+    def display_label(self) -> str:
+        """The headline. Owner text wins; otherwise derived from the promo type,
+        so a promo created without a label is never rendered as a blank band."""
+        if self.label:
+            return self.label
+        if self.ptype == "b1g1":
+            return "Buy 1 Get 1 Free"
+        if self.ptype == "b2g1":
+            return "Buy 2 Get 1 Free"
+        if self.ptype == "percent":
+            return f"{self.value:g}% off"
+        return f"₹{self.value:g} off"
+
+    def display_description(self, targets_text: str = "") -> str:
+        """Owner description, else a mechanically accurate one built from ptype.
+
+        The defaults describe exactly what `services/pricing.py` does, so the
+        copy on the site cannot drift from what the cart actually charges.
+        """
+        if self.description:
+            return self.description
+        on = f" on {targets_text}" if targets_text else ""
+        from_ = f" from {targets_text}" if targets_text else ""
+        if self.ptype == "b1g1":
+            return (f"Add any 2 eligible items{from_} — the cheaper of the two comes off "
+                    "your bill automatically at checkout.")
+        if self.ptype == "b2g1":
+            return f"Buy any 2 items{from_} and the 3rd one is free, applied automatically at checkout."
+        if self.ptype == "percent":
+            return f"{self.value:g}% off every eligible item{on}, applied automatically at checkout."
+        return f"₹{self.value:g} off every eligible item{on}, applied automatically at checkout."
+
+    def display_conditions(self, targets_text: str = "") -> str:
+        """Owner fine print, else the standing terms every promo here shares."""
+        if self.conditions:
+            return self.conditions
+        applies = f"Applies to {targets_text}. " if targets_text else ""
+        return (f"{applies}No coupon code needed — the discount is calculated on the "
+                "final bill. Cannot be combined with itself on the same item twice.")
 
     def to_dict(self) -> dict:
         targets = self.target_id_list()
@@ -168,5 +210,8 @@ class Promo(ndb.Model):
             "ptype": self.ptype,
             "value": self.value,
             "label": self.label,
+            "display_label": self.display_label(),
+            "description": self.description,
+            "conditions": self.conditions,
             "active": self.active,
         }

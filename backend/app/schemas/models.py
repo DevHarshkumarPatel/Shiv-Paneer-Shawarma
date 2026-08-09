@@ -131,6 +131,8 @@ class PromoPayload(BaseModel):
     ptype: str          # b2g1 | b1g1 | percent | flat
     value: float = 0.0
     label: str = ""
+    description: str = ""        # blank means "use the derived copy"
+    conditions: str = ""
     active: bool = True
 
 

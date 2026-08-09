@@ -90,7 +90,11 @@
       title: cat ? "Edit category" : "Add category",
       bodyHTML: `
         <div class="field"><label>Name</label><input class="input" id="fName" value="${esc(c.name)}" /></div>
-        <div class="field"><label>Offer badge (optional)</label><input class="input" id="fBadge" value="${esc(c.offer_badge)}" placeholder="e.g. Buy 2 Get 1" /></div>
+        <!-- Legacy free-text badge. The customer menu no longer reads it: the
+             badge on a category heading now comes from the live promo, so it
+             cannot outlive the offer it advertises. -->
+        <div class="field"><label>Offer badge (internal note — not shown on the site)</label><input class="input" id="fBadge" value="${esc(c.offer_badge)}" placeholder="e.g. Buy 2 Get 1" />
+          <p class="text-muted text-sm">Offers shown to customers come from the <strong>Promos</strong> tab.</p></div>
         <div class="input-row">
           <div class="field grow"><label>Sort order</label><input class="input" id="fSort" type="number" value="${c.sort_order}" /></div>
           <div class="field grow"><label>Active</label><select class="select" id="fActive"><option value="true" ${c.active ? "selected" : ""}>Active</option><option value="false" ${!c.active ? "selected" : ""}>Hidden</option></select></div>
@@ -482,6 +486,13 @@
         </div>
         <p class="text-muted text-sm" id="b1g1Hint" style="display:none;">Buy 1 Get 1 applies to the items in every category/item you select. Eligible items are pooled together and, for every 2 of them in a cart, the cheaper one is free. Select all categories to run it store-wide.</p>
         <div class="field"><label>Label shown to customers</label><input class="input" id="fLabel" value="${esc(p.label)}" placeholder="Buy 2 Get 1 Free" /></div>
+        <!-- These two are what the site's offer banners say. Left blank, the API
+             writes the copy itself from the promo type and the categories it
+             covers, so a promo is never advertised with an empty description. -->
+        <div class="field"><label>Description (optional)</label>
+          <textarea class="input" id="fDescription" rows="2" placeholder="Left blank: written automatically from the promo type.">${esc(p.description || "")}</textarea></div>
+        <div class="field"><label>Conditions / fine print (optional)</label>
+          <textarea class="input" id="fConditions" rows="2" placeholder="Left blank: the standard 'applies automatically at checkout' terms.">${esc(p.conditions || "")}</textarea></div>
         <div class="field"><label>Active</label><select class="select" id="fActive"><option value="true" ${p.active ? "selected" : ""}>Active</option><option value="false" ${!p.active ? "selected" : ""}>Off</option></select></div>`,
       footHTML: `<button class="btn btn-primary btn-block" id="saveBtn">Save promo</button>`,
     });
@@ -536,6 +547,8 @@
         ptype,
         value: noValueType(ptype) ? 0 : (parseFloat(el("#fValue", m.backdrop).value) || 0),
         label: el("#fLabel", m.backdrop).value.trim() || (ptype === "b2g1" ? "Buy 2 Get 1 Free" : ptype === "b1g1" ? "Buy 1 Get 1 Free" : ""),
+        description: el("#fDescription", m.backdrop).value.trim(),
+        conditions: el("#fConditions", m.backdrop).value.trim(),
         active: el("#fActive", m.backdrop).value === "true",
       };
       await save(promo ? "put" : "post", promo ? `/api/admin/menu/promos/${promo.id}` : "/api/admin/menu/promos", payload, m);

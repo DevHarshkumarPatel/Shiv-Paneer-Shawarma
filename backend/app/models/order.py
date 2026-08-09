@@ -25,6 +25,10 @@ class OrderItem(ndb.Model):
     quantity = ndb.IntegerProperty(required=True)
     free_quantity = ndb.IntegerProperty(default=0)   # from B2G1-type promos
     line_total = ndb.FloatProperty(required=True)    # after item promo, before coupon
+    # The offer that discounted this line, as it read when the order was placed.
+    # Kept on the order rather than looked up later: promos get edited and
+    # switched off, and an old bill must still say what it actually gave.
+    promo_label = ndb.StringProperty(default="")
 
     def to_dict(self) -> dict:
         return {
@@ -37,6 +41,7 @@ class OrderItem(ndb.Model):
             "quantity": self.quantity,
             "free_quantity": self.free_quantity,
             "line_total": self.line_total,
+            "promo_label": self.promo_label,
         }
 
 

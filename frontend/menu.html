@@ -105,8 +105,12 @@
       <h1>Veg shawarma menu &amp; prices in Surat</h1>
       <p>Paneer shawarma, cheese delights, kullads and bowls — pick whole wheat or millet,
         regular or exotic. Everything is 100% vegetarian and rolled after you order it.
-        Buy 1 Get 1 Free applies automatically at checkout.</p>
+        <span data-promos="line">Buy 1 Get 1 Free applies automatically at checkout.</span></p>
     </div>
+
+    <!-- Running offers with their terms, from /api/promos. Empty markup on
+         purpose: nothing is claimed here until the live promos say so. -->
+    <div data-promos="strip"></div>
 
     <div class="menu-layout">
       <div id="menuContent">
@@ -139,6 +143,7 @@
 
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
+<script src="js/promos.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/store.js"></script>
 <script src="js/menu.js"></script>

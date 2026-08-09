@@ -320,7 +320,8 @@ def create_promo(body: PromoPayload, _owner=Depends(require_owner)):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pick at least one category or item.")
     promo = Promo(
         scope=body.scope, target_id=targets[0], target_ids=targets, ptype=body.ptype,
-        value=body.value, label=body.label, active=body.active,
+        value=body.value, label=body.label, description=body.description,
+        conditions=body.conditions, active=body.active,
     )
     promo.put()
     return promo.to_dict()
@@ -340,6 +341,8 @@ def update_promo(promo_id: int, body: PromoPayload, _owner=Depends(require_owner
     promo.ptype = body.ptype
     promo.value = body.value
     promo.label = body.label
+    promo.description = body.description
+    promo.conditions = body.conditions
     promo.active = body.active
     promo.put()
     return promo.to_dict()

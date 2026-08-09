@@ -22,10 +22,30 @@
   // Each step: { target?, title, bodyHTML, placement?, pad?, wait?, last?, ctaLast? }
   // No `target` => a centered card (welcome / intro). `target` may be a CSS
   // selector or a function returning an element.
-  const WELCOME_LIST = `
+  /* The tour's offer copy comes from the live promos (js/promos.js), so the
+     walkthrough cannot keep advertising an offer the owner switched off. Step
+     text may use {{promo_label}} / {{promo_on}} / {{promo_desc}} / {{promo_note}},
+     and a step marked promoOnly is dropped when nothing is running. */
+  let PROMOS = [];
+  const topPromo = () => PROMOS[0] || null;
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  function fillTokens(s) {
+    const p = topPromo();
+    return String(s == null ? "" : s)
+      .replace(/\{\{promo_label\}\}/g, p ? esc(p.label) : "Today's offer")
+      .replace(/\{\{promo_on\}\}/g, p ? esc(p.applies_to_text || "the menu") : "the menu")
+      .replace(/\{\{promo_desc\}\}/g, p ? esc(p.description) : "")
+      .replace(/\{\{promo_note\}\}/g, p ? `<b>${esc(p.label)}</b> is applied automatically.` : "");
+  }
+
+  const WELCOME_LIST = () => `
     <ul class="tour-steps-list">
       <li><span class="ico">🍽️</span> Pick <b>dine-in, takeaway or delivery</b></li>
-      <li><span class="ico">🌯</span> Add items — <b>Buy 1 Get 1 Free!</b></li>
+      <li><span class="ico">🌯</span> ${topPromo()
+        ? `Add items — <b>${esc(topPromo().label)}!</b>`
+        : "Add items to your cart"}</li>
       <li><span class="ico">💳</span> Checkout &amp; pay by <b>UPI</b></li>
       <li><span class="ico">📍</span> <b>Track</b> your order live</li>
     </ul>`;
@@ -33,12 +53,12 @@
   const TOURS = {
     index: [
       { title: "Welcome to Shiv Paneer Shawarma! 👋",
-        bodyHTML: "Ordering takes under a minute. Here's the whole journey:" + WELCOME_LIST,
+        bodyHTML: () => "Ordering takes under a minute. Here's the whole journey:" + WELCOME_LIST(),
         ctaFirst: "Show me around →" },
       { target: ".ordertypes", title: "1 · Choose your order type",
         bodyHTML: "Start with <b>Dine-in</b>, <b>Takeaway</b> or <b>Delivery</b>. Prices and any delivery fee adjust automatically." },
-      { target: ".section .card", title: "Buy 1 Get 1 Free 🎉",
-        bodyHTML: "This offer runs on shawarmas, cheese delights, kullads &amp; bowls. Add 2 of the same item and one is <b>free</b> — applied for you at checkout." },
+      { target: "[data-promos='band'] .card", title: "{{promo_label}} 🎉", promoOnly: true,
+        bodyHTML: "{{promo_desc}}" },
       { target: '.header-actions a[href="track.html"]', title: "Track anytime", placement: "bottom",
         bodyHTML: "Once you order, check its status here — from <em>Placed</em> to <em>Delivered</em> — with your order ID. Tap <b>Refresh</b> for the latest." },
       { target: ".section .btn-primary", title: "Ready to order?",
@@ -49,11 +69,12 @@
       { target: "#modeSeg", title: "Order type",
         bodyHTML: "Switch between <b>dine-in</b>, <b>takeaway</b> and <b>delivery</b> here anytime — totals update instantly." },
       { target: "#catChips", title: "Browse the menu", wait: 6000,
-        bodyHTML: "Tap a category to jump to it. A <b>B1G1</b> tag means <b>Buy 1 Get 1 Free</b> on those items." },
+        bodyHTML: () => "Tap a category to jump to it." + (topPromo()
+          ? ` An offer tag on a category means <b>${esc(topPromo().label)}</b> runs on those items.` : "") },
       { target: () => document.querySelector(".add-btn"), title: "Add an item", wait: 6000,
         bodyHTML: "Tap <b>Add</b> — or anywhere on the card — to see the photo, the full description and every base and size with its own price. Items with nothing to choose go straight into the cart. Once added, the button becomes a <b>− 1 ＋</b> counter you can adjust right here." },
       { target: "#headerCart", title: "Your cart", placement: "bottom",
-        bodyHTML: "Everything you add collects here. Add <b>2 of the same</b> item and one is free automatically." },
+        bodyHTML: "Everything you add collects here. {{promo_note}}" },
       { target: "#headerCart", title: "Checkout when ready", placement: "bottom",
         bodyHTML: "Open your cart and tap <b>Proceed to checkout →</b> to add your details and pay. You'll get an order ID to track. Enjoy! 🌯",
         last: true, ctaLast: "Got it" },
@@ -259,9 +280,21 @@
     teardown();
   }
 
+  /* Resolve a step's copy against the promos that are actually running. Done
+     here rather than at module load, because the promos arrive over the wire. */
+  function resolveSteps(stepList) {
+    return stepList
+      .filter((s) => !s.promoOnly || topPromo())
+      .map((s) => ({
+        ...s,
+        title: fillTokens(typeof s.title === "function" ? s.title() : s.title),
+        bodyHTML: fillTokens(typeof s.bodyHTML === "function" ? s.bodyHTML() : s.bodyHTML).trim(),
+      }));
+  }
+
   function start(stepList, pageName, complete) {
     if (root) teardown();               // never stack two tours
-    steps = stepList; page = pageName; onComplete = complete || null; idx = 0;
+    steps = resolveSteps(stepList); page = pageName; onComplete = complete || null; idx = 0;
     buildDOM();
     show(0, 1);
   }
@@ -290,10 +323,16 @@
   }
 
   /* ---------------- boot ---------------- */
-  function boot() {
+  async function boot() {
     injectHelp();
     const pg = currentPage();
     if (!TOURS[pg]) return;
+    // Offer steps need the live promos before the first step is drawn.
+    // js/promos.js declares Promos with `const`, which is script-scoped and
+    // never lands on `window` — so this has to test the binding itself.
+    if (typeof Promos !== "undefined") {
+      try { PROMOS = (await Promos.load()) || []; } catch (_) { PROMOS = []; }
+    }
     const continuing = SS.getItem("sps_tour");
     if (pg === "menu" && continuing === "menu") {
       SS.removeItem("sps_tour");

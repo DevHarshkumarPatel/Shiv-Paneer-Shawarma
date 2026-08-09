@@ -67,8 +67,24 @@
       : order.payment.status === "failed" ? "badge-status" : "badge-soft";
     const items = order.items.map((i) =>
       `<div class="summary-item"><div><div class="si-name">${esc(i.name)} × ${i.quantity}</div>
-        <div class="si-sub">${esc(i.variant_label || "")}${i.free_quantity ? ` · ${i.free_quantity} free` : ""}</div></div>
+        <div class="si-sub">${esc(i.variant_label || "")}${i.free_quantity ? ` · ${i.free_quantity} free` : ""}${i.promo_label ? ` · 🎉 ${esc(i.promo_label)}` : ""}</div></div>
         <div class="si-name">${money(i.line_total)}</div></div>`).join("");
+
+    /* The bill, not just the total. Without these rows a customer who used a
+       coupon saw the items add up to more than they paid, with nothing saying
+       why — the discount had no evidence anywhere on the page. */
+    const billRows = [`<div class="summary-line"><span>Subtotal</span><span>${money(order.subtotal)}</span></div>`];
+    if (order.promo_discount > 0) {
+      const labels = [...new Set(order.items.map((i) => i.promo_label).filter(Boolean))];
+      billRows.push(`<div class="summary-line free-note"><span>${labels.length ? `Offers · ${esc(labels.join(", "))}` : "Offers"}</span><span>− ${money(order.promo_discount)}</span></div>`);
+    }
+    if (order.coupon_discount > 0) {
+      billRows.push(`<div class="summary-line free-note"><span>Coupon ${esc(order.coupon_code || "")}</span><span>− ${money(order.coupon_discount)}</span></div>`);
+    }
+    if (order.delivery_fee > 0) {
+      const area = order.delivery_area ? `Delivery · ${esc(order.delivery_area)}` : "Delivery fee";
+      billRows.push(`<div class="summary-line"><span>${area}</span><span>${money(order.delivery_fee)}</span></div>`);
+    }
 
     el("#trackResult").innerHTML = `
       <div class="card step-card"><div class="card-pad">
@@ -96,7 +112,8 @@
       <div class="card step-card"><div class="card-pad">
         <h3 style="margin-top:0;">Items</h3>
         ${items}
-        <div class="summary-line grand" style="margin-top:var(--sp-3);"><span>Total</span><span>${money(order.total)}</span></div>
+        <div style="margin-top:var(--sp-3);">${billRows.join("")}</div>
+        <div class="summary-line grand"><span>Total</span><span>${money(order.total)}</span></div>
         ${order.customer && order.customer.address ? `<p class="text-sm text-muted" style="margin-top:var(--sp-3);">🛵 ${esc(order.customer.address)}</p>` : ""}
       </div></div>`;
 

@@ -47,6 +47,11 @@
 .order-card .oc-body { padding: var(--sp-3) var(--sp-4); }
 .oc-item { font-size: var(--fs-sm); display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; }
 .oc-item .q { color: var(--brand-700); font-weight: 800; }
+/* Bill breakdown under the items: subtotal, offers, coupon, delivery. */
+.oc-line { font-size: var(--fs-sm); display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; color: var(--ink-2); }
+.oc-line:first-of-type { margin-top: 6px; border-top: 1px dashed var(--line); padding-top: 6px; }
+.oc-line.disc { color: #1f8a45; font-weight: 700; }
+.oc-free { color: #1f8a45; font-weight: 700; font-size: var(--fs-xs); }
 .oc-cust { font-size: var(--fs-xs); color: var(--ink-2); border-top: 1px dashed var(--line); margin-top: 8px; padding-top: 8px; }
 .order-card .oc-foot { padding: var(--sp-3) var(--sp-4); border-top: 1px solid var(--line); background: var(--surface-2); }
 .type-tag { font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; padding: 3px 8px; border-radius: var(--r-pill); }

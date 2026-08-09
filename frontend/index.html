@@ -309,9 +309,12 @@
     </div>
   </section>
 
-  <!-- Offer. Kept as one loud band instead of the badge-on-every-card noise. -->
-  <section class="section lp-section-tight">
-    <div class="container">
+  <!-- Offers. Kept as one loud band instead of the badge-on-every-card noise.
+       Filled from /api/promos by js/promos.js: the markup below is the fallback
+       shown until that answers (and if it never does), and the whole section
+       removes itself when no promo is running. -->
+  <section class="section lp-section-tight" data-promo-section>
+    <div class="container" data-promos="band">
       <div class="card lp-offer">
         <div class="t">
           <span class="tag">Running now</span>
@@ -487,11 +490,15 @@
             and roughly 35g of protein per shawarma. Nothing is pre-cooked and held —
             each roll is made after you order it.</p>
         </details>
-        <details>
-          <summary>What is the Buy 1 Get 1 Free offer?</summary>
-          <p>Add two of the same shawarma, cheese delight, kullad or bowl and the second
-            one is taken off the bill automatically at checkout. No coupon code needed.</p>
-        </details>
+        <!-- One entry per running offer, from /api/promos. The entry below is
+             the fallback; it is replaced (or dropped) once promos load. -->
+        <div data-promos="faq">
+          <details>
+            <summary>What is the Buy 1 Get 1 Free offer?</summary>
+            <p>Add two of the same shawarma, cheese delight, kullad or bowl and the second
+              one is taken off the bill automatically at checkout. No coupon code needed.</p>
+          </details>
+        </div>
       </div>
     </div>
   </section>
@@ -535,13 +542,14 @@
 
 <!-- Phones only: one persistent way to order once the hero button is gone. -->
 <div class="lp-sticky" id="stickyBar">
-  <div class="t"><b>Buy 1 Get 1 Free</b>on shawarma, kullad &amp; bowls</div>
+  <div class="t" data-promos="line"><b>Buy 1 Get 1 Free</b>on shawarma, kullad &amp; bowls</div>
   <a class="btn btn-primary" id="stickyCta" href="menu.html">Order now →</a>
 </div>
 
 <script src="js/bgvideo.js"></script>
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
+<script src="js/promos.js"></script>
 <script src="js/store.js"></script>
 <script>
   // Remember the chosen order mode when entering from a landing card.

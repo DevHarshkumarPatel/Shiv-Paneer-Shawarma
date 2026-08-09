@@ -115,8 +115,10 @@ here matters.
   "Shiv Paneer Shawarma Best Veg Shawarma Surat" — that is a suspension risk and
   competitors report it.
 - Set the service area to the Surat areas you deliver to.
-- Add the website link → `https://shivpaneershawarma.com/`, and the menu link →
-  `https://shivpaneershawarma.com/menu.html`.
+- Add the website link → `https://shivpaneershawarma.com/?utm_source=gbp`, and
+  the menu link → `https://shivpaneershawarma.com/menu.html?utm_source=gbp`.
+  The `utm_source` is what later makes "how many orders came from the Google
+  listing" answerable at all — see §8.
 - Upload **20+ real photos** (shawarma being rolled, the counter, the shopfront
   with signage, packed delivery bags). Geotagged, shot on a phone at the shop.
   Photo volume and freshness measurably affect local pack position.
@@ -213,6 +215,84 @@ The homepage now carries the phrases. To go further, in rough value order:
   landing page. `bgvideo.js` already defers it and serves a smaller phone encode,
   so this is fine — but if PageSpeed flags LCP, drop the video on 4G/slow
   connections too, not just Save-Data.
+
+## 8. How you will know whether it worked
+
+Short answer: **not by Googling it yourself.** Your own search is the one result
+you cannot trust — Google personalises it from your history, and it ranks by how
+far the searcher is from the shop, so "first" is literally a different answer for
+someone in Adajan and someone in Udhna. There is no single position to check.
+These four are the real instruments, cheapest first.
+
+### a. Is it even in the index? (day 1, takes a minute)
+
+```
+site:shivpaneershawarma.com
+```
+
+Zero results = nothing else in this file matters yet; the pages are not indexed.
+Fix by submitting the sitemap and using **URL Inspection → Request indexing** in
+Search Console (§5) for `/` and `/menu.html`.
+
+Also run the live URL through <https://search.google.com/test/rich-results> once.
+`Restaurant` and `FAQPage` must both come back detected with no errors.
+
+### b. Search Console — ground truth for the blue links (from ~week 2)
+
+**Performance → Queries**, then filter query *contains* `shawarma`. You get, per
+query, real impressions, clicks and **average position**. This is Google telling
+you your rank, sampled across everyone who searched — not one biased snapshot.
+
+What to look at:
+
+- Any impressions at all for "shawarma surat"-shaped queries = you are in the
+  running. Position 30 with impressions beats "not present".
+- Queries sitting at **position 8–20** are the cheap wins. They already rank;
+  they need a bit more copy or a link, not a rebuild.
+- Compare 28 days vs previous 28 days. Direction matters more than the number.
+
+### c. Google Business Profile performance — ground truth for the map pack
+
+In the GBP dashboard: **Performance**. Watch *searches that showed your profile*,
+*calls*, *direction requests*, *website clicks*. Google deliberately does **not**
+show a map-pack rank number, so these interactions are the proxy — direction
+requests climbing means you are surfacing to more nearby searchers.
+
+For an actual position, you need a **local rank grid**: it checks your rank from
+dozens of points around the city and draws a heat map, which is the only honest
+picture of a distance-ranked result. Local Falcon and BrightLocal both do this;
+free tiers are enough at this scale. Run one now as a baseline and again monthly
+— without the baseline you cannot prove any improvement later.
+
+### d. Check it manually without lying to yourself
+
+If you want to eyeball it:
+
+1. Chrome → Incognito.
+2. DevTools (F12) → ⋮ → More tools → **Sensors** → Location → *Other* →
+   latitude `21.1912337`, longitude `72.788374`.
+3. Search `best shawarma in surat`.
+
+That approximates a Surat customer standing at the shop. Change the coordinates
+to Vesu or Katargam and the answer changes — that variation is the point, not a
+bug. Never judge from a logged-in, unspoofed search.
+
+### e. The measurement gap in the app itself
+
+The site currently has **no analytics of any kind**. So "did search bring us
+orders?" is unanswerable today — Search Console stops at the click, and the
+ordering flow records nothing about where the customer came from.
+
+Minimum fix, in rough order of value:
+
+1. Store the landing `utm_source` / `utm_medium` in `sessionStorage` on first
+   page load and attach it to the order payload, so the orders board can say
+   *this order came from the Google listing*. That is the number that actually
+   matters, and it needs no third-party script.
+2. Add a lightweight analytics tag (GA4, or Plausible/Umami if you would rather
+   not hand Google more data) for page-level traffic.
+
+Neither is built yet — ask for it when you want it.
 
 ## Timeline to expect
 

@@ -63,11 +63,27 @@
   }
 
   /* ---------- rendering ---------- */
+  /* A category chip has room for a tag, not a sentence, so the offer is
+     shortened by type rather than showing the full label. Empty when the
+     category has no live promo — the chips used to say B1G1 off a static
+     category badge, which survived the promo being switched off. */
+  function chipTag(promo) {
+    if (!promo) return "";
+    if (promo.ptype === "b1g1") return "B1G1";
+    if (promo.ptype === "b2g1") return "B2G1";
+    if (promo.ptype === "percent") return `${promo.value}% OFF`;
+    if (promo.ptype === "flat") return `₹${promo.value} OFF`;
+    return "OFFER";
+  }
+
   function renderChips() {
-    const chips = MENU.categories.map((c, i) => `
+    const chips = MENU.categories.map((c, i) => {
+      const tag = chipTag(c.promo);
+      return `
       <button class="chip ${i === 0 ? "active" : ""}" data-cat="cat-${c.id}">
-        ${esc(c.name)} ${c.offer_badge ? `<span class="tag">B1G1</span>` : ""}
-      </button>`).join("");
+        ${esc(c.name)} ${tag ? `<span class="tag">${esc(tag)}</span>` : ""}
+      </button>`;
+    }).join("");
     el("#catChips").innerHTML = `<button class="chip active" data-cat="__all">All</button>` + chips;
     els("#catChips .chip").forEach((chip) => chip.addEventListener("click", () => {
       els("#catChips .chip").forEach((c) => c.classList.remove("active"));
@@ -302,13 +318,17 @@
     return `<div class="price-single">${priceRange(item)}</div>${control}`;
   }
 
+  /* Owner label if there is one, else the label the API derives from the promo
+     type — so a promo saved without a label still reads as an offer. */
+  const promoLabel = (p) => (p && (p.display_label || p.label)) || "Offer";
+
   /* catPromoId: the promo the whole category is running, if any. The API copies
      a category promo onto every item in it, so without this check the same
      "Buy 1 Get 1 Free" badge repeats on every card under a heading that already
      says so. Only genuinely item-specific offers get a badge. */
   function itemCard(item, catPromoId) {
     const ownPromo = item.promo && item.promo.id !== catPromoId;
-    const offer = ownPromo ? `<span class="badge badge-offer offer-tag">${esc(item.promo.label || "Offer")}</span>` : "";
+    const offer = ownPromo ? `<span class="badge badge-offer offer-tag">${esc(promoLabel(item.promo))}</span>` : "";
     // No placeholder frame when there is no photo — an empty box on every card
     // is what made the menu look unfinished. The thumb appears only if real.
     // assetUrl resolves the API-relative path uploads are stored as.
@@ -343,7 +363,11 @@
       const cards = allItems.map((it) => itemCard(it, catPromoId)).join("");
       // The offer is stated once, here. It used to also run as a full-width
       // banner under this heading and as a badge on every card below it.
-      const offer = cat.offer_badge ? `<span class="offer">${esc(cat.offer_badge)} Free</span>` : "";
+      // Only the live promo can put a badge here. The category's typed-in
+      // offer_badge is deliberately ignored: it is a free-text field nobody
+      // updates, so it kept saying "Buy 1 Get 1 Free" after the promo was
+      // switched off.
+      const offer = cat.promo ? `<span class="offer">${esc(promoLabel(cat.promo))}</span>` : "";
       return `
         <section class="cat-block" id="cat-${cat.id}">
           <div class="cat-head">
@@ -594,10 +618,17 @@
     if (co) co.addEventListener("click", () => { location.href = "checkout.html"; });
   }
 
+  /* Name the offers the discount actually came from, taken off the priced
+     lines, instead of hard-coding "(B1G1)" onto whatever promo is running. */
+  function offerRowLabel(q) {
+    const labels = [...new Set((q.lines || []).map((l) => l.promo_label).filter(Boolean))];
+    return labels.length ? `Offers · ${esc(labels.join(", "))}` : "Offers";
+  }
+
   function totalsHTML(q) {
     const rows = [];
     rows.push(rowLine("Subtotal", money(q.subtotal)));
-    if (q.promo_discount > 0) rows.push(rowLine("Offers (B1G1)", "− " + money(q.promo_discount), "free-note"));
+    if (q.promo_discount > 0) rows.push(rowLine(offerRowLabel(q), "− " + money(q.promo_discount), "free-note"));
     if (q.coupon_discount > 0) rows.push(rowLine(`Coupon ${esc(q.coupon_code)}`, "− " + money(q.coupon_discount), "free-note"));
     if (q.delivery_fee > 0) rows.push(rowLine("Delivery fee", money(q.delivery_fee)));
     return rows.join("") + `<div class="row-between grand"><span>Total</span><span>${money(q.total)}</span></div>`;

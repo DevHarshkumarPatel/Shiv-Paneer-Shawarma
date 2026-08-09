@@ -71,6 +71,7 @@ def create_order(body: CreateOrderRequest):
                 item_id=l.item_id, name=l.name, variant_label=l.variant_label,
                 base=l.base, size=l.size, unit_price=l.unit_price, quantity=l.quantity,
                 free_quantity=l.free_quantity, line_total=round(l.line_total, 2),
+                promo_label=l.promo_label,
             )
             for l in priced.lines
         ],
