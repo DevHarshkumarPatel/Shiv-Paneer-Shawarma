@@ -10,7 +10,7 @@ from .config import settings
 from .db import wrap_router_endpoints
 from .routers import (
     auth, menu_public, menu_admin, coupons, customers_admin, orders,
-    orders_admin, payments, provision, delivery_areas,
+    orders_admin, payments, provision, delivery_areas, scratch,
     settings as settings_router,
 )
 
@@ -33,6 +33,7 @@ app.include_router(coupons.router)
 app.include_router(orders.router)
 app.include_router(orders_admin.router)
 app.include_router(customers_admin.router)
+app.include_router(scratch.router)
 app.include_router(payments.router)
 app.include_router(provision.router)
 app.include_router(delivery_areas.router)

@@ -12,8 +12,10 @@ router = APIRouter(prefix="/api/payments", tags=["payments"])
 @router.post("/upi-qr")
 def upi_qr(body: QuoteRequest):
     """Return a UPI intent link + QR image for the cart's current total."""
+    # The phone goes in so a scratch-card code prices the same here as it will
+    # at order creation — otherwise the QR would carry the undiscounted amount.
     priced = price_cart([c.model_dump() for c in body.cart], body.order_type,
-                        body.coupon_code, body.delivery_area_id)
+                        body.coupon_code, body.delivery_area_id, body.phone)
     if body.order_type == "delivery" and priced.delivery_area_required:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Please select your delivery area.")
     # Never hand out a QR for a cart that order creation is going to refuse.

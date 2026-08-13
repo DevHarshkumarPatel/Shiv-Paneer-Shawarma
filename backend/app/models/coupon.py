@@ -16,6 +16,17 @@ class Coupon(ndb.Model):
     used_count = ndb.IntegerProperty(default=0)
     created_at = ndb.DateTimeProperty(auto_now_add=True)
 
+    # ---- scratch-card mints ----
+    # "manual" is a code the owner typed and advertises; "scratch" is a private
+    # one-time copy minted when someone won it on a scratch card. The two are
+    # kept in one kind so pricing, validation and usage counting stay in a
+    # single place — the owner's coupon screen filters the mints back out.
+    source = ndb.StringProperty(choices=["manual", "scratch"], default="manual")
+    # When set, only this phone number may redeem the code. That is what makes
+    # a won code safe to show on screen: a screenshot is useless to anyone else.
+    bound_phone = ndb.StringProperty(default="")
+    prize_id = ndb.IntegerProperty()                     # pool slot it came from
+
     @classmethod
     def by_code(cls, code: str) -> "Coupon | None":
         return cls.query(cls.code == code.upper().strip()).get()
@@ -41,4 +52,6 @@ class Coupon(ndb.Model):
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "usage_limit": self.usage_limit,
             "used_count": self.used_count,
+            "source": self.source,
+            "bound_phone": self.bound_phone,
         }

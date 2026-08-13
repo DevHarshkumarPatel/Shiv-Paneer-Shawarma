@@ -269,6 +269,25 @@
   .cust-list { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
 }
 
+/* ---- Scratch-card batch bar ----
+   One block per card type, its width the share of the batch the owner asked
+   for; the solid part inside each block is how much of that share has gone
+   out. Reads as "what I printed" and "what is left" in one glance. */
+.batch-bar-wrap { margin-top: var(--sp-3); display: grid; gap: 6px; }
+.batch-bar { display: flex; gap: 3px; height: 18px; }
+.bb-seg {
+  position: relative; overflow: hidden; min-width: 4px;
+  background: var(--brand-soft); border: 1px solid var(--brand);
+  border-radius: var(--r-sm);
+}
+.bb-seg i { position: absolute; inset: 0 auto 0 0; background: var(--brand); display: block; }
+.bb-seg.miss { background: var(--surface-2); border-color: var(--ink-3); }
+.bb-seg.miss i { background: var(--ink-3); }
+
+/* Row-action cells size to their buttons instead of being squeezed to the
+   narrowest column and letting the buttons hang past the table edge. */
+.admin-table td.col-actions { width: 1%; white-space: nowrap; }
+
 /* ---- Multi-select checkbox dropdown (promo targets) ---- */
 .ms { position: relative; }
 .ms-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; cursor: pointer; }

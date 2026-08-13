@@ -6,6 +6,7 @@ from ..models import (
 )
 from ..schemas.models import CreateOrderRequest, QuoteRequest
 from ..services.order_ids import generate_order_id
+from ..services.scratch import close_open_awards
 from ..services.pricing import price_cart
 from ..services.upi import build_upi_uri, build_qr_data_url
 from ..config import settings
@@ -17,7 +18,7 @@ router = APIRouter(prefix="/api/orders", tags=["orders"])
 def quote(body: QuoteRequest):
     """Live price preview (subtotal, promos, coupon, delivery)."""
     result = price_cart([c.model_dump() for c in body.cart], body.order_type,
-                        body.coupon_code, body.delivery_area_id)
+                        body.coupon_code, body.delivery_area_id, body.phone)
     return result.to_dict()
 
 
@@ -32,7 +33,7 @@ def create_order(body: CreateOrderRequest):
 
     priced = price_cart(
         [c.model_dump() for c in body.cart], body.order_type, body.coupon_code,
-        body.delivery_area_id,
+        body.delivery_area_id, body.customer.phone,
     )
     # Refuse rather than quietly place a short order. A cart lives in
     # localStorage and can be days old, so anything that sold out in the
@@ -102,6 +103,10 @@ def create_order(body: CreateOrderRequest):
         if coupon:
             coupon.used_count += 1
             coupon.put()
+
+    # Settle this phone's open scratch draw. The card is one per order, so
+    # placing the order is exactly what re-arms it for the next one.
+    close_open_awards(body.customer.phone, order.public_id, priced.coupon_code)
 
     return order.to_dict()
 

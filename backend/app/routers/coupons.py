@@ -22,7 +22,13 @@ def validate(code: str):
 # ---- Owner management ----
 @router.get("")
 def list_coupons(_owner=Depends(require_owner)):
-    return {"coupons": [c.to_dict() for c in Coupon.query()]}
+    """The owner's own coupons.
+
+    Codes minted by the scratch card are excluded: there is one per winner, so
+    within a busy month they would bury the handful of codes the owner actually
+    manages. They are reported on the scratch card screen instead.
+    """
+    return {"coupons": [c.to_dict() for c in Coupon.query() if c.source != "scratch"]}
 
 
 @router.post("")

@@ -7,9 +7,12 @@ so the client cannot tamper with amounts.
 Cart line input shape (from the client):
     {"item_id": int, "base": str, "size": str, "quantity": int}
 """
+import re
 from dataclasses import dataclass, field
 
 from ..models import Item, Promo, Coupon, DeliveryArea
+
+_digits = lambda s: re.sub(r"\D", "", s or "")   # noqa: E731
 
 
 @dataclass
@@ -154,7 +157,7 @@ def _apply_cart_b1g1(result: PricingResult, promo: Promo, line_indices: list[int
 
 
 def price_cart(cart: list[dict], order_type: str, coupon_code: str = "",
-               delivery_area_id: int = 0) -> PricingResult:
+               delivery_area_id: int = 0, customer_phone: str = "") -> PricingResult:
     result = PricingResult()
     promos = _load_active_promos()
 
@@ -226,8 +229,21 @@ def price_cart(cart: list[dict], order_type: str, coupon_code: str = "",
             result.coupon_code = ""
         else:
             ok, reason = coupon.is_valid_now()
+            # A scratch-card code is minted for one phone number. Checked here,
+            # in the one module both /quote and order creation price through, so
+            # a won code cannot be passed to a friend on either path.
+            phone_ok = (
+                not coupon.bound_phone
+                or _digits(customer_phone)[-10:] == coupon.bound_phone
+            )
             if not ok:
                 result.coupon_error = reason
+                result.coupon_code = ""
+            elif not phone_ok:
+                result.coupon_error = (
+                    "This reward code only works for the phone number that won it — "
+                    "enter that number at checkout."
+                )
                 result.coupon_code = ""
             elif after_promo < coupon.min_order:
                 result.coupon_error = f"Add ₹{coupon.min_order - after_promo:.0f} more to use this coupon."

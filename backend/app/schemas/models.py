@@ -40,6 +40,8 @@ class QuoteRequest(BaseModel):
     order_type: str = "takeaway"   # dine_in | takeaway | delivery
     coupon_code: str = ""
     delivery_area_id: int = 0      # required (non-zero) for delivery orders
+    # Needed to price a scratch-card code, which only its winner may redeem.
+    phone: str = ""
 
 
 # ---- Orders ----
@@ -146,6 +148,25 @@ class DeliveryAreaPayload(BaseModel):
 # ---- Store settings ----
 class SettingsPayload(BaseModel):
     ordering_enabled: bool = True
+    scratch_enabled: bool = False
+    scratch_repeat_batch: bool = False
+
+
+# ---- Scratch cards ----
+class ScratchPrizePayload(BaseModel):
+    kind: str = "coupon"           # coupon | miss
+    coupon_id: int = 0             # the owner coupon this prize hands out
+    label: str = ""                # blank = derived from the coupon
+    # How many of this card the batch holds — 40 of a batch of 100. The odds are
+    # derived from this; there is nothing else to set.
+    quantity: int = Field(ge=1, default=1)
+    validity_days: int = Field(ge=1, default=7)
+    active: bool = True
+    sort_order: int = 0
+
+
+class ScratchDrawRequest(BaseModel):
+    phone: str
 
 
 class CouponPayload(BaseModel):

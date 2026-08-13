@@ -2,7 +2,12 @@
 (function () {
   const { money, esc, el, els, toast, modal } = UI;
 
-  let data = { categories: [], items: [], promos: [], coupons: [], areas: [], settings: { ordering_enabled: true } };
+  let data = {
+    categories: [], items: [], promos: [], coupons: [], areas: [],
+    settings: { ordering_enabled: true, scratch_enabled: false },
+    scratch: { prizes: [], enabled: false, live: false },
+    awards: { awards: [], stats: {} },
+  };
   let tab = "items";
 
   document.addEventListener("DOMContentLoaded", init);
@@ -24,15 +29,20 @@
 
   async function load() {
     try {
-      const [cats, items, promos, coupons, areas, settings] = await Promise.all([
+      const [cats, items, promos, coupons, areas, settings, scratch, awards] = await Promise.all([
         API.get("/api/admin/menu/categories"),
         API.get("/api/admin/menu/items"),
         API.get("/api/admin/menu/promos"),
         API.get("/api/coupons"),
         API.get("/api/admin/delivery-areas"),
         API.get("/api/admin/settings"),
+        API.get("/api/admin/scratch/prizes"),
+        API.get("/api/admin/scratch/awards"),
       ]);
-      data = { categories: cats.categories, items: items.items, promos: promos.promos, coupons: coupons.coupons, areas: areas.areas, settings };
+      data = {
+        categories: cats.categories, items: items.items, promos: promos.promos,
+        coupons: coupons.coupons, areas: areas.areas, settings, scratch, awards,
+      };
       render();
     } catch (e) {
       if (e.status === 401) { location.href = "login.html"; return; }
@@ -48,13 +58,14 @@
         ${tabBtn("categories", "🗂️ Categories")}
         ${tabBtn("promos", "🎉 Promos")}
         ${tabBtn("coupons", "🏷️ Coupons")}
+        ${tabBtn("scratch", "🎁 Scratch Cards")}
         ${tabBtn("areas", "🛵 Delivery Areas")}
         ${tabBtn("export", "📄 Export")}
         ${tabBtn("settings", "⚙️ Settings")}
       </div>
       <div id="tabBody"></div>`;
     els("[data-tab]").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; render(); }));
-    ({ items: renderItems, categories: renderCategories, promos: renderPromos, coupons: renderCoupons, areas: renderAreas, export: renderExport, settings: renderSettings }[tab])();
+    ({ items: renderItems, categories: renderCategories, promos: renderPromos, coupons: renderCoupons, scratch: renderScratch, areas: renderAreas, export: renderExport, settings: renderSettings }[tab])();
   }
 
   function toolbar(title, addLabel, onAdd) {
@@ -612,6 +623,253 @@
     });
   }
 
+  /* ---------------- Scratch cards ----------------
+     A printed batch, not a set of odds: the owner says "100 cards — 40 of this,
+     40 of that, 20 of the third" and those are the numbers that go out. Cards
+     come off the batch at random, so the order is a surprise and the totals are
+     not. Each row therefore needs one number, how many of that card exist, and
+     everything else on this screen is worked out from it. */
+  function renderScratch() {
+    const body = el("#tabBody");
+    const s = data.scratch || {};
+    const prizes = s.prizes || [];
+    const stats = data.awards.stats || {};
+    const on = !!data.settings.scratch_enabled;
+    const repeat = !!data.settings.scratch_repeat_batch;
+    const live = !!s.live;
+    const size = s.batch_size || 0;
+    const left = s.left || 0;
+    const given = size - left;
+    const pct = size ? Math.round(given / size * 100) : 0;
+
+    body.innerHTML = "";
+    body.appendChild(toolbar("Scratch Cards", "Add card to batch", null));
+
+    const status = !on
+      ? `<span class="pill-out">Off</span> Customers do not see a card.`
+      : live
+        ? `<span class="pill-in">Running</span> Customers get one card per order at checkout.`
+        : `<span class="pill-part">Batch finished</span> The card is on, but every card in the batch has gone out — customers see no card until you print a new batch.`;
+
+    body.insertAdjacentHTML("beforeend", `
+      <div class="card" style="margin-bottom:var(--sp-4);"><div class="card-pad">
+        <div class="row-between" style="gap:var(--sp-4);flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:600;">Show scratch cards at checkout</div>
+            <p class="text-muted text-sm" style="margin:4px 0 0;max-width:52ch;">
+              Each customer gets one card per order, just before they pay. A win mints a
+              private code locked to their phone number, so it cannot be shared around.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="scratchToggle" ${on ? "checked" : ""} />
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </label>
+        </div>
+        <div class="text-sm" style="margin-top:var(--sp-3);">${status}</div>
+
+        <div class="batch-bar-wrap">
+          <div class="row-between" style="gap:var(--sp-2);flex-wrap:wrap;">
+            <div><strong>Batch #${s.batch_no || 1}</strong> · ${size} cards · <strong>${left}</strong> still to give</div>
+            <div class="text-muted text-sm">${given} given (${pct}%)</div>
+          </div>
+          <div class="batch-bar">${prizes.filter((p) => p.active && p.quantity).map((p) => `
+            <span class="bb-seg ${p.kind === "miss" ? "miss" : ""}" style="width:${size ? p.quantity / size * 100 : 0}%"
+                  title="${esc(p.label)}: ${p.quantity} of ${size}">
+              <i style="width:${p.quantity ? (p.awarded_count / p.quantity * 100) : 0}%"></i>
+            </span>`).join("")}</div>
+          <div class="text-muted text-sm">Solid part of each block is what has already gone out.</div>
+        </div>
+
+        <div class="row-between" style="gap:var(--sp-4);flex-wrap:wrap;margin-top:var(--sp-4);padding-top:var(--sp-3);border-top:1px solid var(--line);">
+          <div>
+            <div style="font-weight:600;">Print the same batch again when it runs out</div>
+            <p class="text-muted text-sm" style="margin:4px 0 0;max-width:52ch;">
+              On: the split starts over automatically, forever. Off: cards stop when the
+              batch is finished, and you decide whether to run another.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="repeatToggle" ${repeat ? "checked" : ""} />
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+          </label>
+        </div>
+        <div style="margin-top:var(--sp-3);">
+          <button class="btn btn-outline btn-sm" id="reprintBtn">↻ Start a new batch now</button>
+          <span class="text-muted text-sm"> Resets every count to zero. Codes already won stay valid.</span>
+        </div>
+      </div></div>
+
+      <div class="stat-strip" style="margin-top:0;">
+        <div class="stat-tile"><div class="st-val">${stats.draws || 0}</div><div class="st-label">Cards scratched</div><div class="st-hint">all batches</div></div>
+        <div class="stat-tile good"><div class="st-val">${stats.wins || 0}</div><div class="st-label">Prizes won</div></div>
+        <div class="stat-tile good"><div class="st-val">${stats.redeemed || 0}</div><div class="st-label">Redeemed</div><div class="st-hint">came back and spent it</div></div>
+        <div class="stat-tile warn"><div class="st-val">${stats.outstanding || 0}</div><div class="st-label">Unspent</div><div class="st-hint">still owed</div></div>
+        <div class="stat-tile"><div class="st-val">${stats.misses || 0}</div><div class="st-label">No-win cards</div></div>
+      </div>`);
+
+    const rows = prizes.map((p) => {
+      const what = p.kind === "miss"
+        ? `<em class="text-muted">Better luck next time</em>`
+        : p.coupon_missing
+          ? `<span class="pill-out">Coupon deleted</span>`
+          : `<strong>${esc(p.coupon_code)}</strong> <span class="text-muted">· ${esc(p.coupon_terms)}</span>`;
+      return `
+        <tr>
+          <td><strong>${esc(p.label)}</strong></td>
+          <td>${what}</td>
+          <td><strong>${p.quantity}</strong> <span class="text-muted">of ${size}</span>
+            <div class="text-muted text-sm">${p.share}% of the batch</div></td>
+          <td>${p.awarded_count} given<div class="text-muted text-sm">${p.remaining} left</div></td>
+          <td>${p.drawable ? `${p.chance}%` : "—"}</td>
+          <td>${p.kind === "miss" ? "—" : `${p.validity_days} days`}</td>
+          <td>${p.drawable ? "✅" : p.active ? "⛔ all given" : "⛔ paused"}</td>
+          <td class="row col-actions"><button class="btn btn-sm btn-outline" data-edit="${p.id}">Edit</button>
+            <button class="btn btn-sm btn-danger" data-del="${p.id}">Delete</button></td>
+        </tr>`;
+    }).join("");
+
+    body.insertAdjacentHTML("beforeend", `
+      <h3 style="margin:var(--sp-4) 0 var(--sp-2);">What is in the batch</h3>
+      <div class="table-wrap"><table class="admin-table" style="min-width:960px;">
+        <thead><tr><th>Shows as</th><th>Gives</th><th>How many</th><th>Given</th><th>Next card</th><th>Valid for</th><th>Live</th><th></th></tr></thead>
+        <tbody>${rows || emptyRow(8)}</tbody></table></div>
+      <p class="text-muted text-sm" style="margin-top:var(--sp-2);">
+        “How many” is the promise: 40 of 100 means exactly 40 customers get that coupon, no
+        more and no fewer. “Next card” is only the odds for the very next scratch — it drifts
+        as the batch empties, which is what keeps the final split exact.
+        Add a “Better luck next time” card to decide how many of the batch win nothing.</p>`);
+
+    const winRows = (data.awards.awards || []).map((a) => `
+      <tr>
+        <td>${esc(a.phone)}</td>
+        <td>${esc(a.label)}</td>
+        <td><code>${esc(a.code || "—")}</code></td>
+        <td>${a.status === "used" ? `✅ used${a.order_public_id ? ` · ${esc(a.order_public_id)}` : ""}` : "⏳ not used yet"}</td>
+        <td>${esc(UI.fmtDate(a.created_at))}</td>
+        <td>${a.expires_at ? esc(UI.fmtDate(a.expires_at)) : "—"}</td>
+      </tr>`).join("");
+
+    body.insertAdjacentHTML("beforeend", `
+      <h3 style="margin:var(--sp-5) 0 var(--sp-2);">Winners</h3>
+      <div class="table-wrap"><table class="admin-table" style="min-width:720px;">
+        <thead><tr><th>Phone</th><th>Won</th><th>Code</th><th>Status</th><th>Won on</th><th>Valid till</th></tr></thead>
+        <tbody>${winRows || emptyRow(6)}</tbody></table></div>`);
+
+    el("#addBtn").addEventListener("click", () => prizeForm());
+    els("[data-edit]", body).forEach((b) => b.addEventListener("click", () => prizeForm(prizes.find((p) => p.id == b.dataset.edit))));
+    els("[data-del]", body).forEach((b) => b.addEventListener("click", () => del(`/api/admin/scratch/prizes/${b.dataset.del}`, "Remove this card from the batch?")));
+
+    const putSettings = async (patch, okMsg, checkbox) => {
+      checkbox.disabled = true;
+      try {
+        // The payload replaces the whole settings row, so every switch goes up
+        // together — sending one alone would reset the others to their defaults.
+        data.settings = await API.put("/api/admin/settings", {
+          ordering_enabled: !!data.settings.ordering_enabled,
+          scratch_enabled: !!data.settings.scratch_enabled,
+          scratch_repeat_batch: !!data.settings.scratch_repeat_batch,
+          ...patch,
+        });
+        toast(okMsg, "ok");
+      } catch (err) {
+        toast(err.message, "err");
+        checkbox.checked = !checkbox.checked;
+      } finally { checkbox.disabled = false; renderScratch(); }
+    };
+
+    el("#scratchToggle").addEventListener("change", (e) =>
+      putSettings({ scratch_enabled: e.target.checked },
+        e.target.checked ? "Scratch cards turned on" : "Scratch cards turned off", e.target));
+    el("#repeatToggle").addEventListener("change", (e) =>
+      putSettings({ scratch_repeat_batch: e.target.checked },
+        e.target.checked ? "The batch will reprint itself" : "Cards will stop when the batch runs out", e.target));
+
+    el("#reprintBtn").addEventListener("click", async () => {
+      if (!confirm(`Start a new batch of ${size} cards? Every count goes back to zero.`)) return;
+      try {
+        data.scratch = await API.post("/api/admin/scratch/reprint");
+        data.settings = await API.get("/api/admin/settings");
+        toast("New batch started", "ok");
+        renderScratch();
+      } catch (e) { toast(e.message, "err"); }
+    });
+  }
+
+  function prizeForm(prize) {
+    const p = prize || { kind: "coupon", coupon_id: 0, label: "", quantity: 10, validity_days: 7, active: true, sort_order: 0 };
+    const couponOpts = data.coupons.map((c) =>
+      `<option value="${c.id}" ${p.coupon_id == c.id ? "selected" : ""}>${esc(c.code)} — ${c.ctype === "percent" ? `${c.value}%` : money(c.value)} off</option>`).join("");
+    // The rest of the batch, so the owner can see what their number adds up to
+    // without leaving the form — "40" only means something next to the other 60.
+    const others = (data.scratch.prizes || [])
+      .filter((x) => x.active && x.id !== p.id)
+      .reduce((sum, x) => sum + (x.quantity || 0), 0);
+    const m = modal({
+      title: prize ? "Edit card" : "Add card to batch",
+      bodyHTML: `
+        <div class="field"><label>Prize type</label>
+          <select class="select" id="fKind">
+            <option value="coupon" ${p.kind === "coupon" ? "selected" : ""}>A coupon</option>
+            <option value="miss" ${p.kind === "miss" ? "selected" : ""}>Better luck next time (no prize)</option>
+          </select>
+        </div>
+        <div class="field" id="couponField"><label>Which coupon does this give?</label>
+          <select class="select" id="fCoupon">${couponOpts || `<option value="0">Add a coupon first</option>`}</select>
+          <div class="text-sm text-muted" style="margin-top:6px;">
+            The winner gets a private one-time copy of this code, locked to their phone number.
+            Your own code stays untouched.</div>
+        </div>
+        <div class="field"><label>Card text (blank = the discount)</label>
+          <input class="input" id="fLabel" value="${esc(p.label)}" placeholder="e.g. ₹50 OFF" /></div>
+        <div class="field"><label>How many of this card are in the batch?</label>
+          <input class="input" id="fQty" type="number" min="1" value="${p.quantity}" />
+          <div class="text-sm text-muted" style="margin-top:6px;" id="qtyHint"></div>
+          ${prize ? `<div class="text-sm text-muted">${prize.awarded_count} already given this batch.</div>` : ""}
+        </div>
+        <div class="input-row">
+          <div class="field grow"><label>Code valid for (days)</label>
+            <input class="input" id="fDays" type="number" min="1" value="${p.validity_days}" /></div>
+          <div class="field grow"><label>In the batch</label>
+            <select class="select" id="fActive"><option value="true" ${p.active ? "selected" : ""}>Yes</option><option value="false" ${!p.active ? "selected" : ""}>Paused</option></select></div>
+        </div>`,
+      footHTML: `<button class="btn btn-primary btn-block" id="saveBtn">Save card</button>`,
+    });
+
+    const kindEl = el("#fKind", m.backdrop);
+    const syncKind = () => { el("#couponField", m.backdrop).style.display = kindEl.value === "miss" ? "none" : ""; };
+    kindEl.addEventListener("change", syncKind);
+    syncKind();
+
+    // Live arithmetic under the field: this is the number the owner is really
+    // choosing — "40 of 100, 40% of the batch" — and doing it in their head is
+    // where a give-away budget goes wrong.
+    const qtyEl = el("#fQty", m.backdrop);
+    const syncQty = () => {
+      const q = Math.max(0, parseInt(qtyEl.value) || 0);
+      const total = others + q;
+      el("#qtyHint", m.backdrop).textContent = total
+        ? `Batch becomes ${total} cards — ${q} of them this one (${Math.round(q / total * 100)}%). Exactly ${q} customers get it, then it stops.`
+        : "";
+    };
+    qtyEl.addEventListener("input", syncQty);
+    syncQty();
+
+    el("#saveBtn", m.backdrop).addEventListener("click", async () => {
+      const kind = kindEl.value;
+      const payload = {
+        kind,
+        coupon_id: kind === "miss" ? 0 : parseInt(el("#fCoupon", m.backdrop).value) || 0,
+        label: el("#fLabel", m.backdrop).value.trim(),
+        quantity: parseInt(qtyEl.value) || 0,
+        validity_days: parseInt(el("#fDays", m.backdrop).value) || 7,
+        active: el("#fActive", m.backdrop).value === "true",
+        sort_order: p.sort_order || 0,
+      };
+      if (kind === "coupon" && !payload.coupon_id) return toast("Pick the coupon this card gives", "err");
+      if (payload.quantity < 1) return toast("Enter how many of this card the batch holds", "err");
+      await save(prize ? "put" : "post", prize ? `/api/admin/scratch/prizes/${prize.id}` : "/api/admin/scratch/prizes", payload, m);
+    });
+  }
+
   /* ---------------- Delivery Areas ---------------- */
   function renderAreas() {
     const body = el("#tabBody");
@@ -752,7 +1010,11 @@
       const enabled = e.target.checked;
       e.target.disabled = true;
       try {
-        data.settings = await API.put("/api/admin/settings", { ordering_enabled: enabled });
+        // Both switches go up together: the payload replaces the settings row,
+        // so sending one alone would quietly reset the other to its default.
+        data.settings = await API.put("/api/admin/settings", {
+          ordering_enabled: enabled, scratch_enabled: !!data.settings.scratch_enabled,
+        });
         toast(enabled ? "Ordering turned on" : "Ordering turned off", "ok");
       } catch (err) {
         toast(err.message, "err");

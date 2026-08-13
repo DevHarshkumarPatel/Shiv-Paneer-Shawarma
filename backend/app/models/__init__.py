@@ -6,6 +6,7 @@ from .order import Order, OrderItem, CustomerInfo, PaymentInfo, StatusEvent
 from .counter import Counter
 from .delivery_area import DeliveryArea
 from .setting import Setting
+from .scratch import ScratchPrize, ScratchAward
 
 __all__ = [
     "User",
@@ -24,4 +25,6 @@ __all__ = [
     "StatusEvent",
     "Counter",
     "Setting",
+    "ScratchPrize",
+    "ScratchAward",
 ]

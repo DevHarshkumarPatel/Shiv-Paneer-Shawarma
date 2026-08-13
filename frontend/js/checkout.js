@@ -14,6 +14,7 @@
     qr: null,          // server-generated UPI QR (amount pre-filled)
     placing: false,
     orderingEnabled: true,   // owner master switch (from /api/settings)
+    scratch: null,     // /api/scratch/card response: the reward card for this phone
   };
 
   const MODE_LABEL = { dine_in: "Dine-in", takeaway: "Takeaway", delivery: "Delivery" };
@@ -39,6 +40,7 @@
     } catch { state.areas = []; }
     // Delivery must be paid online; default others to cash.
     state.payment = state.mode === "delivery" ? "upi" : "cash";
+    state.scratch = await SPSScratch.fetchCard(state.customer.phone);
     await refreshQuote();
     render();
   }
@@ -63,6 +65,9 @@
     state.quote = await API.post("/api/orders/quote", {
       cart: Store.toCartPayload(), order_type: state.mode, coupon_code: state.coupon,
       delivery_area_id: Number(state.deliveryAreaId) || 0,
+      // A scratch-card code is only valid for the phone that won it, so the
+      // preview has to be priced against the same number the order will carry.
+      phone: state.customer.phone,
     });
     if (state.coupon && state.quote.coupon_error) { toast(state.quote.coupon_error, "err"); state.coupon = ""; Store.setCoupon(""); }
     // Changing the total invalidates any generated QR (amount is baked into it).
@@ -80,6 +85,7 @@
         <div>
           ${stepOrderType()}
           ${stepDetails()}
+          ${stepReward()}
           ${stepPayment()}
         </div>
         <aside>
@@ -102,6 +108,7 @@
         </aside>
       </div>`;
     bind();
+    mountScratch();
   }
 
   function stepOrderType() {
@@ -215,6 +222,58 @@
     </div></div>`;
   }
 
+  /* The reward card, between "your details" and paying — the last moment where
+     a discount can still change what the customer pays for this order. It is
+     deliberately unnumbered: it is a gift, not a step they have to complete. */
+  function stepReward() {
+    if (!state.scratch || !state.scratch.enabled) return "";
+    return `<div class="card step-card"><div class="card-pad">
+      <div class="step-head"><span class="step-num" style="background:var(--gold-dim);">🎁</span><h3>Your scratch card</h3></div>
+      <div id="scratchSlot"></div>
+    </div></div>`;
+  }
+
+  /* Mounted after every render because render() replaces the whole subtree —
+     the widget keeps no state of its own, so re-mounting an already-revealed
+     card just paints it face-up again without replaying the animation. */
+  function mountScratch() {
+    const slot = el("#scratchSlot");
+    if (!slot || !state.scratch) return;
+    const award = state.scratch.award;
+    SPSScratch.mount(slot, {
+      card: state.scratch,
+      phone: state.customer.phone,
+      applied: !!(award && award.code && state.quote && state.quote.coupon_code === award.code),
+      onAward: applyAward,
+    });
+  }
+
+  /* A won code goes straight onto the order — the customer should not have to
+     copy their own prize into the coupon box to get it. */
+  async function applyAward(award) {
+    state.scratch = { enabled: true, state: "revealed", award };
+    if (!award.won || !award.code) return;
+    state.coupon = award.code;
+    Store.setCoupon(state.coupon);
+    await refreshQuote();
+    render();
+    if (state.quote.coupon_code === award.code) toast(`🎉 ${award.label} applied!`, "ok");
+  }
+
+  /* The card cannot be drawn without knowing who is scratching, so it unlocks
+     the moment the phone number is complete. Fetched on the transition only —
+     once when the tenth digit lands, once if it is broken again — not on every
+     keystroke. Only the card is repainted: a full re-render mid-typing would
+     take the keyboard focus off the field. */
+  let scratchPhone = null;
+  async function refreshScratch() {
+    const key = state.customer.phone.length === 10 ? state.customer.phone : "";
+    if (key === scratchPhone) return;
+    scratchPhone = key;
+    state.scratch = await SPSScratch.fetchCard(key);
+    mountScratch();
+  }
+
   function stepPayment() {
     const delivery = state.mode === "delivery";
     const methods = delivery ? "" : `
@@ -321,7 +380,12 @@
       await refreshQuote(); render();
     }));
     const nameEl = el("#custName"); if (nameEl) nameEl.addEventListener("input", (e) => state.customer.name = e.target.value);
-    const phoneEl = el("#custPhone"); if (phoneEl) phoneEl.addEventListener("input", (e) => state.customer.phone = e.target.value.replace(/[^0-9]/g, "").slice(0, 10));
+    const phoneEl = el("#custPhone");
+    if (phoneEl) phoneEl.addEventListener("input", (e) => {
+      state.customer.phone = e.target.value.replace(/[^0-9]/g, "").slice(0, 10);
+      e.target.value = state.customer.phone;
+      refreshScratch();
+    });
     const addrEl = el("#custAddress"); if (addrEl) addrEl.addEventListener("input", (e) => state.customer.address = e.target.value);
     els("[data-area]").forEach((b) => b.addEventListener("click", async () => {
       state.deliveryAreaId = b.dataset.area;
@@ -405,6 +469,21 @@
     }
   }
 
+  /* A prize that could not go on this order — usually because the bill was
+     under the coupon's minimum — is repeated here with its code. Otherwise it
+     vanishes with the checkout screen and the customer has nothing to type in
+     next time, even though the code is still theirs and still valid. */
+  function unusedRewardNote(order) {
+    const a = state.scratch && state.scratch.award;
+    if (!a || !a.won || !a.code || order.coupon_code === a.code) return "";
+    return `
+      <div class="notice-banner" style="margin:var(--sp-4) auto 0;max-width:420px;text-align:left;">
+        🎁 Your <strong>${esc(a.label)}</strong> reward is still yours — code
+        <strong>${esc(a.code)}</strong>${a.terms ? ` (${esc(a.terms)})` : ""}.
+        Use it on your next order${a.expires_at ? ` before ${esc(UI.fmtDate(a.expires_at))}` : ""}.
+      </div>`;
+  }
+
   function renderConfirmation(order) {
     const payMsg = order.payment.method === "upi"
       ? (order.payment.status === "awaiting_verification"
@@ -422,6 +501,7 @@
           <a class="btn btn-primary btn-lg" href="track.html?id=${encodeURIComponent(order.public_id)}">Track this order →</a>
           <a class="btn btn-outline btn-lg" href="menu.html">Order more</a>
         </div>
+        ${unusedRewardNote(order)}
       </div></div>`;
     window.scrollTo({ top: 0 });
   }

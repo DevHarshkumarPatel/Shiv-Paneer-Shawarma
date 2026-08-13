@@ -29,5 +29,7 @@ def get_settings(_owner=Depends(require_owner)):
 def update_settings(body: SettingsPayload, _owner=Depends(require_owner)):
     s = Setting.singleton()
     s.ordering_enabled = body.ordering_enabled
+    s.scratch_enabled = body.scratch_enabled
+    s.scratch_repeat_batch = body.scratch_repeat_batch
     s.put()
     return s.to_dict()

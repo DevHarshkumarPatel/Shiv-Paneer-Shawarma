@@ -1,0 +1,107 @@
+/* Checkout scratch card.
+   Drawn dark-first because it lives on the customer pages, which load
+   theme.css — every colour here is either a token or gold, the theme's
+   "this is a treat" accent, so it stays legible if the palette moves. */
+
+.sc-wrap { position: relative; }
+
+.sc-card {
+  position: relative; overflow: hidden;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--gold-dim, var(--line));
+  background:
+    radial-gradient(120% 140% at 15% 0%, rgba(233,185,73,.16), transparent 60%),
+    var(--surface-2);
+  padding: var(--sp-4);
+  min-height: 168px;
+  display: grid; place-items: center; text-align: center;
+}
+
+/* ---- Locked (no phone number yet) ---- */
+.sc-locked { display: grid; gap: 6px; justify-items: center; color: var(--ink-2); }
+.sc-locked .sc-lock { font-size: 1.8rem; }
+
+/* ---- The prize underneath the foil ---- */
+.sc-prize { display: grid; gap: 6px; justify-items: center; width: 100%; }
+.sc-eyebrow { font-size: var(--fs-xs); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--gold, var(--brand)); }
+.sc-label {
+  font-size: 1.7rem; font-weight: 800; line-height: 1.1;
+  background: linear-gradient(92deg, var(--gold, #e9b949), #fff2cf 45%, var(--gold, #e9b949));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.sc-terms { font-size: var(--fs-sm); color: var(--ink-2); }
+.sc-code {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: var(--fs-md); font-weight: 700; letter-spacing: .06em;
+  background: rgba(233,185,73,.12); border: 1px dashed var(--gold-dim, var(--line));
+  color: var(--ink); border-radius: var(--r-pill); padding: 7px 14px;
+}
+.sc-note { font-size: var(--fs-xs); color: var(--ink-3); }
+.sc-note.applied { color: var(--veg); font-weight: 700; }
+.sc-miss .sc-label { background: none; -webkit-text-fill-color: currentColor; color: var(--ink); font-size: var(--fs-lg); }
+
+/* ---- The foil the customer scratches off ----
+   A canvas, not an image: the scratched-away pixels have to be erased where the
+   finger actually went, and only a canvas can be rubbed out per-pixel. */
+.sc-foil {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  touch-action: none;          /* the drag is the scratch, not a page scroll */
+  cursor: grab; z-index: 2;
+  transition: opacity .45s ease;
+}
+.sc-foil.gone { opacity: 0; pointer-events: none; }
+
+/* Sheen sweeping across the unscratched foil — the only thing telling a
+   first-time customer this panel is interactive before they touch it. */
+.sc-shine {
+  position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden;
+  border-radius: var(--r-lg);
+}
+.sc-shine::after {
+  content: ""; position: absolute; top: -60%; bottom: -60%; width: 42%; left: -50%;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.34), transparent);
+  transform: rotate(12deg);
+  animation: scSheen 2.9s ease-in-out infinite;
+}
+@keyframes scSheen { 0% { left: -50%; } 55%, 100% { left: 120%; } }
+
+.sc-hint {
+  position: absolute; left: 0; right: 0; bottom: 12px; z-index: 4;
+  font-size: var(--fs-xs); font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase; color: rgba(20,16,12,.62); pointer-events: none;
+}
+
+/* ---- Reveal ---- */
+.sc-card.revealing .sc-prize { animation: scPop .5s cubic-bezier(.2,1.4,.4,1) both; }
+@keyframes scPop {
+  0% { transform: scale(.72); opacity: 0; }
+  60% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.sc-card.revealing { animation: scGlow 1.1s ease-out; }
+@keyframes scGlow {
+  0% { box-shadow: 0 0 0 0 rgba(233,185,73,.55); }
+  100% { box-shadow: 0 0 0 26px rgba(233,185,73,0); }
+}
+
+/* Confetti pieces are plain spans the JS drops in and removes again — no
+   library, no canvas, and nothing left running after the animation ends. */
+.sc-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 5; }
+.sc-confetti i {
+  position: absolute; top: -12px; width: 7px; height: 12px; border-radius: 2px;
+  animation: scFall linear forwards;
+}
+@keyframes scFall {
+  0% { transform: translateY(-10px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(220px) rotate(540deg); opacity: 0; }
+}
+
+.sc-actions { margin-top: var(--sp-3); display: flex; gap: var(--sp-2); justify-content: center; flex-wrap: wrap; }
+.sc-actions .btn { min-height: 42px; }
+
+/* Motion-sensitive visitors get the same reward, just delivered instantly. */
+@media (prefers-reduced-motion: reduce) {
+  .sc-shine::after, .sc-card.revealing .sc-prize, .sc-card.revealing { animation: none; }
+  .sc-foil { transition: none; }
+}
