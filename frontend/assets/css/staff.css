@@ -116,6 +116,159 @@
   .staff-header .who #whoami { max-width: 38vw; }
 }
 
+/* ================= Customers (owner) =================
+   Built phone-first: the owner reads this standing at the counter, one thumb
+   free. Everything below is sized for that and only widens on a bigger screen.
+   Tap targets are kept at 44px, the smallest reliable touch size. */
+
+/* Summary tiles. A phone gets a swipeable rail rather than five columns
+   crushed to nothing; wider screens get a plain grid. */
+.stat-strip {
+  display: flex; gap: var(--sp-2); margin: var(--sp-4) 0 var(--sp-3);
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory; padding-bottom: 4px; scrollbar-width: thin;
+}
+.stat-tile {
+  flex: 0 0 44%; scroll-snap-align: start; min-width: 0;
+  background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--ink-3);
+  border-radius: var(--r-md); padding: var(--sp-3); box-shadow: var(--shadow-sm);
+}
+.stat-tile.good { border-top-color: var(--ok); }
+.stat-tile.warn { border-top-color: var(--warn); }
+.stat-tile .st-val { font-size: var(--fs-lg); font-weight: 800; line-height: 1.15; }
+.stat-tile .st-label { font-size: var(--fs-xs); font-weight: 700; color: var(--ink-2); margin-top: 2px; }
+.stat-tile .st-hint { font-size: 0.7rem; color: var(--ink-3); margin-top: 2px; }
+
+.cust-toolbar { display: grid; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.search-field { position: relative; }
+.search-field .search-ico { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 15px; opacity: .7; }
+.search-field .input { padding-left: 38px; min-height: 46px; }
+.cust-filters { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.cust-filters .btn { min-height: 40px; }
+.pill-toggle {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 40px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-pill);
+  padding: 4px 14px; font-size: var(--fs-sm); font-weight: 700; color: var(--ink-2); cursor: pointer;
+}
+.pill-toggle input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--brand); margin: 0; }
+.pill-toggle .select { width: auto; border: none; background: none; padding: 4px 2px; font-size: var(--fs-sm); font-weight: 700; }
+.pill-toggle .select:focus { box-shadow: none; }
+
+#resultNote { margin-bottom: var(--sp-2); }
+
+.cust-list { display: grid; grid-template-columns: 1fr; gap: var(--sp-3); padding-bottom: var(--sp-6); }
+.cust-card {
+  background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--brand);
+  border-radius: var(--r-md); box-shadow: var(--shadow-sm); padding: var(--sp-3);
+  display: grid; gap: var(--sp-2); cursor: pointer;
+}
+.cust-card:active { transform: translateY(1px); }
+.cust-card:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.cc-head { display: flex; align-items: center; gap: var(--sp-3); }
+.cc-av {
+  flex: none; width: 42px; height: 42px; border-radius: 50%;
+  background: var(--brand-soft); color: var(--brand-700);
+  display: grid; place-items: center; font-weight: 800; font-size: var(--fs-sm);
+}
+.cc-av.lg { width: 56px; height: 56px; font-size: var(--fs-md); }
+.cc-id { min-width: 0; flex: 1; }
+.cc-name { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The number is a live dial link, so it is styled as one — this is the fastest
+   route from "who is this" to actually calling them back. */
+.cc-phone, .cd-phone { font-size: var(--fs-sm); color: var(--info); font-weight: 700; }
+.cd-phone { font-size: var(--fs-md); }
+.cc-money { text-align: right; flex: none; }
+.cc-spent { font-weight: 800; }
+.cc-sub { font-size: var(--fs-xs); color: var(--ink-2); }
+
+.cc-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.cbadge { font-size: 0.7rem; font-weight: 800; padding: 3px 9px; border-radius: var(--r-pill); white-space: nowrap; }
+.cbadge.regular { background: var(--brand-soft); color: var(--brand-700); }
+.cbadge.vip { background: #fff4e0; color: #8a5300; }
+.cbadge.new { background: var(--surface-2); color: var(--ink-2); }
+.cbadge.lapsed { background: #fdecea; color: #a5261a; }
+.cbadge.cancel { background: var(--surface-2); color: var(--ink-3); }
+
+.cc-label { font-size: 0.68rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 4px; }
+.fav-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fav-chip { font-size: var(--fs-xs); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-pill); padding: 4px 10px; }
+.fav-chip em { font-style: normal; color: var(--ink-3); }
+.fav-chip b { color: var(--brand-700); }
+
+.cc-foot { border-top: 1px dashed var(--line); padding-top: var(--sp-2); display: grid; gap: var(--sp-2); }
+.cc-last { font-size: var(--fs-xs); color: var(--ink-2); }
+.cc-actions { display: flex; gap: 6px; }
+/* Three actions share the row evenly so none of them is a hard-to-hit sliver.
+   Tight padding and nowrap because "WhatsApp" is long enough to wrap to two
+   lines inside a third of a 360px screen. */
+.cc-actions > * { flex: 1; min-height: 42px; padding: 8px 4px; font-size: 0.78rem; gap: 5px; white-space: nowrap; }
+
+/* ---- Detail sheet ---- */
+.cd-top { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.cd-actions { display: flex; gap: var(--sp-2); margin-bottom: var(--sp-4); }
+.cd-actions .btn { flex: 1; min-height: 44px; }
+.cd-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-2); }
+.cd-stat { background: var(--surface-2); border-radius: var(--r-md); padding: 10px 12px; }
+.cd-val { font-weight: 800; }
+.cd-lab { font-size: var(--fs-xs); color: var(--ink-2); }
+.cd-h { font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); margin: var(--sp-4) 0 var(--sp-2); }
+
+/* Item history as bars: the length answers "what do they actually come for"
+   faster than a column of numbers does. */
+.fav-list { display: grid; gap: 10px; }
+/* On a phone the name gets the full width and the bar drops beneath it —
+   squeezed into a third of the row, every dish name ended in an ellipsis. */
+.fav-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 8px; font-size: var(--fs-sm); }
+.fav-bar { grid-column: 1 / -1; }
+.fav-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fav-name em { font-style: normal; color: var(--ink-3); font-size: var(--fs-xs); }
+.fav-bar { background: var(--surface-2); border-radius: var(--r-pill); height: 8px; overflow: hidden; }
+.fav-bar span { display: block; height: 100%; background: linear-gradient(90deg, var(--brand), var(--brand-700)); border-radius: var(--r-pill); }
+.fav-qty { font-weight: 800; font-size: var(--fs-xs); white-space: nowrap; }
+.fav-qty .free { color: #1f8a45; }
+
+.split-bar { display: flex; height: 12px; border-radius: var(--r-pill); overflow: hidden; background: var(--surface-2); }
+.sb-seg.delivery { background: var(--info); }
+.sb-seg.dine_in { background: var(--veg); }
+.sb-seg.takeaway { background: var(--brand); }
+.split-key { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; font-size: var(--fs-xs); color: var(--ink-2); }
+.split-key .sk-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+.sk-dot.delivery { background: var(--info); }
+.sk-dot.dine_in { background: var(--veg); }
+.sk-dot.takeaway { background: var(--brand); }
+
+.addr-list { display: grid; gap: 6px; font-size: var(--fs-sm); color: var(--ink-2); }
+
+/* Order history: collapsed to one line each, expanded on tap. A regular can
+   have thirty orders, and an always-open list would bury everything under it. */
+.hist-list { display: grid; gap: var(--sp-2); }
+.hist-row { border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px 12px; cursor: pointer; }
+.hr-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.hr-main { min-width: 0; }
+.hr-id { font-weight: 800; font-size: var(--fs-sm); }
+.hr-when { font-size: var(--fs-xs); color: var(--ink-2); }
+.hr-right { text-align: right; flex: none; display: grid; gap: 4px; justify-items: end; }
+.hr-total { font-weight: 800; font-size: var(--fs-sm); }
+.hist-row .hr-items { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.hist-row.open .hr-items { display: block; }
+.hist-row.open { background: var(--surface-2); }
+
+@media (min-width: 560px) {
+  .stat-tile { flex: 1 1 0; }
+  .cust-toolbar { grid-template-columns: 1fr auto; align-items: center; }
+  .cust-toolbar .chips { grid-column: 1 / -1; padding-bottom: 0; }
+  .cd-stats { grid-template-columns: repeat(3, 1fr); }
+  /* Room for the bar beside the name again once the sheet is wide enough:
+     name | bar | count, all on one line. */
+  .fav-row { grid-template-columns: 1fr 32% auto; }
+  .fav-bar { grid-column: 2; grid-row: 1; }
+  .fav-qty { grid-column: 3; grid-row: 1; }
+}
+@media (min-width: 860px) {
+  .cust-list { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+}
+
 /* ---- Multi-select checkbox dropdown (promo targets) ---- */
 .ms { position: relative; }
 .ms-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; cursor: pointer; }

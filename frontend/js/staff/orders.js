@@ -19,7 +19,10 @@
   async function init() {
     user = await Auth.requireAuth();
     el("#whoami").textContent = `${user.name || user.email} · ${user.role}`;
-    if (user.role === "owner") el("#navMenu").classList.remove("hidden");
+    if (user.role === "owner") {
+      el("#navMenu").classList.remove("hidden");
+      el("#navCustomers").classList.remove("hidden");
+    }
     el("#logoutBtn").addEventListener("click", async () => { await Auth.logout(); location.href = "login.html"; });
     els("[data-filter]").forEach((c) => c.addEventListener("click", () => {
       els("[data-filter]").forEach((x) => x.classList.remove("active"));

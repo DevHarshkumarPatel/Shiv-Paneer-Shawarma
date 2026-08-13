@@ -9,8 +9,9 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from .config import settings
 from .db import wrap_router_endpoints
 from .routers import (
-    auth, menu_public, menu_admin, coupons, orders, orders_admin, payments,
-    provision, delivery_areas, settings as settings_router,
+    auth, menu_public, menu_admin, coupons, customers_admin, orders,
+    orders_admin, payments, provision, delivery_areas,
+    settings as settings_router,
 )
 
 # Disable the built-in public docs endpoints; we re-serve them below behind
@@ -31,6 +32,7 @@ app.include_router(menu_admin.router)
 app.include_router(coupons.router)
 app.include_router(orders.router)
 app.include_router(orders_admin.router)
+app.include_router(customers_admin.router)
 app.include_router(payments.router)
 app.include_router(provision.router)
 app.include_router(delivery_areas.router)

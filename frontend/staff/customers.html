@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en-IN">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Customers — Shiv Paneer Shawarma Owner</title>
+<link rel="icon" href="../assets/img/logo.jpeg" />
+<link rel="stylesheet" href="../assets/css/tokens.css" />
+<link rel="stylesheet" href="../assets/css/base.css" />
+<link rel="stylesheet" href="../assets/css/components.css" />
+<link rel="stylesheet" href="../assets/css/staff.css" />
+<body class="staff-body">
+
+<header class="staff-header">
+  <div class="container">
+    <a class="brand" href="orders.html">
+      <img src="../assets/img/logo.jpeg" alt="logo" style="height:34px;width:34px;border-radius:8px;background:#fff;padding:2px;" />
+      <div class="name">Shiv Paneer Shawarma</div>
+    </a>
+    <nav class="nav">
+      <a href="orders.html">Orders</a>
+      <a href="customers.html" class="active">Customers</a>
+      <a href="menu-admin.html">Menu &amp; Offers</a>
+    </nav>
+    <div class="who">
+      <span id="whoami"></span>
+      <button class="btn btn-ghost btn-sm" id="logoutBtn" style="border-color:rgba(255,255,255,.4);">Logout</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="container">
+
+    <!-- Store-wide numbers. Horizontally scrollable on a phone rather than
+         squeezed into four unreadable columns. -->
+    <div class="stat-strip" id="statStrip"></div>
+
+    <!-- Search sits above the filters: on a phone, finding one known customer
+         is the most common reason to open this page. -->
+    <div class="cust-toolbar">
+      <div class="search-field">
+        <span class="search-ico" aria-hidden="true">🔎</span>
+        <input class="input" id="searchBox" type="search" inputmode="search"
+               placeholder="Search name or phone number" autocomplete="off" />
+      </div>
+
+      <div class="chips" id="sortChips">
+        <button class="chip active" data-sort="recent">🕒 Recent</button>
+        <button class="chip" data-sort="orders">🔁 Most orders</button>
+        <button class="chip" data-sort="spend">💰 Top spend</button>
+        <button class="chip" data-sort="name">🔤 A–Z</button>
+      </div>
+
+      <div class="cust-filters">
+        <label class="pill-toggle" title="Hide people who have ordered only once">
+          <input type="checkbox" id="repeatOnly" checked /> <span>Repeat only</span>
+        </label>
+        <label class="pill-toggle" title="How far back to look">
+          <span>Since</span>
+          <select class="select" id="windowSel">
+            <option value="30">30 days</option>
+            <option value="90">90 days</option>
+            <option value="365" selected>1 year</option>
+            <option value="0">All time</option>
+          </select>
+        </label>
+        <button class="btn btn-outline btn-sm" id="refreshBtn">↻ Refresh</button>
+      </div>
+    </div>
+
+    <div class="text-sm text-muted" id="resultNote"></div>
+    <div id="custList"><div class="center-load"><div class="spinner"></div><div>Loading customers…</div></div></div>
+  </div>
+</main>
+
+<script src="../js/config.js"></script>
+<script src="../js/api.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/staff/auth.js"></script>
+<script src="../js/staff/customers.js"></script>
