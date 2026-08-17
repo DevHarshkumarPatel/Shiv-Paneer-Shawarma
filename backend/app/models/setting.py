@@ -19,6 +19,18 @@ class Setting(ndb.Model):
     # give-away that silently restarts is not a give-away the owner budgeted.
     scratch_repeat_batch = ndb.BooleanProperty(default=False)
     scratch_batch_no = ndb.IntegerProperty(default=1)   # how many batches in
+
+    # --- Review page ---------------------------------------------------
+    # On by default, but the page only actually opens once the owner has written
+    # at least one active question, so nothing is shown before there is
+    # something to ask (see routers/reviews.py).
+    reviews_enabled = ndb.BooleanProperty(default=True)
+    review_title = ndb.StringProperty(default="How did we do?")
+    review_intro = ndb.StringProperty(default="A few quick taps — under a minute, and it helps us a lot.")
+    review_thanks = ndb.StringProperty(default="Thank you! Your feedback goes straight to the kitchen.")
+    # Optional "write it on Google too" link, offered only after a happy review.
+    review_google_url = ndb.StringProperty(default="")
+
     updated_at = ndb.DateTimeProperty(auto_now=True)
 
     @classmethod
@@ -36,4 +48,9 @@ class Setting(ndb.Model):
             "scratch_enabled": self.scratch_enabled,
             "scratch_repeat_batch": self.scratch_repeat_batch,
             "scratch_batch_no": self.scratch_batch_no or 1,
+            "reviews_enabled": self.reviews_enabled,
+            "review_title": self.review_title or "",
+            "review_intro": self.review_intro or "",
+            "review_thanks": self.review_thanks or "",
+            "review_google_url": self.review_google_url or "",
         }

@@ -10,7 +10,7 @@ from app.db import db_context
 from app.config import settings
 from app.models import (
     User, Category, Subcategory, Item, Variant, Promo, Coupon, Order, Counter,
-    DeliveryArea,
+    DeliveryArea, ReviewQuestion,
 )
 from app.security import hash_password
 
@@ -132,6 +132,36 @@ def seed_delivery_areas():
     print(f"Delivery areas: {', '.join(n for n, _ in areas)}")
 
 
+def seed_review_questions():
+    """A short, tap-first form the owner can then edit.
+
+    Six questions, only the first of them required: the whole point of the
+    review page is that someone can finish it at a traffic light, and every
+    extra required question is a place to abandon it.
+    """
+    if ReviewQuestion.query().get():
+        print("Review questions already present; skipping.")
+        return
+    qs = [
+        dict(text="How was your food?", help_text="Taste, portion, temperature.",
+             qtype="rating", scale_max=5, required=True),
+        dict(text="What did you like?", qtype="multi",
+             options=["Taste", "Freshness", "Portion size", "Value for money",
+                      "Packing", "Speed", "Politeness"]),
+        dict(text="Was your order on time?", qtype="yes_no"),
+        dict(text="How did you order?", qtype="single",
+             options=["Dine-in", "Takeaway", "Delivery"]),
+        dict(text="Would you recommend us to a friend?",
+             help_text="0 = never, 10 = definitely.", qtype="nps"),
+        dict(text="Anything we should fix or keep doing?",
+             help_text="Tap a word, or type in your own words.", qtype="long_text",
+             options=["Loved it", "Too spicy", "Less oil", "Was cold", "Late delivery", "Great staff"]),
+    ]
+    for i, q in enumerate(qs):
+        ReviewQuestion(sort_order=i, active=True, **q).put()
+    print(f"Review questions: {len(qs)} seeded.")
+
+
 def main():
     with db_context():
         if "--reset" in sys.argv:
@@ -140,6 +170,7 @@ def main():
         seed_menu()
         seed_coupon()
         seed_delivery_areas()
+        seed_review_questions()
     print("Seed complete.")
 
 

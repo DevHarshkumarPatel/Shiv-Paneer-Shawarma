@@ -335,3 +335,58 @@
    money coming in, so it must be obvious at a glance during service. */
 .pill-out { background: #fdecea; color: #a5261a; }
 .pill-part { background: #fff4e0; color: #8a5300; }
+
+/* ---- Reviews (owner) ------------------------------------------------------
+   Two shapes carry this page: a bar row (how the answers split) and a response
+   card (one filled-in form). Both are laid out to stay readable on the counter
+   tablet held in portrait, which is how the owner actually reads them. */
+.rv-dist { display: grid; gap: 6px; margin: var(--sp-3) 0; }
+.rv-dist-row { display: grid; grid-template-columns: 46px 1fr 34px; align-items: center; gap: 10px; font-size: var(--fs-sm); }
+.rv-dist-lab { font-weight: 700; color: var(--ink-2); white-space: nowrap; }
+.rv-dist-lab.wide { grid-column: 1 / 2; overflow: hidden; text-overflow: ellipsis; }
+.rv-dist-row:has(.rv-dist-lab.wide) { grid-template-columns: minmax(90px, 34%) 1fr 34px; }
+.rv-bar { display: block; height: 10px; border-radius: var(--r-pill); background: var(--surface-2); overflow: hidden; }
+.rv-bar i { display: block; height: 100%; background: var(--brand); border-radius: var(--r-pill); }
+.rv-bar i.mid { background: var(--warn); }
+.rv-bar i.bad { background: var(--err); }
+.rv-dist-n { text-align: right; font-weight: 800; color: var(--ink-2); }
+
+.rv-sum-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--sp-3); }
+.rv-sum-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-4); }
+.rv-sum-head { margin-bottom: var(--sp-2); }
+.rv-sum-q { font-weight: 800; }
+.rv-avg { font-size: 2rem; font-weight: 800; color: var(--brand-700); line-height: 1.1; }
+.rv-avg small { font-size: var(--fs-sm); font-weight: 700; color: var(--ink-3); }
+.rv-quotes blockquote { margin: 0 0 10px; padding: 10px 12px; background: var(--surface-2); border-left: 3px solid var(--brand); border-radius: var(--r-sm); font-size: var(--fs-sm); }
+.rv-quotes cite { display: block; margin-top: 4px; font-style: normal; font-size: var(--fs-xs); color: var(--ink-3); }
+
+.rv-resp { background: var(--surface); border: 1px solid var(--line); border-left: 5px solid var(--line); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-3); }
+.rv-resp.good { border-left-color: var(--ok); }
+.rv-resp.mid { border-left-color: var(--warn); }
+.rv-resp.bad { border-left-color: var(--err); }
+.rv-resp-head { display: flex; justify-content: space-between; gap: var(--sp-3); flex-wrap: wrap; align-items: flex-start; }
+.rv-resp-who { font-weight: 800; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rv-resp-side { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.rv-resp-body { margin-top: var(--sp-3); display: grid; gap: 8px; }
+.rv-ans { display: grid; grid-template-columns: minmax(120px, 36%) 1fr; gap: 10px; font-size: var(--fs-sm); border-top: 1px dashed var(--line); padding-top: 8px; }
+.rv-ans-q { color: var(--ink-3); }
+.rv-ans-v b.yes { color: var(--ok); }
+.rv-ans-v b.no { color: var(--err); }
+.rv-stars-sm { color: #e8a33d; letter-spacing: 1px; }
+@media (max-width: 560px) {
+  .rv-ans { grid-template-columns: 1fr; gap: 2px; }
+}
+
+.rv-qlist { display: grid; gap: var(--sp-3); }
+.rv-qcard { display: grid; grid-template-columns: 34px 1fr auto; gap: var(--sp-3); align-items: start;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); }
+.rv-qcard.off { opacity: .6; }
+.rv-qnum { width: 30px; height: 30px; border-radius: 50%; background: var(--brand-soft); color: var(--brand-700);
+  font-weight: 800; display: grid; place-items: center; font-size: var(--fs-sm); }
+.rv-qtext { font-weight: 700; }
+.rv-qtags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.rv-qacts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 560px) {
+  .rv-qcard { grid-template-columns: 30px 1fr; }
+  .rv-qacts { grid-column: 1 / -1; justify-content: flex-start; }
+}

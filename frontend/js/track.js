@@ -98,6 +98,11 @@
         <div class="text-sm text-muted" style="margin-top:8px;text-transform:capitalize;">${esc(order.order_type.replace("_", "-"))} · ${money(order.total)}</div>
       </div></div>
 
+      <!-- Filled in by askForReview() once the order is finished. Sits directly
+           under the order id because that is the moment the page is opened
+           after eating, and the ask has to be the first thing seen. -->
+      <div id="reviewCta"></div>
+
       <div class="card step-card"><div class="card-pad">
         <div class="row-between wrap" style="align-items:center;gap:8px;">
           <h3 style="margin:0;">Status</h3>
@@ -121,6 +126,34 @@
     if (rb) rb.addEventListener("click", load);
     const chk = el("#trackChecked");
     if (chk) chk.textContent = `Checked ${fmtTime(new Date())}`;
+
+    askForReview(order);
+  }
+
+  /* The review ask, and only when it is earned: the order is finished, the
+     owner is collecting reviews, and this order has not been reviewed already.
+     Asking mid-delivery would be asking someone to rate food they have not
+     eaten, so the card simply does not exist until the last status lands. */
+  const DONE = ["delivered", "picked_up", "served"];
+
+  async function askForReview(order) {
+    if (!DONE.includes(order.status)) return;
+    let form;
+    try { form = await API.get(`/api/review/form?order_id=${encodeURIComponent(order.public_id)}`); }
+    catch { return; }                       // never let this break the page
+    const slot = el("#reviewCta");
+    if (!slot || !form.enabled) return;
+
+    slot.innerHTML = form.already_reviewed
+      ? `<div class="card step-card"><div class="card-pad text-center">
+           <p style="margin:0;">✅ Thanks for reviewing this order — the kitchen has read it.</p>
+         </div></div>`
+      : `<div class="card step-card"><div class="card-pad text-center">
+           <div style="font-size:1.9rem;line-height:1;">⭐</div>
+           <h3 style="margin:var(--sp-2) 0 4px;">${esc(form.title || "How did we do?")}</h3>
+           <p class="text-sm text-muted">${esc(form.intro || "A few quick taps — it takes under a minute.")}</p>
+           <a class="btn btn-primary btn-lg btn-block" href="review.html?id=${encodeURIComponent(order.public_id)}">Rate your order</a>
+         </div></div>`;
   }
 
   function cancelledCard(order) {

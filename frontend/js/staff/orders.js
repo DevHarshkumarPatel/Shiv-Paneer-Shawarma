@@ -22,6 +22,7 @@
     if (user.role === "owner") {
       el("#navMenu").classList.remove("hidden");
       el("#navCustomers").classList.remove("hidden");
+      el("#navReviews").classList.remove("hidden");
     }
     el("#logoutBtn").addEventListener("click", async () => { await Auth.logout(); location.href = "login.html"; });
     els("[data-filter]").forEach((c) => c.addEventListener("click", () => {

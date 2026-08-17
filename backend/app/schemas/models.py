@@ -169,6 +169,43 @@ class ScratchDrawRequest(BaseModel):
     phone: str
 
 
+# ---- Reviews ----
+class ReviewQuestionPayload(BaseModel):
+    text: str
+    help_text: str = ""
+    qtype: str = "rating"           # rating | nps | single | multi | yes_no | short_text | long_text
+    options: list[str] = []
+    scale_max: int = Field(ge=2, le=10, default=5)
+    required: bool = False
+    active: bool = True
+    sort_order: int = 0
+
+
+class ReviewAnswerPayload(BaseModel):
+    question_id: int
+    score: int | None = None        # rating / nps / yes_no (1|0)
+    text: str = ""
+    choices: list[str] = []
+
+
+class ReviewSubmitRequest(BaseModel):
+    order_public_id: str = ""
+    name: str = ""
+    phone: str = ""
+    answers: list[ReviewAnswerPayload] = []
+
+
+class ReviewSettingsPayload(BaseModel):
+    """Kept apart from SettingsPayload so the store switches and the review page
+    copy can be saved independently — a PUT of one must never reset the other."""
+
+    reviews_enabled: bool = True
+    review_title: str = ""
+    review_intro: str = ""
+    review_thanks: str = ""
+    review_google_url: str = ""
+
+
 class CouponPayload(BaseModel):
     code: str
     ctype: str          # percent | flat

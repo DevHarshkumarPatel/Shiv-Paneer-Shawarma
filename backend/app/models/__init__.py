@@ -7,6 +7,7 @@ from .counter import Counter
 from .delivery_area import DeliveryArea
 from .setting import Setting
 from .scratch import ScratchPrize, ScratchAward
+from .review import Review, ReviewAnswer, ReviewQuestion
 
 __all__ = [
     "User",
@@ -27,4 +28,7 @@ __all__ = [
     "Setting",
     "ScratchPrize",
     "ScratchAward",
+    "Review",
+    "ReviewAnswer",
+    "ReviewQuestion",
 ]

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en-IN">
+<meta charset="UTF-8" />
+<!-- viewport-fit=cover so the bottom bar can pay attention to the home-indicator
+     inset on notched phones (see env(safe-area-inset-bottom) in review.css). -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<!-- Transactional page: nothing to rank for, but the links out of it (menu,
+     home) should still be followed. -->
+<meta name="robots" content="noindex, follow" />
+<title>Leave a review — Shiv Paneer Shawarma</title>
+<meta name="theme-color" content="#14100c" />
+<link rel="icon" href="assets/img/logo.jpeg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/css/tokens.css" />
+<link rel="stylesheet" href="assets/css/base.css" />
+<link rel="stylesheet" href="assets/css/components.css" />
+<link rel="stylesheet" href="assets/css/theme.css" />
+<link rel="stylesheet" href="assets/css/review.css" />
+<body class="rv-body">
+
+<div class="rv-shell">
+  <header class="rv-top">
+    <div class="container">
+      <img src="assets/img/logo.jpeg" alt="Shiv Paneer Shawarma logo" />
+      <div>
+        <div class="rv-shop">Shiv Paneer Shawarma</div>
+        <div class="text-sm text-muted" style="font-size:var(--fs-xs);">Your review</div>
+      </div>
+      <div class="rv-step-count" id="stepCount"></div>
+    </div>
+    <div class="rv-progress"><span id="progressBar"></span></div>
+  </header>
+
+  <main class="rv-stage">
+    <div class="container" id="rvRoot">
+      <div class="center-load"><div class="spinner"></div><div>Loading…</div></div>
+    </div>
+  </main>
+
+  <!-- Rendered only while there are questions on screen; kept out of the DOM on
+       the thank-you / closed states so nothing floats over them. -->
+  <div id="rvBar"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/review.js"></script>

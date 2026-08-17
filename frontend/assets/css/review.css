@@ -1,0 +1,187 @@
+/* Customer review page — built for one thumb on a phone held one-handed.
+ *
+ * The rules this layout follows, in case a later change is tempted to break one:
+ *
+ * 1. One question per screen. A long scrolling form reads as work; a single
+ *    question with three fat buttons reads as a tap.
+ * 2. Everything you touch lives in the bottom half. The question sits at the
+ *    top of the card, the answer controls are pushed to the bottom of it, and
+ *    the Next button is in the bar at the very bottom — all inside the arc a
+ *    right or left thumb sweeps without the hand shifting grip.
+ * 3. Nothing tappable is under 52px, and options are full-width, so the target
+ *    is the whole row rather than a small circle at its edge.
+ * 4. The page is exactly one viewport tall (100dvh, not 100vh — vh is wrong
+ *    while the mobile browser's address bar is showing) so a step never needs
+ *    scrolling and the bar never floats over the answers.
+ * 5. Single-answer questions advance themselves. The Next button stays for
+ *    everything else, so the customer never has to hunt for "how do I go on".
+ */
+
+.rv-body { background: var(--bg); }
+
+.rv-shell { min-height: 100dvh; display: flex; flex-direction: column; }
+
+/* --------------------------------------------------------------- header --- */
+.rv-top {
+  position: sticky; top: 0; z-index: 20;
+  background: rgba(20, 16, 12, .96); backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.rv-top .container { display: flex; align-items: center; gap: var(--sp-3); min-height: 54px; }
+.rv-top img { height: 32px; width: 32px; border-radius: 9px; object-fit: contain; }
+.rv-shop { font-weight: 800; font-size: 0.95rem; line-height: 1.1; }
+.rv-step-count { margin-left: auto; font-size: var(--fs-xs); font-weight: 700; color: var(--ink-3); }
+
+/* Progress: a hairline, not a widget. It answers "how much is left" at a glance
+   and takes no room away from the question. */
+.rv-progress { height: 4px; background: var(--surface-2); }
+.rv-progress span {
+  display: block; height: 100%; width: 0;
+  background: linear-gradient(90deg, var(--brand), var(--gold, var(--brand-600)));
+  border-radius: 0 4px 4px 0; transition: width .28s ease;
+}
+
+/* ---------------------------------------------------------------- stage --- */
+.rv-stage { flex: 1; display: flex; flex-direction: column; padding: var(--sp-4) 0 0; }
+.rv-stage .container { flex: 1; display: flex; flex-direction: column; max-width: 560px; }
+
+/* Bottom-anchored, not spread out: with space-between, a short question on a
+   tall phone left a dead void down the middle of the screen. Hugging the bottom
+   keeps the question and its answers as one block, and puts that block where the
+   thumb already is — the empty room ends up above it, where nothing is needed. */
+.rv-card {
+  flex: 1; display: flex; flex-direction: column; justify-content: flex-end;
+  gap: var(--sp-5); padding-bottom: var(--sp-4);
+}
+.rv-card.in { animation: rvIn .22s ease; }
+@keyframes rvIn { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+.rv-card.back.in { animation: rvBack .22s ease; }
+@keyframes rvBack { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+
+.rv-q { font-family: var(--font-display, inherit); font-size: 1.5rem; line-height: 1.25; margin: 0 0 6px; }
+.rv-help { color: var(--ink-2); font-size: var(--fs-sm); margin: 0; }
+.rv-req { color: var(--brand); font-size: var(--fs-xs); font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.rv-optional { color: var(--ink-3); font-size: var(--fs-xs); font-weight: 700; }
+
+/* Answers sit in the lower half — the thumb arc. */
+.rv-answer { display: grid; gap: var(--sp-2); }
+
+/* ------------------------------------------------------------ rating ------ */
+.rv-stars { display: flex; gap: 6px; justify-content: space-between; }
+.rv-stars button {
+  flex: 1 1 0; min-height: 64px; border: 1.5px solid var(--line); border-radius: var(--r-md);
+  background: var(--surface); font-size: 1.9rem; line-height: 1; color: var(--ink-3);
+  display: grid; place-items: center; transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+.rv-stars button.on { color: #f6b93b; border-color: var(--brand); background: var(--brand-soft); }
+.rv-stars button:active { transform: scale(.94); }
+.rv-star-label { text-align: center; font-weight: 800; min-height: 24px; color: var(--brand); }
+.rv-scale-ends { display: flex; justify-content: space-between; font-size: var(--fs-xs); color: var(--ink-3); }
+
+/* --------------------------------------------------------------- 0–10 ----- */
+.rv-nps { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.rv-nps button {
+  min-height: 54px; border: 1.5px solid var(--line); border-radius: var(--r-md);
+  background: var(--surface); color: var(--ink); font-weight: 800; font-size: var(--fs-md);
+}
+.rv-nps button:active { transform: scale(.95); }
+.rv-nps button.on { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
+.rv-nps button.on.low { border-color: var(--err); background: rgba(211,59,44,.14); color: #ff8b7e; }
+.rv-nps button.on.mid { border-color: var(--warn); background: rgba(201,138,0,.16); color: #f0b845; }
+.rv-nps button.on.high { border-color: var(--ok); background: rgba(26,143,60,.16); color: #58c47c; }
+
+/* ----------------------------------------------------- radio / checkbox --- */
+.rv-opt {
+  display: flex; align-items: center; gap: var(--sp-3); width: 100%;
+  min-height: 56px; padding: 12px 16px; text-align: left;
+  border: 1.5px solid var(--line); border-radius: var(--r-md); background: var(--surface);
+  color: var(--ink); font-size: var(--fs-md); font-weight: 600;
+  transition: border-color .12s ease, background .12s ease, transform .1s ease;
+}
+.rv-opt:active { transform: scale(.99); }
+.rv-opt .mark {
+  flex: 0 0 auto; width: 24px; height: 24px; border: 2px solid var(--ink-3);
+  display: grid; place-items: center; font-size: 14px; color: transparent; font-weight: 900;
+}
+.rv-opt.radio .mark { border-radius: 50%; }
+.rv-opt.check .mark { border-radius: 7px; }
+.rv-opt.on { border-color: var(--brand); background: var(--brand-soft); }
+.rv-opt.on .mark { background: var(--brand); border-color: var(--brand); color: #1a1208; }
+
+/* ------------------------------------------------------------- yes / no --- */
+.rv-yesno { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
+.rv-yesno button {
+  min-height: 96px; border: 1.5px solid var(--line); border-radius: var(--r-lg);
+  background: var(--surface); color: var(--ink); font-weight: 800; font-size: var(--fs-md);
+  display: grid; place-items: center; gap: 6px; line-height: 1.2;
+}
+.rv-yesno button span { font-size: 1.9rem; }
+.rv-yesno button:active { transform: scale(.97); }
+.rv-yesno button.on.yes { border-color: var(--ok); background: rgba(26,143,60,.15); }
+.rv-yesno button.on.no { border-color: var(--err); background: rgba(211,59,44,.14); }
+
+/* ----------------------------------------------------------------- text --- */
+.rv-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.rv-chip {
+  border: 1.5px solid var(--line); background: var(--surface); color: var(--ink-2);
+  border-radius: var(--r-pill); padding: 10px 14px; font-size: var(--fs-sm); font-weight: 700;
+  min-height: 42px;
+}
+.rv-chip.on { border-color: var(--brand); color: var(--brand); background: var(--brand-soft); }
+.rv-text { width: 100%; }
+textarea.rv-text { min-height: 110px; }
+.rv-count { text-align: right; font-size: var(--fs-xs); color: var(--ink-3); }
+
+/* --------------------------------------------------------- who's this ----- */
+.rv-who { display: grid; gap: var(--sp-3); }
+.rv-who .input { min-height: 52px; }
+
+/* ------------------------------------------------------------ bottom bar -- */
+.rv-bar {
+  position: sticky; bottom: 0; z-index: 20;
+  background: linear-gradient(180deg, rgba(20,16,12,0) 0%, var(--bg) 34%);
+  padding: var(--sp-3) 0 max(var(--sp-3), env(safe-area-inset-bottom));
+}
+.rv-bar .container { display: flex; align-items: center; gap: var(--sp-2); max-width: 560px; }
+.rv-back {
+  flex: 0 0 auto; width: 52px; height: 54px; border-radius: var(--r-md);
+  border: 1.5px solid var(--line); background: var(--surface); color: var(--ink-2); font-size: 20px;
+}
+.rv-back[disabled] { opacity: .35; }
+.rv-skip { flex: 0 0 auto; border: none; background: none; color: var(--ink-3); font-weight: 700; font-size: var(--fs-sm); padding: 0 10px; min-height: 54px; }
+.rv-next {
+  flex: 1 1 auto; min-height: 54px; border: none; border-radius: var(--r-md);
+  background: linear-gradient(180deg, var(--brand) 0%, var(--brand-600) 100%);
+  color: #fff; font-weight: 800; font-size: var(--fs-md); box-shadow: var(--shadow-md);
+}
+.rv-next:disabled { opacity: .5; box-shadow: none; }
+.rv-next:active { transform: translateY(1px); }
+
+/* --------------------------------------------------------------- states --- */
+.rv-state { flex: 1; display: grid; place-items: center; text-align: center; padding: var(--sp-6) 0; }
+.rv-state .emoji { font-size: 3.4rem; margin-bottom: var(--sp-3); }
+.rv-state h2 { margin-bottom: var(--sp-2); }
+.rv-state p { color: var(--ink-2); max-width: 34ch; margin-inline: auto; }
+.rv-state .rv-cta { display: grid; gap: var(--sp-2); margin-top: var(--sp-5); width: min(100%, 320px); }
+.rv-state .rv-cta .btn { min-height: 52px; }
+.rv-pop { animation: rvPop .5s cubic-bezier(.2,1.6,.4,1); }
+@keyframes rvPop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* Order strip: proof we know which visit this is about, so the questions do not
+   feel like a generic web form bolted onto the site. */
+.rv-order {
+  display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md);
+  padding: 8px 12px; font-size: var(--fs-xs); color: var(--ink-2); margin-bottom: var(--sp-3);
+}
+.rv-order b { color: var(--ink); }
+
+@media (min-width: 620px) {
+  .rv-q { font-size: 1.75rem; }
+  .rv-card { justify-content: center; gap: var(--sp-6); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rv-card.in, .rv-card.back.in, .rv-pop { animation: none; }
+  .rv-progress span { transition: none; }
+}
