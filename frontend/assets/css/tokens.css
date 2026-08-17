@@ -22,6 +22,32 @@
   --dark: #17110c;
   --dark-2: #241a12;
 
+  /* Themed surfaces the customer pages share.
+     These are the *light* values; theme.css re-points every one of them for the
+     dark palette (see the switching note at the top of that file). A sticky bar,
+     a tinted full-width band or an offer panel is written once against these,
+     never against a literal colour, or it only works in one theme. */
+  --gold: #9a6b12;                    /* "premium/offer" accent, readable on cream */
+  --gold-dim: #d9b25f;
+  --bar: rgba(255, 247, 239, .93);    /* sticky glass bars (header, menu, review) */
+  --band: #fff1e2;                    /* full-width tinted band (footer, strips) */
+  --band-top: #ffe6c9;                /* glow at the top of the closing band */
+  /* Text/wash pairs for the states. The wash stays the same tint in both
+     palettes; only the text on it has to flip, because a shade readable on
+     cream is invisible on charcoal and vice versa. */
+  --brand-ink: var(--brand-700);      /* brand-coloured text on --brand-soft */
+  --star: #e8a33d;
+  --err-ink: #a5261a;
+  --err-soft: rgba(211, 59, 44, .10);
+  --warn-ink: #8a5300;
+  --warn-soft: rgba(201, 138, 0, .12);
+  --ok-ink: #0f7a32;
+  --ok-soft: rgba(26, 143, 60, .12);
+  --offer-bg: linear-gradient(135deg, #fff3dd 0%, #ffe8c4 55%, #fff2da 100%);
+  --offer-ink: #2a1c08;
+  --offer-body: #6a533a;
+  --offer-fine: #8b755c;
+
   /* Feedback */
   --ok: #1a8f3c;
   --warn: #c98a00;

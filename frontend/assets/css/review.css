@@ -24,7 +24,7 @@
 /* --------------------------------------------------------------- header --- */
 .rv-top {
   position: sticky; top: 0; z-index: 20;
-  background: rgba(20, 16, 12, .96); backdrop-filter: blur(10px);
+  background: var(--bar); backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
 }
 .rv-top .container { display: flex; align-items: center; gap: var(--sp-3); min-height: 54px; }
@@ -60,7 +60,7 @@
 
 .rv-q { font-family: var(--font-display, inherit); font-size: 1.5rem; line-height: 1.25; margin: 0 0 6px; }
 .rv-help { color: var(--ink-2); font-size: var(--fs-sm); margin: 0; }
-.rv-req { color: var(--brand); font-size: var(--fs-xs); font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.rv-req { color: var(--brand-ink); font-size: var(--fs-xs); font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .rv-optional { color: var(--ink-3); font-size: var(--fs-xs); font-weight: 700; }
 
 /* Answers sit in the lower half — the thumb arc. */
@@ -73,9 +73,9 @@
   background: var(--surface); font-size: 1.9rem; line-height: 1; color: var(--ink-3);
   display: grid; place-items: center; transition: transform .12s ease, background .12s ease, border-color .12s ease;
 }
-.rv-stars button.on { color: #f6b93b; border-color: var(--brand); background: var(--brand-soft); }
+.rv-stars button.on { color: var(--star); border-color: var(--brand); background: var(--brand-soft); }
 .rv-stars button:active { transform: scale(.94); }
-.rv-star-label { text-align: center; font-weight: 800; min-height: 24px; color: var(--brand); }
+.rv-star-label { text-align: center; font-weight: 800; min-height: 24px; color: var(--brand-ink); }
 .rv-scale-ends { display: flex; justify-content: space-between; font-size: var(--fs-xs); color: var(--ink-3); }
 
 /* --------------------------------------------------------------- 0–10 ----- */
@@ -85,10 +85,10 @@
   background: var(--surface); color: var(--ink); font-weight: 800; font-size: var(--fs-md);
 }
 .rv-nps button:active { transform: scale(.95); }
-.rv-nps button.on { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
-.rv-nps button.on.low { border-color: var(--err); background: rgba(211,59,44,.14); color: #ff8b7e; }
-.rv-nps button.on.mid { border-color: var(--warn); background: rgba(201,138,0,.16); color: #f0b845; }
-.rv-nps button.on.high { border-color: var(--ok); background: rgba(26,143,60,.16); color: #58c47c; }
+.rv-nps button.on { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-ink); }
+.rv-nps button.on.low { border-color: var(--err); background: var(--err-soft); color: var(--err-ink); }
+.rv-nps button.on.mid { border-color: var(--warn); background: var(--warn-soft); color: var(--warn-ink); }
+.rv-nps button.on.high { border-color: var(--ok); background: var(--ok-soft); color: var(--ok-ink); }
 
 /* ----------------------------------------------------- radio / checkbox --- */
 .rv-opt {
@@ -117,8 +117,8 @@
 }
 .rv-yesno button span { font-size: 1.9rem; }
 .rv-yesno button:active { transform: scale(.97); }
-.rv-yesno button.on.yes { border-color: var(--ok); background: rgba(26,143,60,.15); }
-.rv-yesno button.on.no { border-color: var(--err); background: rgba(211,59,44,.14); }
+.rv-yesno button.on.yes { border-color: var(--ok); background: var(--ok-soft); }
+.rv-yesno button.on.no { border-color: var(--err); background: var(--err-soft); }
 
 /* ----------------------------------------------------------------- text --- */
 .rv-chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -127,7 +127,7 @@
   border-radius: var(--r-pill); padding: 10px 14px; font-size: var(--fs-sm); font-weight: 700;
   min-height: 42px;
 }
-.rv-chip.on { border-color: var(--brand); color: var(--brand); background: var(--brand-soft); }
+.rv-chip.on { border-color: var(--brand); color: var(--brand-ink); background: var(--brand-soft); }
 .rv-text { width: 100%; }
 textarea.rv-text { min-height: 110px; }
 .rv-count { text-align: right; font-size: var(--fs-xs); color: var(--ink-3); }
@@ -139,7 +139,7 @@ textarea.rv-text { min-height: 110px; }
 /* ------------------------------------------------------------ bottom bar -- */
 .rv-bar {
   position: sticky; bottom: 0; z-index: 20;
-  background: linear-gradient(180deg, rgba(20,16,12,0) 0%, var(--bg) 34%);
+  background: linear-gradient(180deg, transparent 0%, var(--bg) 34%);
   padding: var(--sp-3) 0 max(var(--sp-3), env(safe-area-inset-bottom));
 }
 .rv-bar .container { display: flex; align-items: center; gap: var(--sp-2); max-width: 560px; }

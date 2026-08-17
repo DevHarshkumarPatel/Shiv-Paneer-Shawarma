@@ -16,7 +16,7 @@
   transition: background .25s ease, box-shadow .25s ease;
 }
 .site-header.scrolled {
-  background: rgba(20, 16, 12, .92);
+  background: var(--bar);
   backdrop-filter: blur(10px);
   box-shadow: 0 1px 0 var(--line), var(--shadow-md);
 }
@@ -111,10 +111,10 @@
    Four factual claims, straight under the fold. These are the reasons this
    place is different from every other shawarma counter, so they get their own
    band rather than being buried in body copy. */
-.lp-strip { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: #100c09; }
+.lp-strip { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--band); }
 .lp-strip .container { display: flex; gap: var(--sp-5); padding-top: var(--sp-4); padding-bottom: var(--sp-4); overflow-x: auto; scrollbar-width: none; }
 .lp-strip .container::-webkit-scrollbar { display: none; }
-.lp-strip .f { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; font-size: var(--fs-sm); font-weight: 700; color: #e7dbcd; white-space: nowrap; }
+.lp-strip .f { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; font-size: var(--fs-sm); font-weight: 700; color: var(--ink-2); white-space: nowrap; }
 .lp-strip .f svg { width: 20px; height: 20px; color: var(--brand); flex: 0 0 auto; }
 /* Phones: a horizontal scroller here clipped the last claim mid-word, which
    reads as a layout bug rather than as "swipe me". Two by two, all visible. */
@@ -149,7 +149,7 @@
 
 /* ------------------------------------------------------------- offer band ---*/
 .lp-offer {
-  background: linear-gradient(135deg, #2c1e0b 0%, #1a1209 55%, #221708 100%);
+  background: var(--offer-bg);
   border: 1px solid var(--gold-dim); position: relative; overflow: hidden;
   padding: var(--sp-6) var(--sp-5);
   display: flex; align-items: center; justify-content: space-between; gap: var(--sp-5); flex-wrap: wrap;
@@ -160,12 +160,12 @@
 }
 .lp-offer .t { position: relative; }
 .lp-offer .tag { font-size: var(--fs-xs); font-weight: 800; letter-spacing: .16em; text-transform: uppercase; color: var(--gold); }
-.lp-offer h3 { font-family: var(--font-display); font-size: clamp(1.7rem, 7vw, 2.6rem); margin: 6px 0 8px; color: #fff; line-height: 1; }
-.lp-offer p { margin: 0; color: #d9c9b4; font-size: var(--fs-sm); max-width: 46ch; }
+.lp-offer h3 { font-family: var(--font-display); font-size: clamp(1.7rem, 7vw, 2.6rem); margin: 6px 0 8px; color: var(--offer-ink); line-height: 1; }
+.lp-offer p { margin: 0; color: var(--offer-body); font-size: var(--fs-sm); max-width: 46ch; }
 .lp-offer .btn { position: relative; flex: 0 0 auto; }
 /* The promo's fine print inside the band. Needs its own rule: `.lp-offer p`
    would otherwise give it the same size and colour as the pitch above it. */
-.lp-offer .promo-terms { font-size: var(--fs-xs); color: #a3917b; max-width: 46ch; }
+.lp-offer .promo-terms { font-size: var(--fs-xs); color: var(--offer-fine); max-width: 46ch; }
 
 /* --------------------------------------------------------- signature list ---
    Populated from /api/menu at runtime (see index.html). No food photography
@@ -198,7 +198,7 @@
 .lp-info p { margin: 0; font-size: var(--fs-sm); color: var(--ink-2); }
 
 /* ---------------------------------------------------------------- closing ---*/
-.lp-close { text-align: center; background: radial-gradient(90% 120% at 50% 0%, #2a1c10 0%, var(--bg) 70%); border-top: 1px solid var(--line); }
+.lp-close { text-align: center; background: radial-gradient(90% 120% at 50% 0%, var(--band-top) 0%, var(--bg) 70%); border-top: 1px solid var(--line); }
 .lp-close h2 { font-size: clamp(1.8rem, 7vw, 2.8rem); margin: 0 0 var(--sp-3); }
 .lp-close p { color: var(--ink-2); margin: 0 auto var(--sp-5); max-width: 46ch; }
 .lp-close .btn-primary { padding: 16px 34px; font-size: 1.05rem; box-shadow: 0 12px 30px rgba(247, 148, 29, .3); }
@@ -209,7 +209,7 @@
 .lp-sticky {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 44;
   padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
-  background: rgba(20, 16, 12, .94); backdrop-filter: blur(10px);
+  background: var(--bar); backdrop-filter: blur(10px);
   border-top: 1px solid var(--line);
   display: none; align-items: center; gap: var(--sp-3);
   transform: translateY(110%); transition: transform .22s ease;

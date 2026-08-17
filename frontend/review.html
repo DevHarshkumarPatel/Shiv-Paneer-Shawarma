@@ -1,5 +1,7 @@
 <!doctype html>
-<html lang="en-IN">
+<!-- data-theme is the shipped default (dark, the brand look); js/theme.js
+     rewrites it from the visitor's saved preference before first paint. -->
+<html lang="en-IN" data-theme="dark">
 <meta charset="UTF-8" />
 <!-- viewport-fit=cover so the bottom bar can pay attention to the home-indicator
      inset on notched phones (see env(safe-area-inset-bottom) in review.css). -->
@@ -17,6 +19,9 @@
 <link rel="stylesheet" href="assets/css/base.css" />
 <link rel="stylesheet" href="assets/css/components.css" />
 <link rel="stylesheet" href="assets/css/theme.css" />
+<!-- Not deferred on purpose: the saved theme must land on <html> before
+     the first paint, or the page flashes the other palette. -->
+<script src="js/theme.js"></script>
 <link rel="stylesheet" href="assets/css/review.css" />
 <body class="rv-body">
 
@@ -29,6 +34,7 @@
         <div class="text-sm text-muted" style="font-size:var(--fs-xs);">Your review</div>
       </div>
       <div class="rv-step-count" id="stepCount"></div>
+      <div data-theme-toggle></div>
     </div>
     <div class="rv-progress"><span id="progressBar"></span></div>
   </header>

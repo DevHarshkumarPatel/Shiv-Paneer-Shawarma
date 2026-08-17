@@ -1,5 +1,7 @@
 <!doctype html>
-<html lang="en-IN">
+<!-- data-theme is the shipped default (dark, the brand look); js/theme.js
+     rewrites it from the visitor's saved preference before first paint. -->
+<html lang="en-IN" data-theme="dark">
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <!-- Transactional page, nothing to rank for: keep it out of the index but let
@@ -15,6 +17,9 @@
 <link rel="stylesheet" href="assets/css/base.css" />
 <link rel="stylesheet" href="assets/css/components.css" />
 <link rel="stylesheet" href="assets/css/theme.css" />
+<!-- Not deferred on purpose: the saved theme must land on <html> before
+     the first paint, or the page flashes the other palette. -->
+<script src="js/theme.js"></script>
 <link rel="stylesheet" href="assets/css/menu.css" />
 <link rel="stylesheet" href="assets/css/checkout.css" />
 <link rel="stylesheet" href="assets/css/scratch.css" />
@@ -38,7 +43,7 @@
       <img src="assets/img/logo.jpeg" alt="Shiv Paneer Shawarma logo" />
       <div><div class="name">Shiv Paneer Shawarma</div><div class="tagline">Checkout</div></div>
     </a>
-    <div class="header-actions"><a class="btn btn-ghost btn-sm" href="menu.html">← Back to menu</a></div>
+    <div class="header-actions"><a class="btn btn-ghost btn-sm" href="menu.html">← Back to menu</a><div data-theme-toggle></div></div>
   </div>
 </header>
 

@@ -1,5 +1,7 @@
 <!doctype html>
-<html lang="en-IN">
+<!-- data-theme is the shipped default (dark, the brand look); js/theme.js
+     rewrites it from the visitor's saved preference before first paint. -->
+<html lang="en-IN" data-theme="dark">
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <!-- Second-most-important page for the "veg shawarma Surat" queries: people
@@ -50,6 +52,9 @@
 <!-- theme.css re-points the shared tokens at the dark palette; after
      components.css, before the page stylesheet. -->
 <link rel="stylesheet" href="assets/css/theme.css" />
+<!-- Not deferred on purpose: the saved theme must land on <html> before
+     the first paint, or the page flashes the other palette. -->
+<script src="js/theme.js"></script>
 <link rel="stylesheet" href="assets/css/menu.css" />
 
 <!-- Icon sprite. Inline so the icons cost no request and inherit currentColor. -->
@@ -77,6 +82,7 @@
         <svg width="18" height="18"><use href="#i-cart"/></svg>
         <span class="count hidden" id="headerCartCount">0</span>
       </button>
+      <div data-theme-toggle></div>
     </div>
   </div>
 </header>

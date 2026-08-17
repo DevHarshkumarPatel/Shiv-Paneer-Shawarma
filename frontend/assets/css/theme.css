@@ -1,16 +1,85 @@
-/* Dark theme — shared by every customer-facing page.
+/* Customer-facing theme — shared chrome plus the two palettes.
  *
  * Loaded AFTER components.css and BEFORE the per-page stylesheet, so it can
  * re-point the tokens without any page-level rule having to know about it.
- * Everything token-driven (cards, buttons, inputs, chips, modal, footer, the
- * guided-tour tooltip) follows along for free; the handful of components that
- * hard-coded a light value are corrected at the bottom.
  *
- * The staff pages deliberately do NOT load this — they are a back-office tool,
- * and a light UI is easier to read on a counter tablet all day.
+ * WHICH PALETTE IS LIVE is decided by `data-theme` on <html>, written by
+ * js/theme.js before first paint from the visitor's saved preference
+ * (dark | light | system). Every page ships `data-theme="dark"` in the markup,
+ * so dark is what renders if JS never runs — the brand's own look, and no
+ * flash of the wrong theme on the way in.
+ *
+ * The rule for adding anything here or in a page stylesheet: colours come from
+ * tokens, never from a literal. `--bar`, `--band`, `--gold`, `--err-ink` and
+ * friends exist precisely so a sticky bar or an offer band can be written once
+ * and mean the right thing in both palettes. The two exceptions, both
+ * deliberate: the hero video's scrim (white type over footage needs a dark
+ * scrim whatever the page around it does) and the veg mark's white plate (that
+ * is the FSSAI convention, not a theme choice).
+ *
+ * The staff pages deliberately load none of this — a back-office tool read on a
+ * counter tablet all day stays light, and has no toggle.
  */
 
+/* ------------------------------------------------------------ shared ------ */
 :root {
+  --font: "Plus Jakarta Sans", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+}
+
+/* Weight 700, not the base 800: Fraunces is loaded at 600/700, so asking for
+   800 made the browser synthesise a fake bold — which is what smeared the
+   headings. 700 Fraunces is already heavier than 800 of the old system font. */
+h1, h2 { font-family: var(--font-display); font-weight: 700; letter-spacing: -.01em; }
+h3, h4 { font-weight: 700; }
+
+/* ---------------------------------------------------------------- header ---
+   A full-width saffron band (base.css) was the brightest thing on every page
+   and pulled the eye away from the food and the prices. A glass bar in the
+   page's own surface colour instead — one rule, both palettes, because the
+   colour arrives through --bar. (The landing page overrides this to sit
+   transparent over the hero video — see landing.css.) */
+.site-header {
+  background: var(--bar);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 1px 0 var(--line);
+  color: var(--ink);
+}
+.site-header .brand img { background: transparent; padding: 0; box-shadow: none; border-radius: 9px; }
+.site-header .brand .name { font-family: var(--font-display); font-weight: 700; }
+.site-header .brand .tagline { color: var(--ink-3); opacity: 1; }
+/* .btn-ghost / .btn-outline were drawn for a coloured header; on a glass bar
+   they need to read as quiet glass instead of as white boxes. */
+.site-header .btn-ghost { border-color: var(--line); color: var(--ink-2); }
+.site-header .btn-ghost:hover { color: var(--ink); border-color: var(--ink-3); }
+.site-header .btn-outline { background: var(--surface-2); border-color: var(--line); color: var(--ink); }
+.site-header .btn-outline:hover { border-color: var(--brand); }
+
+/* Narrow phones: the wordmark and the buttons cannot both fit — the name wrapped
+   onto two or three lines and then collided with "Guide". The logo carries the
+   brand at this width. */
+@media (max-width: 560px) {
+  .site-header .brand > div { display: none; }
+  .site-header .header-actions .btn { padding: 6px 11px; }
+}
+
+.site-footer { background: var(--band); border-top: 1px solid var(--line); color: var(--ink-2); }
+
+.modal-head h3 { font-family: var(--font-display); }
+
+/* .opt is a <button> that never set a colour of its own — on the light theme
+   the UA's default black happened to be right, so nothing caught it. On dark it
+   left the base/size labels near-black on a near-black card. */
+.opt { color: var(--ink); }
+.opt:hover { background: var(--surface-2); }
+.opt.active { color: var(--ink); box-shadow: none; }
+
+/* The veg mark is a green square on white in the FSSAI convention; on a dark
+   card it needs its own light plate to stay legible as that mark. */
+.dot { background: #fff; }
+
+/* ------------------------------------------------------------- dark ------- */
+:root[data-theme="dark"] {
   /* Tells the browser this page is dark, so the parts of the UI it draws itself
      and CSS cannot reach — scrollbars, form-control internals, autofill
      backgrounds, any native popup — come up dark instead of flashing white. */
@@ -35,68 +104,98 @@
      components that put text on it are re-pointed at --brand below. */
   --brand-soft: rgba(247, 148, 29, .14);
 
-  --font: "Plus Jakarta Sans", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
-  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --bar: rgba(20, 16, 12, .96);
+  --band: #100c09;
+  --band-top: #2a1c10;
+  --brand-ink: var(--brand);
+  --star: #f6b93b;
+  --err-ink: #ff8b7d;
+  --err-soft: rgba(211, 59, 44, .14);
+  --warn-ink: #f0b845;
+  --warn-soft: rgba(201, 138, 0, .16);
+  --ok-ink: #58c47c;
+  --ok-soft: rgba(26, 143, 60, .16);
+  --offer-bg: linear-gradient(135deg, #2c1e0b 0%, #1a1209 55%, #221708 100%);
+  --offer-ink: #ffffff;
+  --offer-body: #d9c9b4;
+  --offer-fine: #a3917b;
 
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, .4);
   --shadow-md: 0 10px 30px rgba(0, 0, 0, .45);
   --shadow-lg: 0 26px 60px rgba(0, 0, 0, .55);
 }
 
-/* Weight 700, not the base 800: Fraunces is loaded at 600/700, so asking for
-   800 made the browser synthesise a fake bold — which is what smeared the
-   headings. 700 Fraunces is already heavier than 800 of the old system font. */
-h1, h2 { font-family: var(--font-display); font-weight: 700; letter-spacing: -.01em; }
-h3, h4 { font-weight: 700; }
+/* These put text on --brand-soft, which is a dark tint here: the text has to
+   move from the dark brand shade to the bright one or it drops below readable
+   contrast. */
+:root[data-theme="dark"] .badge-soft,
+:root[data-theme="dark"] .tour-badge,
+:root[data-theme="dark"] .opt small { color: var(--brand); }
+:root[data-theme="dark"] .tour-badge { background: var(--brand-soft); }
 
-/* ---------------------------------------------------------------- header ---
-   A full-width saffron band was the brightest thing on every page and pulled
-   the eye away from the food and the prices. Dark bar, brand-coloured only
-   where it has to be. (The landing page overrides this to sit transparent on
-   top of the hero video — see landing.css.) */
-.site-header {
-  background: rgba(20, 16, 12, .94);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 1px 0 var(--line);
-  color: var(--ink);
+/* ------------------------------------------------------------- light ------ */
+/* The light palette is tokens.css as it ships — this block only declares the
+   scheme and fixes the handful of places drawn for dark. */
+:root[data-theme="light"] {
+  color-scheme: light;
 }
-.site-header .brand img { background: transparent; padding: 0; box-shadow: none; border-radius: 9px; }
-.site-header .brand .name { font-family: var(--font-display); font-weight: 700; }
-.site-header .brand .tagline { color: var(--ink-3); opacity: 1; }
-/* .btn-ghost / .btn-outline were drawn for a coloured header; on a dark bar
-   they need to read as quiet glass instead of as white boxes. */
-.site-header .btn-ghost { border-color: var(--line); color: var(--ink-2); }
-.site-header .btn-ghost:hover { color: var(--ink); border-color: var(--ink-3); }
-.site-header .btn-outline { background: var(--surface-2); border-color: var(--line); color: var(--ink); }
-.site-header .btn-outline:hover { border-color: var(--brand); }
-
-/* Narrow phones: the wordmark and the buttons cannot both fit — the name wrapped
-   onto two or three lines and then collided with "Guide". The logo carries the
-   brand at this width. */
-@media (max-width: 560px) {
-  .site-header .brand > div { display: none; }
-  .site-header .header-actions .btn { padding: 6px 11px; }
+/* On cream, saffron-on-saffron is unreadable; these go back to the deep shade. */
+:root[data-theme="light"] .badge-soft,
+:root[data-theme="light"] .tour-badge,
+:root[data-theme="light"] .opt small { color: var(--brand-700); }
+/* The mobile cart bar's drop shadow was tuned against a near-black page. */
+:root[data-theme="light"] .cart-bar { box-shadow: 0 -8px 26px rgba(30, 20, 10, .18); }
+/* The scratch-card prize label is gold gradient text with a near-white middle
+   stop — invisible on cream. Solid deep gold instead. */
+:root[data-theme="light"] .sc-label {
+  background: none; -webkit-text-fill-color: currentColor; color: var(--gold);
 }
+/* The hero is dark in BOTH palettes — white type over footage needs a dark
+   scrim whatever the rest of the page does — so everything inside it wants the
+   bright gold, not the deep one that cream needs. Re-pointing the token on the
+   hero itself covers the eyebrow, its rule, and the scroll hint in one go. */
+:root[data-theme="light"] .lp-hero { --gold: #e9b949; }
+/* Same reason, inverted: this button is bright gold with near-black type. On
+   the deep light gold it would be dark-on-dark. */
+:root[data-theme="light"] .lp-btn-gold { background: linear-gradient(180deg, #e9b949 0%, #cf9c2c 100%); }
 
-.site-footer { background: #100c09; border-top: 1px solid var(--line); color: var(--ink-2); }
+/* ------------------------------------------------------- the theme switch --
+   Built by js/theme.js into every `[data-theme-toggle]` slot. A single button
+   showing the live mode; tapping it opens three full-width rows, each a 44px
+   target, because this control is used one-handed like everything else. */
+.theme-switch { position: relative; flex: 0 0 auto; }
+.theme-btn {
+  width: 38px; height: 38px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--ink);
+  display: grid; place-items: center; font-size: 16px; line-height: 1;
+}
+.theme-btn:hover { border-color: var(--brand); }
+.theme-menu {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 60;
+  min-width: 172px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
+  display: grid; gap: 2px;
+}
+.theme-menu[hidden] { display: none; }
+.theme-menu button {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  min-height: 44px; padding: 8px 12px; text-align: left;
+  border: none; border-radius: var(--r-sm); background: none;
+  color: var(--ink); font-weight: 700; font-size: var(--fs-sm);
+}
+.theme-menu button:hover { background: var(--surface-2); }
+.theme-menu button[aria-checked="true"] { background: var(--brand-soft); color: var(--brand-700); }
+:root[data-theme="dark"] .theme-menu button[aria-checked="true"] { color: var(--brand); }
+.theme-menu .tick { margin-left: auto; font-weight: 900; color: var(--brand); opacity: 0; }
+.theme-menu button[aria-checked="true"] .tick { opacity: 1; }
 
-.modal-head h3 { font-family: var(--font-display); }
-
-/* --------------------------------------------------- light-value patch-ups ---
-   These three put text on --brand-soft, which used to be cream. Now that it is
-   a dark tint, the text has to move from the dark brand shade to the bright
-   one or it drops below readable contrast. */
-.badge-soft { color: var(--brand); }
-.tour-badge { color: var(--brand); background: var(--brand-soft); }
-.opt small { color: var(--brand); }
-
-/* .opt is a <button> that never set a colour of its own — on the light theme
-   the UA's default black happened to be right, so nothing caught it. On dark it
-   left the base/size labels near-black on a near-black card. */
-.opt { color: var(--ink); }
-.opt:hover { background: var(--surface-2); }
-.opt.active { color: var(--ink); box-shadow: none; }
-
-/* The veg mark is a green square on white in the FSSAI convention; on a dark
-   card it needs its own light plate to stay legible as that mark. */
-.dot { background: #fff; }
+/* Landing page only (#siteHeader is the landing header; no other page has it):
+   while it sits transparent over the hero video the button has to read as glass
+   like its neighbours do, and go solid once the bar does. */
+#siteHeader:not(.scrolled) .theme-btn {
+  background: rgba(255, 255, 255, .10);
+  border-color: rgba(255, 255, 255, .28);
+  color: #fff;
+  backdrop-filter: blur(6px);
+}

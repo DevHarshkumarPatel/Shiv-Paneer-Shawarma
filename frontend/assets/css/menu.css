@@ -5,7 +5,7 @@
    category chips. Both have to be opaque — content scrolls under them. */
 .menu-bar {
   position: sticky; top: var(--header-h); z-index: 39;
-  background: rgba(20, 16, 12, .96); backdrop-filter: blur(10px);
+  background: var(--bar); backdrop-filter: blur(10px);
   box-shadow: 0 1px 0 var(--line);
 }
 .menu-bar .container { padding-top: 8px; }
@@ -121,13 +121,13 @@
 /* ---------------------------------------------------------------- sold out ---
    Dimmed and unorderable, but still listed with its price. Hiding it would make
    the menu look different every day and lose the "ask me tomorrow" signal. */
-.badge-out { background: rgba(211, 59, 44, .16); color: #ff8b7d; border: 1px solid rgba(211, 59, 44, .4); }
+.badge-out { background: var(--err-soft); color: var(--err-ink); border: 1px solid rgba(211, 59, 44, .4); }
 .item-card.sold-out { opacity: .62; }
 .item-card.sold-out:hover { border-color: var(--line); background: var(--surface); }
 .item-card.sold-out .thumb img { filter: grayscale(1); }
 .item-card.sold-out .price-single { color: var(--ink-3); }
 .opt small { display: block; font-size: .66rem; font-weight: 700; margin-top: 3px; }
-.cart-gone { font-size: var(--fs-xs); color: #ff8b7d; background: rgba(211, 59, 44, .12); border: 1px solid rgba(211, 59, 44, .32); border-radius: var(--r-md); padding: 8px 10px; margin-bottom: var(--sp-3); line-height: 1.45; }
+.cart-gone { font-size: var(--fs-xs); color: var(--err-ink); background: var(--err-soft); border: 1px solid rgba(211, 59, 44, .32); border-radius: var(--r-md); padding: 8px 10px; margin-bottom: var(--sp-3); line-height: 1.45; }
 
 /* ------------------------------------------------------------------- cart ---*/
 .cart-panel { position: sticky; top: calc(var(--header-h) + 74px); }
