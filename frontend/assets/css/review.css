@@ -30,6 +30,23 @@
 .rv-top .container { display: flex; align-items: center; gap: var(--sp-3); min-height: 54px; }
 .rv-top img { height: 32px; width: 32px; border-radius: 9px; object-fit: contain; }
 .rv-shop { font-weight: 800; font-size: 0.95rem; line-height: 1.1; }
+
+/* Way out of the page. Deliberately not an arrow: `.rv-back` in the bottom bar
+   is already an arrow meaning "previous question", and two back arrows on one
+   screen pointing at different things is how a customer loses their answers.
+   The logo carries the same link — tapping the shop name to reach the shop is
+   what people try first — so this stays a quiet 36px target rather than a
+   button competing with the review's own actions. */
+.rv-brand { display: flex; align-items: center; gap: var(--sp-3); color: inherit; text-decoration: none; min-width: 0; }
+.rv-brand:hover .rv-shop, .rv-brand:focus-visible .rv-shop { color: var(--brand); }
+.rv-exit {
+  display: grid; place-items: center; flex: none;
+  width: 36px; height: 36px; margin-left: calc(var(--sp-2) * -1);
+  border-radius: 50%; font-size: 1rem; line-height: 1;
+  text-decoration: none; opacity: .8;
+  transition: background .15s ease, opacity .15s ease;
+}
+.rv-exit:hover, .rv-exit:focus-visible { background: var(--surface-2); opacity: 1; }
 .rv-step-count { margin-left: auto; font-size: var(--fs-xs); font-weight: 700; color: var(--ink-3); }
 
 /* Progress: a hairline, not a widget. It answers "how much is left" at a glance

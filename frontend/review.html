@@ -29,11 +29,19 @@
 <div class="rv-shell">
   <header class="rv-top">
     <div class="container">
-      <img src="assets/img/logo.jpeg" alt="Shiv Paneer Shawarma logo" />
-      <div>
-        <div class="rv-shop">Shiv Paneer Shawarma</div>
-        <div class="text-sm text-muted" style="font-size:var(--fs-xs);">Your review</div>
-      </div>
+      <!-- Two ways out, because this page is usually opened cold from a QR code
+           or a link in a message: there is often no history to go back to, and
+           without either of these the review is a dead end. -->
+      <a class="rv-exit" href="index.html" id="rvHome" aria-label="Back to Shiv Paneer Shawarma" title="Back to the site">
+        <span aria-hidden="true">🏠</span>
+      </a>
+      <a class="rv-brand" href="index.html" aria-label="Shiv Paneer Shawarma home">
+        <img src="assets/img/logo.jpeg" alt="Shiv Paneer Shawarma logo" />
+        <div>
+          <div class="rv-shop">Shiv Paneer Shawarma</div>
+          <div class="text-sm text-muted" style="font-size:var(--fs-xs);">Your review</div>
+        </div>
+      </a>
       <div class="rv-step-count" id="stepCount"></div>
       <div data-theme-toggle></div>
     </div>

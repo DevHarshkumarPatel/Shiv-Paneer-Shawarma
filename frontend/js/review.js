@@ -35,7 +35,26 @@
   let who = { name: "", phone: "" };
   let submitting = false;
 
-  document.addEventListener("DOMContentLoaded", init);
+  document.addEventListener("DOMContentLoaded", () => { bindBack(); init(); });
+
+  /* The header's way out. It goes wherever the customer came from when that is
+     a page of ours, and to the home page otherwise — this link is usually
+     opened from a QR code or a message, where there is no history to step back
+     to and browser-back would leave the site entirely. */
+  function bindBack() {
+    const back = el("#rvHome");
+    if (!back) return;
+    back.addEventListener("click", (e) => {
+      let cameFromUs = false;
+      try { cameFromUs = !!document.referrer && new URL(document.referrer).origin === location.origin; }
+      catch { cameFromUs = false; }
+      if (cameFromUs && history.length > 1) {
+        e.preventDefault();
+        history.back();
+      }
+      // Otherwise the plain href to index.html does the job.
+    });
+  }
 
   async function init() {
     try {
