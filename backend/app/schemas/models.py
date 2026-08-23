@@ -208,9 +208,12 @@ class ReviewSettingsPayload(BaseModel):
 
 class CouponPayload(BaseModel):
     code: str
-    ctype: str          # percent | flat
+    ctype: str          # percent | flat | promo ("promo" = unlocks promos, no ₹ off)
     value: float
     min_order: float = 0.0
     max_discount: float = 0.0
     active: bool = True
     usage_limit: int = 0
+    # Promos this code switches on. They stop applying by themselves the moment
+    # a coupon claims them, and come back if every coupon lets go.
+    promo_ids: list[int] = []

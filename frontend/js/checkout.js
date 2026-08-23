@@ -350,6 +350,13 @@
     const rows = [`<div class="summary-line"><span>Subtotal</span><span>${money(q.subtotal)}</span></div>`];
     if (q.promo_discount > 0) rows.push(`<div class="summary-line free-note"><span>${offerRowLabel(q)}</span><span>− ${money(q.promo_discount)}</span></div>`);
     if (q.coupon_discount > 0) rows.push(`<div class="summary-line free-note"><span>Coupon ${esc(q.coupon_code)}</span><span>− ${money(q.coupon_discount)}</span></div>`);
+    /* A code can unlock an offer instead of (or as well as) taking money off.
+       Its saving is already in the Offers row above, so without this line an
+       accepted offer-only code would leave the summary looking unchanged. */
+    else if (q.coupon_code && (q.coupon_promos || []).length) {
+      const many = q.coupon_promos.length > 1;
+      rows.push(`<div class="summary-line free-note"><span>Coupon ${esc(q.coupon_code)}</span><span>${many ? "Offers" : "Offer"} unlocked</span></div>`);
+    }
     if (state.mode === "delivery") {
       if (q.delivery_area_required) {
         rows.push(`<div class="summary-line" style="color:var(--err);"><span>Delivery</span><span>Select area</span></div>`);

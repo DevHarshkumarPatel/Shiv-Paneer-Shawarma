@@ -38,6 +38,10 @@ class PricingResult:
     coupon_code: str = ""
     coupon_discount: float = 0.0
     coupon_error: str = ""
+    # Labels of the promos this coupon switched on, for the "you unlocked …"
+    # line. A coupon-only code takes nothing off by itself, so without this the
+    # checkout summary would have nothing to say about a code that worked.
+    coupon_promos: list[str] = field(default_factory=list)
     delivery_fee: float = 0.0
     delivery_area_id: int = 0
     delivery_area_name: str = ""
@@ -68,6 +72,7 @@ class PricingResult:
             "coupon_code": self.coupon_code,
             "coupon_discount": round(self.coupon_discount, 2),
             "coupon_error": self.coupon_error,
+            "coupon_promos": list(self.coupon_promos),
             "delivery_fee": round(self.delivery_fee, 2),
             "delivery_area_id": self.delivery_area_id,
             "delivery_area_name": self.delivery_area_name,
@@ -78,13 +83,30 @@ class PricingResult:
         }
 
 
-def _load_active_promos() -> dict[tuple[str, int], Promo]:
+def _index_promos(promos: list[Promo]) -> dict[tuple[str, int], Promo]:
     """Map each (scope, target id) -> promo. A promo may target several ids."""
-    promos: dict[tuple[str, int], Promo] = {}
-    for p in Promo.query(Promo.active == True):  # noqa: E712
+    index: dict[tuple[str, int], Promo] = {}
+    for p in promos:
         for tid in p.target_id_list():
-            promos[(p.scope, tid)] = p
-    return promos
+            index[(p.scope, tid)] = p
+    return index
+
+
+def _load_active_promos() -> tuple[dict[tuple[str, int], Promo], dict[int, Promo]]:
+    """(promos every cart gets, promos held back behind a coupon by id).
+
+    A coupon-gated promo is deliberately kept out of the first map: the cart is
+    priced without it, and it is only merged in once the code that unlocks it
+    has been accepted.
+    """
+    auto: list[Promo] = []
+    gated: dict[int, Promo] = {}
+    for p in Promo.query(Promo.active == True):  # noqa: E712
+        if p.coupon_only:
+            gated[p.key.id()] = p
+        else:
+            auto.append(p)
+    return _index_promos(auto), gated
 
 
 def _match_variant(item: Item, base: str, size: str):
@@ -156,10 +178,16 @@ def _apply_cart_b1g1(result: PricingResult, promo: Promo, line_indices: list[int
         result.promo_discount += price
 
 
-def price_cart(cart: list[dict], order_type: str, coupon_code: str = "",
-               delivery_area_id: int = 0, customer_phone: str = "") -> PricingResult:
+def _price_lines(cart: list[dict], promos: dict[tuple[str, int], Promo],
+                 items: dict[int, Item | None]) -> PricingResult:
+    """Price every cart line against one promo map.
+
+    Split out of `price_cart` because the cart may have to be priced twice: once
+    with the promos everybody gets, and again with a coupon's promos merged in
+    once that code has been accepted. `items` is a cache shared by both passes
+    so the second one costs no extra datastore reads.
+    """
     result = PricingResult()
-    promos = _load_active_promos()
 
     # Buy-1-Get-1 is a cross-item offer: every line whose scoped promo is b1g1
     # is pooled together and settled once, after all lines are priced. Its scope
@@ -171,7 +199,9 @@ def price_cart(cart: list[dict], order_type: str, coupon_code: str = "",
     for raw in cart:
         item_id = int(raw.get("item_id"))
         qty = max(1, int(raw.get("quantity", 1)))
-        item = Item.get_by_id(item_id)
+        if item_id not in items:
+            items[item_id] = Item.get_by_id(item_id)
+        item = items[item_id]
         if not item or not item.active:
             continue
         base, size = raw.get("base", ""), raw.get("size", "")
@@ -218,44 +248,73 @@ def price_cart(cart: list[dict], order_type: str, coupon_code: str = "",
     if b1g1_lines:
         _apply_cart_b1g1(result, b1g1_promo, b1g1_lines)
 
+    return result
+
+
+def _resolve_coupon(code: str, cart_value: float, customer_phone: str) -> tuple[Coupon | None, str]:
+    """(usable coupon, reason it is not) for a code the customer typed.
+
+    Everything here is checked before any coupon-gated promo is merged in, so a
+    code that fails still leaves the cart priced exactly as it was.
+    """
+    coupon = Coupon.by_code(code)
+    if not coupon:
+        return None, "Coupon not found."
+    ok, reason = coupon.is_valid_now()
+    if not ok:
+        return None, reason
+    # A scratch-card code is minted for one phone number. Checked here, in the
+    # one module both /quote and order creation price through, so a won code
+    # cannot be passed to a friend on either path.
+    if coupon.bound_phone and _digits(customer_phone)[-10:] != coupon.bound_phone:
+        return None, ("This reward code only works for the phone number that won it — "
+                      "enter that number at checkout.")
+    if cart_value < coupon.min_order:
+        return None, f"Add ₹{coupon.min_order - cart_value:.0f} more to use this coupon."
+    return coupon, ""
+
+
+def _coupon_discount(coupon: Coupon, cart_value: float) -> float:
+    """What the code itself takes off. A "promo" code takes off nothing: its
+    whole effect is the promos it unlocked, already priced into the lines."""
+    if coupon.ctype == "percent":
+        disc = cart_value * (coupon.value / 100.0)
+        return min(disc, coupon.max_discount) if coupon.max_discount else disc
+    if coupon.ctype == "flat":
+        return min(coupon.value, cart_value)
+    return 0.0
+
+
+def price_cart(cart: list[dict], order_type: str, coupon_code: str = "",
+               delivery_area_id: int = 0, customer_phone: str = "") -> PricingResult:
+    auto_promos, gated_promos = _load_active_promos()
+    items: dict[int, Item | None] = {}
+
+    # First pass: the cart as anyone gets it, with no coupon in hand.
+    result = _price_lines(cart, auto_promos, items)
     after_promo = result.subtotal - result.promo_discount
 
-    # Coupon (applied on the post-promo amount).
+    coupon = None
     if coupon_code:
-        result.coupon_code = coupon_code.upper().strip()
-        coupon = Coupon.by_code(result.coupon_code)
+        code = coupon_code.upper().strip()
+        coupon, error = _resolve_coupon(code, after_promo, customer_phone)
         if not coupon:
-            result.coupon_error = "Coupon not found."
-            result.coupon_code = ""
+            result.coupon_error = error
         else:
-            ok, reason = coupon.is_valid_now()
-            # A scratch-card code is minted for one phone number. Checked here,
-            # in the one module both /quote and order creation price through, so
-            # a won code cannot be passed to a friend on either path.
-            phone_ok = (
-                not coupon.bound_phone
-                or _digits(customer_phone)[-10:] == coupon.bound_phone
-            )
-            if not ok:
-                result.coupon_error = reason
-                result.coupon_code = ""
-            elif not phone_ok:
-                result.coupon_error = (
-                    "This reward code only works for the phone number that won it — "
-                    "enter that number at checkout."
-                )
-                result.coupon_code = ""
-            elif after_promo < coupon.min_order:
-                result.coupon_error = f"Add ₹{coupon.min_order - after_promo:.0f} more to use this coupon."
-                result.coupon_code = ""
-            else:
-                if coupon.ctype == "percent":
-                    disc = after_promo * (coupon.value / 100.0)
-                    if coupon.max_discount:
-                        disc = min(disc, coupon.max_discount)
-                else:
-                    disc = min(coupon.value, after_promo)
-                result.coupon_discount = disc
+            # The code holds up. Merge in the promos it unlocks and re-price, so
+            # the coupon's own percent/flat cut is taken off the discounted
+            # cart rather than the full one. The minimum-order test above ran on
+            # the pre-unlock value on purpose: unlocking an offer must not drop
+            # the cart under the minimum that just qualified it.
+            unlocked = [gated_promos[pid] for pid in (coupon.promo_ids or []) if pid in gated_promos]
+            if unlocked:
+                merged = dict(auto_promos)
+                merged.update(_index_promos(unlocked))
+                result = _price_lines(cart, merged, items)
+                after_promo = result.subtotal - result.promo_discount
+                result.coupon_promos = list(dict.fromkeys(p.display_label() for p in unlocked))
+            result.coupon_code = code
+            result.coupon_discount = _coupon_discount(coupon, after_promo)
 
     # Delivery fee comes from the customer-selected area. A delivery order
     # without a valid, active area is flagged so callers can require one.

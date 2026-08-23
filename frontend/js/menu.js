@@ -69,11 +69,14 @@
      category badge, which survived the promo being switched off. */
   function chipTag(promo) {
     if (!promo) return "";
-    if (promo.ptype === "b1g1") return "B1G1";
-    if (promo.ptype === "b2g1") return "B2G1";
-    if (promo.ptype === "percent") return `${promo.value}% OFF`;
-    if (promo.ptype === "flat") return `₹${promo.value} OFF`;
-    return "OFFER";
+    // A gated offer is flagged with a lock, not spelled out: the chip has no
+    // room for the code, and the card below it carries that.
+    const lock = promo.coupon_only ? "🔒 " : "";
+    if (promo.ptype === "b1g1") return `${lock}B1G1`;
+    if (promo.ptype === "b2g1") return `${lock}B2G1`;
+    if (promo.ptype === "percent") return `${lock}${promo.value}% OFF`;
+    if (promo.ptype === "flat") return `${lock}₹${promo.value} OFF`;
+    return `${lock}OFFER`;
   }
 
   function renderChips() {
@@ -240,7 +243,7 @@
         <div class="sheet-meta">
           <span class="dot" title="Pure veg"></span>
           ${soldOut ? `<span class="badge badge-out">Sold out</span>` : ""}
-          ${item.promo ? `<span class="badge badge-offer">${esc(item.promo.label || "Offer")}</span>` : ""}
+          ${item.promo ? `<span class="badge badge-offer">${esc(promoLabel(item.promo))}</span>` : ""}
         </div>
         ${item.description ? `<p class="sheet-desc">${esc(item.description)}</p>` : ""}
         ${tags ? `<div class="tags sheet-tags">${tags}</div>` : ""}
@@ -319,8 +322,17 @@
   }
 
   /* Owner label if there is one, else the label the API derives from the promo
-     type — so a promo saved without a label still reads as an offer. */
-  const promoLabel = (p) => (p && (p.display_label || p.label)) || "Offer";
+     type — so a promo saved without a label still reads as an offer.
+
+     A coupon-gated promo names its code: the cart will not apply it unless that
+     code is entered, so a bare "Buy 1 Get 1 Free" badge would be a promise the
+     checkout breaks. */
+  const promoCode = (p) => (p && p.coupon_only && (p.coupon_codes || [])[0]) || "";
+  const promoLabel = (p) => {
+    const base = (p && (p.display_label || p.label)) || "Offer";
+    const code = promoCode(p);
+    return code ? `${base} · code ${code}` : base;
+  };
 
   /* catPromoId: the promo the whole category is running, if any. The API copies
      a category promo onto every item in it, so without this check the same

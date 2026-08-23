@@ -35,7 +35,9 @@ def norm_phone(raw: str) -> str:
 
 def coupon_terms(coupon: Coupon) -> str:
     """One line a customer can act on: what it takes off, and what it needs."""
-    if coupon.ctype == "percent":
+    if coupon.ctype == "promo":
+        amount = "unlocks a running offer"
+    elif coupon.ctype == "percent":
         amount = f"{coupon.value:g}% off"
         if coupon.max_discount:
             amount += f" (up to ₹{coupon.max_discount:g})"
@@ -47,6 +49,8 @@ def coupon_terms(coupon: Coupon) -> str:
 
 
 def default_label(coupon: Coupon) -> str:
+    if coupon.ctype == "promo":
+        return "OFFER UNLOCKED"
     return f"{coupon.value:g}% OFF" if coupon.ctype == "percent" else f"₹{coupon.value:g} OFF"
 
 
@@ -185,6 +189,9 @@ def draw_for_phone(phone: str) -> tuple[ScratchAward | None, str]:
     Coupon(
         code=code, ctype=template.ctype, value=template.value,
         min_order=template.min_order, max_discount=template.max_discount,
+        # The unlocks travel with the copy, so a card won off an offer-carrying
+        # coupon gives that offer too, not a code that does nothing.
+        promo_ids=list(template.promo_ids or []),
         active=True, expires_at=expires_at, usage_limit=1, used_count=0,
         source="scratch", bound_phone=phone, prize_id=prize.key.id(),
     ).put()

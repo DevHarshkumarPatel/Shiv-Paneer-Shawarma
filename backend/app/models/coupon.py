@@ -6,8 +6,10 @@ from google.cloud import ndb
 
 class Coupon(ndb.Model):
     code = ndb.StringProperty(required=True)             # stored upper-cased
-    ctype = ndb.StringProperty(choices=["percent", "flat"], required=True)
-    value = ndb.FloatProperty(required=True)             # percent (0-100) or flat INR
+    # "promo" is a code that carries no money discount of its own: all it does
+    # is switch on the promos listed in promo_ids. value is ignored for it.
+    ctype = ndb.StringProperty(choices=["percent", "flat", "promo"], required=True)
+    value = ndb.FloatProperty(required=True)             # percent (0-100) or flat INR; 0 for "promo"
     min_order = ndb.FloatProperty(default=0.0)
     max_discount = ndb.FloatProperty(default=0.0)        # 0 = no cap
     active = ndb.BooleanProperty(default=True)
@@ -26,6 +28,13 @@ class Coupon(ndb.Model):
     # a won code safe to show on screen: a screenshot is useless to anyone else.
     bound_phone = ndb.StringProperty(default="")
     prize_id = ndb.IntegerProperty()                     # pool slot it came from
+
+    # ---- coupon-gated promos ----
+    # Promo ids this code unlocks. Those promos are flagged coupon_only, so the
+    # cart never applies them on its own — only a cart carrying this code gets
+    # them. A coupon may both take money off (percent/flat) and unlock promos;
+    # ctype "promo" is the case where unlocking is all it does.
+    promo_ids = ndb.IntegerProperty(repeated=True)
 
     @classmethod
     def by_code(cls, code: str) -> "Coupon | None":
@@ -52,6 +61,7 @@ class Coupon(ndb.Model):
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "usage_limit": self.usage_limit,
             "used_count": self.used_count,
+            "promo_ids": list(self.promo_ids or []),
             "source": self.source,
             "bound_phone": self.bound_phone,
         }

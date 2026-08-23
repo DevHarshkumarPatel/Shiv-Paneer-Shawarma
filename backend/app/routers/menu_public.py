@@ -3,9 +3,33 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-from ..models import Category, Subcategory, Item, ItemImage, Promo
+from ..models import Category, Subcategory, Item, ItemImage, Promo, Coupon
 
 router = APIRouter(prefix="/api", tags=["menu"])
+
+
+def _gate_codes(promos: list[Promo]) -> dict[int, list[str]]:
+    """promo id -> the live codes that unlock it.
+
+    A coupon-gated promo is advertised as "with code SHIV10" rather than as a
+    standing offer, so the public copy needs the codes. Only looked up when some
+    promo is actually gated, and scratch-card mints are skipped: those are one
+    private code per winner, not something to print on the menu.
+    """
+    gated = {p.key.id() for p in promos if p.coupon_only}
+    if not gated:
+        return {}
+    codes: dict[int, list[str]] = {}
+    for c in Coupon.query():
+        if c.source == "scratch" or not c.active:
+            continue
+        ok, _ = c.is_valid_now()
+        if not ok:
+            continue
+        for pid in c.promo_ids or []:
+            if pid in gated:
+                codes.setdefault(pid, []).append(c.code)
+    return codes
 
 
 def _join_names(names: list[str]) -> str:
@@ -31,6 +55,10 @@ def list_public_promos():
         [p for p in Promo.query() if p.active],
         key=lambda p: (p.created_at or datetime.min, p.key.id()),
     )
+    codes_by_promo = _gate_codes(promos)
+    # A gated promo whose codes have all expired or been switched off unlocks
+    # nothing, so it is not an offer anyone can claim — leave it off the site.
+    promos = [p for p in promos if not p.coupon_only or codes_by_promo.get(p.key.id())]
 
     # Identical offers running on several categories (the shape the seed creates:
     # one b1g1 row per category) merge into a single banner listing all of them,
@@ -45,7 +73,9 @@ def list_public_promos():
         # so advertising it would be a promise the cart will not keep.
         if not names:
             continue
-        key = (p.ptype, p.value, p.display_label(), p.description, p.conditions)
+        codes = codes_by_promo.get(p.key.id(), [])
+        key = (p.ptype, p.value, p.display_label(), p.description, p.conditions,
+               tuple(codes))
         row = merged.setdefault(key, {
             "id": p.key.id(),
             "scope": p.scope,
@@ -53,6 +83,8 @@ def list_public_promos():
             "value": p.value,
             "label": p.display_label(),
             "applies_to": [],
+            "requires_coupon": bool(codes),
+            "coupon_codes": codes,
             "_cat_ids": set(),
             "_promo": p,
         })
@@ -67,10 +99,11 @@ def list_public_promos():
         p = row.pop("_promo")
         store_wide = bool(cats) and set(cats).issubset(row.pop("_cat_ids"))
         targets_text = "the whole menu" if store_wide else _join_names(row["applies_to"])
+        codes = row["coupon_codes"]
         out.append({
             **row,
-            "description": p.display_description(targets_text),
-            "conditions": p.display_conditions(targets_text),
+            "description": p.display_description(targets_text, codes),
+            "conditions": p.display_conditions(targets_text, codes),
             "applies_to_text": targets_text,
             "store_wide": store_wide,
         })
@@ -110,11 +143,18 @@ def get_menu():
     # Index active promos so the client can render badges + effective offers.
     promos_by_item: dict[int, dict] = {}
     promos_by_cat: dict[int, dict] = {}
-    for p in Promo.query():
-        if not p.active:
+    active_promos = [p for p in Promo.query() if p.active]
+    menu_codes = _gate_codes(active_promos)
+    for p in active_promos:
+        codes = menu_codes.get(p.key.id(), [])
+        # A gated promo with no live code behind it cannot be claimed, so it
+        # must not put an offer badge on the menu.
+        if p.coupon_only and not codes:
             continue
         index = promos_by_item if p.scope == "item" else promos_by_cat
-        pd = p.to_dict()
+        # The badge says which code turns it on: the cart will not apply a gated
+        # promo by itself, and a plain "B1G1" chip would be a promise it breaks.
+        pd = {**p.to_dict(), "coupon_codes": codes}
         for tid in p.target_id_list():
             index[tid] = pd
 

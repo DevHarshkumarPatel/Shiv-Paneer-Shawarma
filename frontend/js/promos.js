@@ -36,11 +36,17 @@ const Promos = (() => {
 
   const appliesTo = (p) => (p.store_wide ? "the whole menu" : p.applies_to_text || "");
 
+  /* A gated offer is only real to someone who has the code, so every place that
+     shows it shows the code with it. */
+  const codes = (p) => (p.requires_coupon ? (p.coupon_codes || []) : []);
+  const codeTag = (p) => (codes(p).length
+    ? `<span class="tag">Code ${esc(codes(p).join(" / "))}</span>` : "");
+
   function bandHTML(p) {
     return `
       <div class="card lp-offer">
         <div class="t">
-          <span class="tag">Running now</span>
+          <span class="tag">${codes(p).length ? `With code ${esc(codes(p).join(" / "))}` : "Running now"}</span>
           <h3>${esc(p.label)}</h3>
           <p>${esc(p.description)}</p>
           <p class="promo-terms">${esc(p.conditions)}</p>
@@ -54,6 +60,7 @@ const Promos = (() => {
     return `
       <div class="promo-item">
         <span class="badge badge-offer">${esc(p.label)}</span>
+        ${codeTag(p)}
         <div class="promo-body">
           ${on ? `<div class="promo-on">On ${esc(on)}</div>` : ""}
           <p class="promo-desc">${esc(p.description)}</p>
@@ -74,7 +81,8 @@ const Promos = (() => {
   /* One sentence, for places with room for a line and not a card. */
   function lineHTML(p) {
     const on = appliesTo(p);
-    return `<b>${esc(p.label)}</b>${on ? ` on ${esc(on)}` : ""}`;
+    const code = codes(p)[0];
+    return `<b>${esc(p.label)}</b>${on ? ` on ${esc(on)}` : ""}${code ? ` with code <b>${esc(code)}</b>` : ""}`;
   }
 
   const RENDERERS = {

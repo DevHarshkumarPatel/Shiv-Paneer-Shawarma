@@ -449,6 +449,11 @@
   }
 
   /* ---------------- Promos ---------------- */
+  /* Which codes gate this promo. Read off the coupons rather than stored on the
+     promo, so the column cannot disagree with the coupon screen. */
+  const promoCodes = (promoId) =>
+    data.coupons.filter((c) => (c.promo_ids || []).includes(promoId)).map((c) => c.code);
+
   function renderPromos() {
     const body = el("#tabBody");
     body.innerHTML = "";
@@ -458,11 +463,12 @@
         <td>${esc(p.label || "—")}</td>
         <td>${esc(p.scope)}: ${esc(((p.target_ids && p.target_ids.length ? p.target_ids : [p.target_id]).map((id) => p.scope === "item" ? itemName(id) : catName(id)).join(", ")))}</td>
         <td>${esc(p.ptype)}${p.ptype === "percent" || p.ptype === "flat" ? ` (${p.value}${p.ptype === "percent" ? "%" : "₹"})` : ""}</td>
+        <td>${p.coupon_only ? `🔒 ${esc(promoCodes(p.id).join(", ")) || "coupon only"}` : "Everyone"}</td>
         <td>${p.active ? "✅" : "⛔"}</td>
         <td class="row"><button class="btn btn-sm btn-outline" data-edit="${p.id}">Edit</button>
           <button class="btn btn-sm btn-danger" data-del="${p.id}">Delete</button></td>
       </tr>`).join("");
-    body.insertAdjacentHTML("beforeend", `<div class="table-wrap"><table class="admin-table"><thead><tr><th>Label</th><th>Applies to</th><th>Type</th><th>Active</th><th></th></tr></thead><tbody>${rows || emptyRow(5)}</tbody></table></div>`);
+    body.insertAdjacentHTML("beforeend", `<div class="table-wrap"><table class="admin-table"><thead><tr><th>Label</th><th>Applies to</th><th>Type</th><th>Who gets it</th><th>Active</th><th></th></tr></thead><tbody>${rows || emptyRow(6)}</tbody></table></div>`);
     el("#addBtn").addEventListener("click", () => promoForm());
     els("[data-edit]", body).forEach((b) => b.addEventListener("click", () => promoForm(data.promos.find((p) => p.id == b.dataset.edit))));
     els("[data-del]", body).forEach((b) => b.addEventListener("click", () => del(`/api/admin/menu/promos/${b.dataset.del}`, "Delete this promo?")));
@@ -567,7 +573,20 @@
     });
   }
 
-  /* ---------------- Coupons ---------------- */
+  /* ---------------- Coupons ----------------
+     A coupon does two things, separately: it can take money off (percent/flat),
+     and it can switch on promos that the cart otherwise never applies. "Offer
+     only" is the second without the first — the code's whole job is unlocking
+     the offer. A promo listed on any coupon stops running on its own, which is
+     what makes "only with this code" true. */
+  const promoName = (id) => {
+    const p = data.promos.find((x) => x.id == id);
+    return p ? (p.display_label || p.label || p.ptype) : "";
+  };
+  const unlockedNames = (c) => (c.promo_ids || []).map(promoName).filter(Boolean);
+  const couponAmount = (c) =>
+    c.ctype === "promo" ? "Offer only" : c.ctype === "percent" ? `${c.value}%` : money(c.value);
+
   function renderCoupons() {
     const body = el("#tabBody");
     body.innerHTML = "";
@@ -575,32 +594,61 @@
     const rows = data.coupons.map((c) => `
       <tr>
         <td><strong>${esc(c.code)}</strong></td>
-        <td>${c.ctype === "percent" ? `${c.value}%` : money(c.value)}${c.max_discount ? ` (max ${money(c.max_discount)})` : ""}</td>
+        <td>${esc(couponAmount(c))}${c.max_discount && c.ctype !== "promo" ? ` (max ${money(c.max_discount)})` : ""}</td>
+        <td>${esc(unlockedNames(c).join(", ")) || "—"}</td>
         <td>${c.min_order ? `≥ ${money(c.min_order)}` : "—"}</td>
         <td>${c.used_count}${c.usage_limit ? ` / ${c.usage_limit}` : ""}</td>
         <td>${c.active ? "✅" : "⛔"}</td>
         <td class="row"><button class="btn btn-sm btn-outline" data-edit="${c.id}">Edit</button>
           <button class="btn btn-sm btn-danger" data-del="${c.id}">Delete</button></td>
       </tr>`).join("");
-    body.insertAdjacentHTML("beforeend", `<div class="table-wrap"><table class="admin-table"><thead><tr><th>Code</th><th>Discount</th><th>Min order</th><th>Used</th><th>Active</th><th></th></tr></thead><tbody>${rows || emptyRow(8)}</tbody></table></div>`);
+    body.insertAdjacentHTML("beforeend", `<div class="table-wrap"><table class="admin-table"><thead><tr><th>Code</th><th>Discount</th><th>Unlocks</th><th>Min order</th><th>Used</th><th>Active</th><th></th></tr></thead><tbody>${rows || emptyRow(7)}</tbody></table></div>`);
     el("#addBtn").addEventListener("click", () => couponForm());
     els("[data-edit]", body).forEach((b) => b.addEventListener("click", () => couponForm(data.coupons.find((c) => c.id == b.dataset.edit))));
     els("[data-del]", body).forEach((b) => b.addEventListener("click", () => del(`/api/coupons/${b.dataset.del}`, "Delete this coupon?")));
   }
 
   function couponForm(coupon) {
-    const c = coupon || { code: "", ctype: "percent", value: 10, min_order: 0, max_discount: 0, usage_limit: 0, active: true };
+    const c = coupon || { code: "", ctype: "percent", value: 10, min_order: 0, max_discount: 0, usage_limit: 0, active: true, promo_ids: [] };
+    const picked = new Set(c.promo_ids || []);
+    /* Several promos of the same type read identically ("Buy 1 Get 1 Free" once
+       per category), so each row names what it covers. */
+    const promoTargets = (p) => {
+      const names = (p.target_ids && p.target_ids.length ? p.target_ids : [p.target_id])
+        .filter((x) => x != null).map((id) => (p.scope === "item" ? itemName(id) : catName(id)));
+      // A promo can cover a dozen items; the row only needs enough to tell it apart.
+      return names.length > 3 ? `${names.slice(0, 3).join(", ")} +${names.length - 3} more` : names.join(", ");
+    };
+    const promoOpts = data.promos.map((p) =>
+      `<label class="ms-opt"><input type="checkbox" value="${p.id}" ${picked.has(p.id) ? "checked" : ""}/> <span>${esc(p.display_label || p.label || p.ptype)} <span class="text-muted">· ${esc(promoTargets(p))}</span>${p.active ? "" : " (off)"}</span></label>`).join("")
+      || `<div class="ms-opt text-muted">Create a promo first.</div>`;
     const m = modal({
       title: coupon ? "Edit coupon" : "Add coupon",
       bodyHTML: `
         <div class="field"><label>Code</label><input class="input" id="fCode" value="${esc(c.code)}" style="text-transform:uppercase;" placeholder="SHIV10" /></div>
         <div class="input-row">
-          <div class="field grow"><label>Type</label><select class="select" id="fType"><option value="percent" ${c.ctype === "percent" ? "selected" : ""}>Percent</option><option value="flat" ${c.ctype === "flat" ? "selected" : ""}>Flat ₹</option></select></div>
-          <div class="field grow"><label>Value</label><input class="input" id="fValue" type="number" value="${c.value}" /></div>
+          <div class="field grow"><label>Type</label><select class="select" id="fType">
+            <option value="percent" ${c.ctype === "percent" ? "selected" : ""}>Percent</option>
+            <option value="flat" ${c.ctype === "flat" ? "selected" : ""}>Flat ₹</option>
+            <option value="promo" ${c.ctype === "promo" ? "selected" : ""}>Offer only (no ₹ off)</option></select></div>
+          <div class="field grow" id="cValWrap"><label>Value</label><input class="input" id="fValue" type="number" value="${c.value}" /></div>
         </div>
+        <!-- Attaching a promo here is what makes it code-only: it stops applying
+             to everyone's cart and comes back only for a cart carrying this
+             code. Detach it (or delete the coupon) and it goes public again. -->
+        <div class="field"><label>Offers this code unlocks</label>
+          <div class="ms" id="fPromoMs">
+            <button type="button" class="select ms-toggle" id="fPromoToggle"><span class="ms-summary placeholder" id="fPromoSummary">None</span><span class="ms-caret">▾</span></button>
+            <div class="ms-panel" id="fPromoPanel" hidden>
+              <div class="ms-bar"><span id="fPromoCount">0 selected</span><span class="ms-actions"><button type="button" id="fPromoNone">Clear</button></span></div>
+              <div id="fPromoOpts">${promoOpts}</div>
+            </div>
+          </div>
+        </div>
+        <p class="text-muted text-sm">Any offer picked here stops running on its own — only carts using this code get it.</p>
         <div class="input-row">
           <div class="field grow"><label>Min order (₹)</label><input class="input" id="fMin" type="number" value="${c.min_order}" /></div>
-          <div class="field grow"><label>Max discount (₹, 0=none)</label><input class="input" id="fMax" type="number" value="${c.max_discount}" /></div>
+          <div class="field grow" id="cMaxWrap"><label>Max discount (₹, 0=none)</label><input class="input" id="fMax" type="number" value="${c.max_discount}" /></div>
         </div>
         <div class="input-row">
           <div class="field grow"><label>Usage limit (0=∞)</label><input class="input" id="fLimit" type="number" value="${c.usage_limit}" /></div>
@@ -608,17 +656,55 @@
         </div>`,
       footHTML: `<button class="btn btn-primary btn-block" id="saveBtn">Save coupon</button>`,
     });
+
+    const updatePromoSummary = () => {
+      const names = [...picked].map((id) => {
+        const p = data.promos.find((x) => x.id == id);
+        return p ? `${promoName(id)} · ${promoTargets(p)}` : "";
+      }).filter(Boolean);
+      const sum = el("#fPromoSummary", m.backdrop);
+      sum.textContent = names.length ? (names.length <= 2 ? names.join(", ") : `${names.length} selected`) : "None";
+      sum.classList.toggle("placeholder", !names.length);
+      el("#fPromoCount", m.backdrop).textContent = `${names.length} selected`;
+    };
+    els("#fPromoOpts input[type=checkbox]", m.backdrop).forEach((cb) =>
+      cb.addEventListener("change", () => { cb.checked ? picked.add(+cb.value) : picked.delete(+cb.value); updatePromoSummary(); }));
+    el("#fPromoToggle", m.backdrop).addEventListener("click", () => {
+      const ms = el("#fPromoMs", m.backdrop), panel = el("#fPromoPanel", m.backdrop);
+      const open = panel.hidden;
+      panel.hidden = !open; ms.classList.toggle("open", open);
+    });
+    el("#fPromoNone", m.backdrop).addEventListener("click", () => {
+      picked.clear();
+      els("#fPromoOpts input[type=checkbox]", m.backdrop).forEach((cb) => { cb.checked = false; });
+      updatePromoSummary();
+    });
+
+    // An offer-only code has no amount to cap or charge, so those two inputs go.
+    const typeSel = el("#fType", m.backdrop);
+    const syncType = () => {
+      const offerOnly = typeSel.value === "promo";
+      el("#cValWrap", m.backdrop).style.display = offerOnly ? "none" : "";
+      el("#cMaxWrap", m.backdrop).style.display = offerOnly ? "none" : "";
+    };
+    typeSel.addEventListener("change", syncType);
+    syncType();
+    updatePromoSummary();
+
     el("#saveBtn", m.backdrop).addEventListener("click", async () => {
+      const ctype = typeSel.value;
       const payload = {
         code: el("#fCode", m.backdrop).value.trim().toUpperCase(),
-        ctype: el("#fType", m.backdrop).value,
-        value: parseFloat(el("#fValue", m.backdrop).value) || 0,
+        ctype,
+        value: ctype === "promo" ? 0 : (parseFloat(el("#fValue", m.backdrop).value) || 0),
         min_order: parseFloat(el("#fMin", m.backdrop).value) || 0,
-        max_discount: parseFloat(el("#fMax", m.backdrop).value) || 0,
+        max_discount: ctype === "promo" ? 0 : (parseFloat(el("#fMax", m.backdrop).value) || 0),
         usage_limit: parseInt(el("#fLimit", m.backdrop).value) || 0,
         active: el("#fActive", m.backdrop).value === "true",
+        promo_ids: [...picked],
       };
       if (!payload.code) return toast("Code is required", "err");
+      if (ctype === "promo" && !payload.promo_ids.length) return toast("Pick the offer this code unlocks", "err");
       await save(coupon ? "put" : "post", coupon ? `/api/coupons/${coupon.id}` : "/api/coupons", payload, m);
     });
   }
@@ -797,7 +883,7 @@
   function prizeForm(prize) {
     const p = prize || { kind: "coupon", coupon_id: 0, label: "", quantity: 10, validity_days: 7, active: true, sort_order: 0 };
     const couponOpts = data.coupons.map((c) =>
-      `<option value="${c.id}" ${p.coupon_id == c.id ? "selected" : ""}>${esc(c.code)} — ${c.ctype === "percent" ? `${c.value}%` : money(c.value)} off</option>`).join("");
+      `<option value="${c.id}" ${p.coupon_id == c.id ? "selected" : ""}>${esc(c.code)} — ${esc(couponAmount(c))}${c.ctype === "promo" ? "" : " off"}</option>`).join("");
     // The rest of the batch, so the owner can see what their number adds up to
     // without leaving the form — "40" only means something next to the other 60.
     const others = (data.scratch.prizes || [])

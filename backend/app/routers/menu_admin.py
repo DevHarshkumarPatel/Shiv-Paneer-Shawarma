@@ -4,7 +4,7 @@ import io
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from ..deps import require_owner
-from ..models import Category, Subcategory, Item, ItemImage, Variant, Promo
+from ..models import Category, Subcategory, Item, ItemImage, Variant, Promo, Coupon
 from ..schemas.models import (
     AvailabilityPayload, CategoryPayload, SubcategoryPayload, ItemPayload,
     PromoPayload, ReorderPayload,
@@ -353,4 +353,12 @@ def delete_promo(promo_id: int, _owner=Depends(require_owner)):
     promo = Promo.get_by_id(promo_id)
     if promo:
         promo.key.delete()
+        # Any coupon that unlocked it now points at nothing. Detached here so
+        # the coupon screen stops listing a promo that is gone, and so a later
+        # promo reusing the id could never be handed out by an unrelated code.
+        for coupon in Coupon.query(Coupon.promo_ids == promo_id):
+            fresh = coupon.key.get()
+            if fresh and promo_id in (fresh.promo_ids or []):
+                fresh.promo_ids = [p for p in fresh.promo_ids if p != promo_id]
+                fresh.put()
     return {"ok": True}
