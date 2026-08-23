@@ -36,17 +36,18 @@ const Promos = (() => {
 
   const appliesTo = (p) => (p.store_wide ? "the whole menu" : p.applies_to_text || "");
 
-  /* A gated offer is only real to someone who has the code, so every place that
-     shows it shows the code with it. */
-  const codes = (p) => (p.requires_coupon ? (p.coupon_codes || []) : []);
-  const codeTag = (p) => (codes(p).length
-    ? `<span class="tag">Code ${esc(codes(p).join(" / "))}</span>` : "");
+  /* A gated offer says a code is needed, never which one. The code is private
+     to whoever the owner gave it to; printing it here would hand the offer to
+     every visitor. */
+  const CODE_CTA = "Apply coupon code and avail this offer";
+  const codeTag = (p) => (p.requires_coupon
+    ? `<span class="tag">${CODE_CTA}</span>` : "");
 
   function bandHTML(p) {
     return `
       <div class="card lp-offer">
         <div class="t">
-          <span class="tag">${codes(p).length ? `With code ${esc(codes(p).join(" / "))}` : "Running now"}</span>
+          <span class="tag">${p.requires_coupon ? CODE_CTA : "Running now"}</span>
           <h3>${esc(p.label)}</h3>
           <p>${esc(p.description)}</p>
           <p class="promo-terms">${esc(p.conditions)}</p>
@@ -81,8 +82,8 @@ const Promos = (() => {
   /* One sentence, for places with room for a line and not a card. */
   function lineHTML(p) {
     const on = appliesTo(p);
-    const code = codes(p)[0];
-    return `<b>${esc(p.label)}</b>${on ? ` on ${esc(on)}` : ""}${code ? ` with code <b>${esc(code)}</b>` : ""}`;
+    return `<b>${esc(p.label)}</b>${on ? ` on ${esc(on)}` : ""}${
+      p.requires_coupon ? ` — <b>${CODE_CTA.toLowerCase()}</b>` : ""}`;
   }
 
   const RENDERERS = {

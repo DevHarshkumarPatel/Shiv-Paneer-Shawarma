@@ -178,36 +178,39 @@ class Promo(ndb.Model):
             return f"{self.value:g}% off"
         return f"₹{self.value:g} off"
 
-    def display_description(self, targets_text: str = "", codes: list[str] | None = None) -> str:
+    def display_description(self, targets_text: str = "", gated: bool = False) -> str:
         """Owner description, else a mechanically accurate one built from ptype.
 
         The defaults describe exactly what `services/pricing.py` does, so the
         copy on the site cannot drift from what the cart actually charges — a
-        coupon-gated promo therefore says which code turns it on rather than
-        promising it applies by itself.
+        coupon-gated promo therefore says a code is needed rather than promising
+        it applies by itself. The code itself is never printed on the public
+        site: whoever the owner gave it to already has it, and anyone else
+        reading it off a page would be helping themselves to a private offer.
         """
         if self.description:
             return self.description
         on = f" on {targets_text}" if targets_text else ""
         from_ = f" from {targets_text}" if targets_text else ""
-        how = f" with code {' or '.join(codes)}" if codes else " automatically"
+        how = (" at checkout once you enter your coupon code" if gated
+               else " automatically at checkout")
         if self.ptype == "b1g1":
             return (f"Add any 2 eligible items{from_} — the cheaper of the two comes off "
-                    f"your bill{how} at checkout.")
+                    f"your bill{how}.")
         if self.ptype == "b2g1":
-            return f"Buy any 2 items{from_} and the 3rd one is free, applied{how} at checkout."
+            return f"Buy any 2 items{from_} and the 3rd one is free, applied{how}."
         if self.ptype == "percent":
-            return f"{self.value:g}% off every eligible item{on}, applied{how} at checkout."
-        return f"₹{self.value:g} off every eligible item{on}, applied{how} at checkout."
+            return f"{self.value:g}% off every eligible item{on}, applied{how}."
+        return f"₹{self.value:g} off every eligible item{on}, applied{how}."
 
-    def display_conditions(self, targets_text: str = "", codes: list[str] | None = None) -> str:
+    def display_conditions(self, targets_text: str = "", gated: bool = False) -> str:
         """Owner fine print, else the standing terms every promo here shares."""
         if self.conditions:
             return self.conditions
         applies = f"Applies to {targets_text}. " if targets_text else ""
         code_terms = (
-            f"Enter code {' or '.join(codes)} at checkout to switch it on."
-            if codes else
+            "Apply the coupon code at checkout and avail this offer."
+            if gated else
             "No coupon code needed — the discount is calculated on the final bill."
         )
         return (f"{applies}{code_terms} Cannot be combined with itself on the "

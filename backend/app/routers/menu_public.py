@@ -8,28 +8,31 @@ from ..models import Category, Subcategory, Item, ItemImage, Promo, Coupon
 router = APIRouter(prefix="/api", tags=["menu"])
 
 
-def _gate_codes(promos: list[Promo]) -> dict[int, list[str]]:
-    """promo id -> the live codes that unlock it.
+def _claimable_gated(promos: list[Promo]) -> set[int]:
+    """Ids of the coupon-gated promos that some live code can still unlock.
 
-    A coupon-gated promo is advertised as "with code SHIV10" rather than as a
-    standing offer, so the public copy needs the codes. Only looked up when some
-    promo is actually gated, and scratch-card mints are skipped: those are one
-    private code per winner, not something to print on the menu.
+    The codes themselves never leave the server for a public page. A gated offer
+    is advertised as "apply your coupon code" — whoever the owner handed the code
+    to already has it, and printing it on the menu would hand a private offer to
+    everyone. This only answers the other question the public pages need: is
+    there any code out there that still turns this offer on? If not, the offer is
+    unclaimable and must not be advertised at all.
+
+    Only looked up when some promo is gated. Scratch-card mints are skipped:
+    those are one private code per winner, not a standing public offer.
     """
     gated = {p.key.id() for p in promos if p.coupon_only}
     if not gated:
-        return {}
-    codes: dict[int, list[str]] = {}
+        return set()
+    claimable: set[int] = set()
     for c in Coupon.query():
         if c.source == "scratch" or not c.active:
             continue
         ok, _ = c.is_valid_now()
         if not ok:
             continue
-        for pid in c.promo_ids or []:
-            if pid in gated:
-                codes.setdefault(pid, []).append(c.code)
-    return codes
+        claimable.update(pid for pid in (c.promo_ids or []) if pid in gated)
+    return claimable
 
 
 def _join_names(names: list[str]) -> str:
@@ -55,10 +58,10 @@ def list_public_promos():
         [p for p in Promo.query() if p.active],
         key=lambda p: (p.created_at or datetime.min, p.key.id()),
     )
-    codes_by_promo = _gate_codes(promos)
+    claimable = _claimable_gated(promos)
     # A gated promo whose codes have all expired or been switched off unlocks
     # nothing, so it is not an offer anyone can claim — leave it off the site.
-    promos = [p for p in promos if not p.coupon_only or codes_by_promo.get(p.key.id())]
+    promos = [p for p in promos if not p.coupon_only or p.key.id() in claimable]
 
     # Identical offers running on several categories (the shape the seed creates:
     # one b1g1 row per category) merge into a single banner listing all of them,
@@ -73,9 +76,8 @@ def list_public_promos():
         # so advertising it would be a promise the cart will not keep.
         if not names:
             continue
-        codes = codes_by_promo.get(p.key.id(), [])
-        key = (p.ptype, p.value, p.display_label(), p.description, p.conditions,
-               tuple(codes))
+        gated = p.coupon_only
+        key = (p.ptype, p.value, p.display_label(), p.description, p.conditions, gated)
         row = merged.setdefault(key, {
             "id": p.key.id(),
             "scope": p.scope,
@@ -83,8 +85,7 @@ def list_public_promos():
             "value": p.value,
             "label": p.display_label(),
             "applies_to": [],
-            "requires_coupon": bool(codes),
-            "coupon_codes": codes,
+            "requires_coupon": gated,
             "_cat_ids": set(),
             "_promo": p,
         })
@@ -99,11 +100,10 @@ def list_public_promos():
         p = row.pop("_promo")
         store_wide = bool(cats) and set(cats).issubset(row.pop("_cat_ids"))
         targets_text = "the whole menu" if store_wide else _join_names(row["applies_to"])
-        codes = row["coupon_codes"]
         out.append({
             **row,
-            "description": p.display_description(targets_text, codes),
-            "conditions": p.display_conditions(targets_text, codes),
+            "description": p.display_description(targets_text, row["requires_coupon"]),
+            "conditions": p.display_conditions(targets_text, row["requires_coupon"]),
             "applies_to_text": targets_text,
             "store_wide": store_wide,
         })
@@ -144,17 +144,17 @@ def get_menu():
     promos_by_item: dict[int, dict] = {}
     promos_by_cat: dict[int, dict] = {}
     active_promos = [p for p in Promo.query() if p.active]
-    menu_codes = _gate_codes(active_promos)
+    claimable = _claimable_gated(active_promos)
     for p in active_promos:
-        codes = menu_codes.get(p.key.id(), [])
         # A gated promo with no live code behind it cannot be claimed, so it
         # must not put an offer badge on the menu.
-        if p.coupon_only and not codes:
+        if p.coupon_only and p.key.id() not in claimable:
             continue
         index = promos_by_item if p.scope == "item" else promos_by_cat
-        # The badge says which code turns it on: the cart will not apply a gated
-        # promo by itself, and a plain "B1G1" chip would be a promise it breaks.
-        pd = {**p.to_dict(), "coupon_codes": codes}
+        # `coupon_only` rides along so the badge can say a code is needed: the
+        # cart will not apply a gated promo by itself, and a plain "B1G1" chip
+        # would be a promise it breaks.
+        pd = p.to_dict()
         for tid in p.target_id_list():
             index[tid] = pd
 

@@ -324,14 +324,13 @@
   /* Owner label if there is one, else the label the API derives from the promo
      type — so a promo saved without a label still reads as an offer.
 
-     A coupon-gated promo names its code: the cart will not apply it unless that
-     code is entered, so a bare "Buy 1 Get 1 Free" badge would be a promise the
-     checkout breaks. */
-  const promoCode = (p) => (p && p.coupon_only && (p.coupon_codes || [])[0]) || "";
+     A coupon-gated promo says a code is needed — the cart will not apply it
+     unless one is entered, so a bare "Buy 1 Get 1 Free" badge would be a promise
+     the checkout breaks. Which code it is stays private to the people the owner
+     gave it to; the badge only tells everyone else that one exists. */
   const promoLabel = (p) => {
     const base = (p && (p.display_label || p.label)) || "Offer";
-    const code = promoCode(p);
-    return code ? `${base} · code ${code}` : base;
+    return p && p.coupon_only ? `${base} · with coupon code` : base;
   };
 
   /* catPromoId: the promo the whole category is running, if any. The API copies
