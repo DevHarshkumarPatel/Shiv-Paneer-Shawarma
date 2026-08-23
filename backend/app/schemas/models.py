@@ -147,9 +147,18 @@ class DeliveryAreaPayload(BaseModel):
 
 # ---- Store settings ----
 class SettingsPayload(BaseModel):
-    ordering_enabled: bool = True
-    scratch_enabled: bool = False
-    scratch_repeat_batch: bool = False
+    """A partial update: only the switches present in the body are written.
+
+    Every field is optional because these switches live on two different admin
+    screens. When the payload replaced the whole row, saving the ordering switch
+    from the Settings tab quietly reset the scratch options the owner had set on
+    the Scratch tab.
+    """
+
+    ordering_enabled: bool | None = None
+    promo_banners_enabled: bool | None = None
+    scratch_enabled: bool | None = None
+    scratch_repeat_batch: bool | None = None
 
 
 # ---- Scratch cards ----

@@ -3,7 +3,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-from ..models import Category, Subcategory, Item, ItemImage, Promo, Coupon
+from ..models import Category, Subcategory, Item, ItemImage, Promo, Coupon, Setting
 
 router = APIRouter(prefix="/api", tags=["menu"])
 
@@ -50,7 +50,16 @@ def list_public_promos():
     The public pages render their offer banners from this instead of hard-coded
     text, so turning a promo off in the admin takes it off the site, and the
     banner always names the categories the promo actually covers.
+
+    The owner's banner switch is answered here rather than in the browser: with
+    it off this returns nothing, and every band, strip, running-offer line and
+    FAQ entry on every page empties itself with no page-by-page change. The
+    promos keep discounting the cart — this hides the advertising, not the
+    offer.
     """
+    if not Setting.singleton().promo_banners_enabled:
+        return {"promos": []}
+
     cats = {c.key.id(): c for c in Category.query() if c.active}
     items = {i.key.id(): i for i in Item.query() if i.active}
 

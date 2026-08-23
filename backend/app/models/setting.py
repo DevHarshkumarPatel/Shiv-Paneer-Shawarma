@@ -1,8 +1,8 @@
 """Global store settings — a single-row entity holding shop-wide switches.
 
-Currently just `ordering_enabled`: the owner's master switch for whether
-customers may place orders from the customer side. Kept as a fixed-id
-singleton so there is always exactly one row to read and update.
+Holds the owner's shop-wide switches: whether customers may order at all,
+whether the offer banners show, and how the scratch card behaves. Kept as a
+fixed-id singleton so there is always exactly one row to read and update.
 """
 from google.cloud import ndb
 
@@ -19,6 +19,13 @@ class Setting(ndb.Model):
     # give-away that silently restarts is not a give-away the owner budgeted.
     scratch_repeat_batch = ndb.BooleanProperty(default=False)
     scratch_batch_no = ndb.IntegerProperty(default=1)   # how many batches in
+
+    # --- Offer banners --------------------------------------------------
+    # The offer bands, strips and running-offer line on the public pages. On by
+    # default. Turning this off only silences the advertising: a promo that is
+    # active still discounts the cart, so the owner can run a quiet offer, or
+    # clear the pages during a rush, without editing a single promo.
+    promo_banners_enabled = ndb.BooleanProperty(default=True)
 
     # --- Review page ---------------------------------------------------
     # On by default, but the page only actually opens once the owner has written
@@ -48,6 +55,7 @@ class Setting(ndb.Model):
             "scratch_enabled": self.scratch_enabled,
             "scratch_repeat_batch": self.scratch_repeat_batch,
             "scratch_batch_no": self.scratch_batch_no or 1,
+            "promo_banners_enabled": self.promo_banners_enabled,
             "reviews_enabled": self.reviews_enabled,
             "review_title": self.review_title or "",
             "review_intro": self.review_intro or "",

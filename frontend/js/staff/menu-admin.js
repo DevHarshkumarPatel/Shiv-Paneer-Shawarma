@@ -448,6 +448,24 @@
     });
   }
 
+  /* One switch, saved on its own. The settings endpoint takes a partial body,
+     so a screen only sends the switch the owner just flipped — sending the
+     whole row from two different tabs is what used to reset the other tab's
+     options. `after` repaints whichever screen is showing. */
+  async function saveSwitch(patch, okMsg, checkbox, after) {
+    checkbox.disabled = true;
+    try {
+      data.settings = await API.put("/api/admin/settings", patch);
+      toast(okMsg, "ok");
+    } catch (err) {
+      toast(err.message, "err");
+      checkbox.checked = !checkbox.checked;      // revert on failure
+    } finally {
+      checkbox.disabled = false;
+      if (after) after();
+    }
+  }
+
   /* ---------------- Promos ---------------- */
   /* Which codes gate this promo. Read off the coupons rather than stored on the
      promo, so the column cannot disagree with the coupon screen. */
@@ -844,30 +862,14 @@
     els("[data-edit]", body).forEach((b) => b.addEventListener("click", () => prizeForm(prizes.find((p) => p.id == b.dataset.edit))));
     els("[data-del]", body).forEach((b) => b.addEventListener("click", () => del(`/api/admin/scratch/prizes/${b.dataset.del}`, "Remove this card from the batch?")));
 
-    const putSettings = async (patch, okMsg, checkbox) => {
-      checkbox.disabled = true;
-      try {
-        // The payload replaces the whole settings row, so every switch goes up
-        // together — sending one alone would reset the others to their defaults.
-        data.settings = await API.put("/api/admin/settings", {
-          ordering_enabled: !!data.settings.ordering_enabled,
-          scratch_enabled: !!data.settings.scratch_enabled,
-          scratch_repeat_batch: !!data.settings.scratch_repeat_batch,
-          ...patch,
-        });
-        toast(okMsg, "ok");
-      } catch (err) {
-        toast(err.message, "err");
-        checkbox.checked = !checkbox.checked;
-      } finally { checkbox.disabled = false; renderScratch(); }
-    };
-
     el("#scratchToggle").addEventListener("change", (e) =>
-      putSettings({ scratch_enabled: e.target.checked },
-        e.target.checked ? "Scratch cards turned on" : "Scratch cards turned off", e.target));
+      saveSwitch({ scratch_enabled: e.target.checked },
+        e.target.checked ? "Scratch cards turned on" : "Scratch cards turned off",
+        e.target, renderScratch));
     el("#repeatToggle").addEventListener("change", (e) =>
-      putSettings({ scratch_repeat_batch: e.target.checked },
-        e.target.checked ? "The batch will reprint itself" : "Cards will stop when the batch runs out", e.target));
+      saveSwitch({ scratch_repeat_batch: e.target.checked },
+        e.target.checked ? "The batch will reprint itself" : "Cards will stop when the batch runs out",
+        e.target, renderScratch));
 
     el("#reprintBtn").addEventListener("click", async () => {
       if (!confirm(`Start a new batch of ${size} cards? Every count goes back to zero.`)) return;
@@ -1070,46 +1072,66 @@
   }
 
   /* ---------------- Settings ---------------- */
+  /* ---------------- Settings ----------------
+     Every shop-wide switch the owner might reach for in a hurry, on one screen.
+     The scratch switch is the same setting as the one on the Scratch tab (that
+     tab keeps it next to the batch it controls); flipping either moves the same
+     row. */
   function renderSettings() {
-    const body = el("#tabBody");
-    const on = !!data.settings.ordering_enabled;
-    body.innerHTML = `
+    const st = data.settings || {};
+    const rows = [
+      {
+        key: "ordering_enabled", id: "orderingToggle", on: st.ordering_enabled !== false,
+        title: "Accept customer orders",
+        blurb: "When this is on, customers can place orders from the customer site. " +
+               "Turn it off to temporarily stop taking new orders (the menu stays visible).",
+        state: (on) => on
+          ? "🟢 Ordering is <strong>open</strong> — customers can place orders."
+          : "🔴 Ordering is <strong>closed</strong> — customers cannot place orders.",
+        msg: (on) => (on ? "Ordering turned on" : "Ordering turned off"),
+      },
+      {
+        key: "promo_banners_enabled", id: "bannersToggle", on: st.promo_banners_enabled !== false,
+        title: "Show offer banners on the site",
+        blurb: "The offer cards on the home page, the strip on the menu and the running-offer " +
+               "line. Turning this off only hides the advertising — an active offer still " +
+               "comes off the bill at checkout.",
+        state: (on) => on
+          ? "🟢 Offers are <strong>advertised</strong> on the customer pages."
+          : "⚪ Banners are <strong>hidden</strong> — offers still apply at checkout.",
+        msg: (on) => (on ? "Offer banners turned on" : "Offer banners hidden"),
+      },
+      {
+        key: "scratch_enabled", id: "scratchSettingToggle", on: !!st.scratch_enabled,
+        title: "Show scratch cards at checkout",
+        blurb: "One card per customer per order, just before they pay. A win mints a private " +
+               "code locked to their phone number. Set the prizes up on the Scratch tab.",
+        state: (on) => on
+          ? "🟢 Customers get a card at checkout (while the batch lasts)."
+          : "⚪ No card is shown at checkout.",
+        msg: (on) => (on ? "Scratch cards turned on" : "Scratch cards turned off"),
+      },
+    ];
+
+    el("#tabBody").innerHTML = `
       <h2 style="margin:0 0 var(--sp-3);">Settings</h2>
-      <div class="card"><div class="card-pad">
-        <div class="row-between" style="gap:var(--sp-4);flex-wrap:wrap;">
-          <div>
-            <div style="font-weight:600;">Accept customer orders</div>
-            <p class="text-muted text-sm" style="margin:4px 0 0;max-width:46ch;">
-              When this is on, customers can place orders from the customer site.
-              Turn it off to temporarily stop taking new orders (the menu stays visible).</p>
+      ${rows.map((r) => `
+        <div class="card" style="margin-bottom:var(--sp-4);"><div class="card-pad">
+          <div class="row-between" style="gap:var(--sp-4);flex-wrap:wrap;">
+            <div>
+              <div style="font-weight:600;">${esc(r.title)}</div>
+              <p class="text-muted text-sm" style="margin:4px 0 0;max-width:52ch;">${esc(r.blurb)}</p>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="${r.id}" ${r.on ? "checked" : ""} />
+              <span class="switch-track"><span class="switch-thumb"></span></span>
+            </label>
           </div>
-          <label class="switch">
-            <input type="checkbox" id="orderingToggle" ${on ? "checked" : ""} />
-            <span class="switch-track"><span class="switch-thumb"></span></span>
-          </label>
-        </div>
-        <div class="text-sm ${on ? "" : "text-muted"}" id="orderingState" style="margin-top:var(--sp-3);">
-          ${on ? "🟢 Ordering is <strong>open</strong> — customers can place orders." : "🔴 Ordering is <strong>closed</strong> — customers cannot place orders."}
-        </div>
-      </div></div>`;
-    el("#orderingToggle").addEventListener("change", async (e) => {
-      const enabled = e.target.checked;
-      e.target.disabled = true;
-      try {
-        // Both switches go up together: the payload replaces the settings row,
-        // so sending one alone would quietly reset the other to its default.
-        data.settings = await API.put("/api/admin/settings", {
-          ordering_enabled: enabled, scratch_enabled: !!data.settings.scratch_enabled,
-        });
-        toast(enabled ? "Ordering turned on" : "Ordering turned off", "ok");
-      } catch (err) {
-        toast(err.message, "err");
-        e.target.checked = !enabled;   // revert on failure
-      } finally {
-        e.target.disabled = false;
-        renderSettings();
-      }
-    });
+          <div class="text-sm ${r.on ? "" : "text-muted"}" style="margin-top:var(--sp-3);">${r.state(r.on)}</div>
+        </div></div>`).join("")}`;
+
+    rows.forEach((r) => el(`#${r.id}`).addEventListener("change", (e) =>
+      saveSwitch({ [r.key]: e.target.checked }, r.msg(e.target.checked), e.target, renderSettings)));
   }
 
   /* ---------------- shared ---------------- */

@@ -1,8 +1,10 @@
-"""Store settings: public read of the ordering switch + owner update.
+"""Store settings: public read of the shop-wide switches + owner update.
 
 `ordering_enabled` is the owner's master switch. When it is off, the
 customer side cannot place orders (enforced in the orders router); the
 public endpoint lets the customer pages reflect that state in the UI.
+`promo_banners_enabled` hides the offer banners without touching the promos
+themselves, so the discounts keep working while the advertising stops.
 """
 from fastapi import APIRouter, Depends
 
@@ -27,9 +29,12 @@ def get_settings(_owner=Depends(require_owner)):
 
 @router.put("/api/admin/settings")
 def update_settings(body: SettingsPayload, _owner=Depends(require_owner)):
+    """Write only the switches the caller sent, leaving the rest alone."""
     s = Setting.singleton()
-    s.ordering_enabled = body.ordering_enabled
-    s.scratch_enabled = body.scratch_enabled
-    s.scratch_repeat_batch = body.scratch_repeat_batch
+    for field in ("ordering_enabled", "promo_banners_enabled",
+                  "scratch_enabled", "scratch_repeat_batch"):
+        value = getattr(body, field)
+        if value is not None:
+            setattr(s, field, value)
     s.put()
     return s.to_dict()
