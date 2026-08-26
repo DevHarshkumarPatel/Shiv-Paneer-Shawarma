@@ -390,3 +390,9 @@
   .rv-qcard { grid-template-columns: 30px 1fr; }
   .rv-qacts { grid-column: 1 / -1; justify-content: flex-start; }
 }
+
+/* ---- WhatsApp bill draft ----
+   The invoice is line-oriented plain text; a monospaced box makes a wrong
+   line stand out before it is sent, and it stays tall enough to read the
+   whole bill without scrolling on a laptop. */
+.wa-draft { width: 100%; min-height: 340px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; line-height: 1.55; }

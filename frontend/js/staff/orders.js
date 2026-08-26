@@ -1,6 +1,6 @@
 /* Staff/owner live orders board: list, advance status, verify payment. */
 (function () {
-  const { money, esc, el, els, toast, statusLabel, fmtDateTime, fmtTime, istDateISO, fmtDate } = UI;
+  const { money, esc, el, els, toast, modal, statusLabel, fmtDateTime, fmtTime, istDateISO, fmtDate } = UI;
 
   const FLOW = {
     delivery: ["placed", "confirmed", "preparing", "packing", "ready", "on_the_way", "delivered"],
@@ -8,11 +8,16 @@
     dine_in: ["placed", "confirmed", "preparing", "ready", "served"],
   };
   const TYPE_LABEL = { dine_in: "Dine-in", takeaway: "Takeaway", delivery: "Delivery" };
+  const TYPE_EMOJI = { dine_in: "🍽️", takeaway: "🥡", delivery: "🛵" };
+  const SHOP = "Shiv Paneer Shawarma";
 
   let filter = "all";
   let activeOnly = true;
   let dateFilter = istDateISO();   // IST "YYYY-MM-DD"; "" = all dates
   let user = null;
+  // Last rendered board, keyed by public_id: the WhatsApp bill needs the whole
+  // order object and a data- attribute can only carry the id.
+  let ordersById = {};
 
   document.addEventListener("DOMContentLoaded", init);
 
@@ -46,6 +51,7 @@
 
     el("#refreshBtn").addEventListener("click", load);
     Alerts.init();
+    WA.init();
     startAutoRefresh();
     await load();
   }
@@ -331,6 +337,134 @@
     return { init, seed };
   })();
 
+  /* ------------------------------------------------------------------ *
+   * WhatsApp bill: a thank-you + the full invoice, sent to the customer.
+   * wa.me can only carry plain text, so the bill is laid out in lines with
+   * WhatsApp's own *bold* markers rather than a table. The draft opens in a
+   * modal first — the owner can reword it, and nothing is sent until they
+   * tap send inside WhatsApp itself.
+   * ------------------------------------------------------------------ */
+  const WA = (function () {
+    let reviewsOn = false;
+
+    async function init() {
+      try { reviewsOn = !!(await API.get("/api/settings")).reviews_enabled; }
+      catch { /* the review line is optional; drop it if settings can't be read */ }
+    }
+
+    /* wa.me needs a full international number with no punctuation. This shop
+       serves India only, so a bare 10-digit number gets the 91 prefix. */
+    function number(raw) {
+      const d = String(raw || "").replace(/\D/g, "");
+      if (d.length === 10) return "91" + d;
+      if (d.length === 11 && d.startsWith("0")) return "91" + d.slice(1);
+      if (d.length === 12 && d.startsWith("91")) return d;
+      return d.length >= 11 ? d : "";
+    }
+
+    const pageUrl = (file, id) => new URL(`../${file}?id=${encodeURIComponent(id)}`, location.href).href;
+
+    function itemLine(i) {
+      const variant = i.variant_label ? ` (${i.variant_label})` : "";
+      const free = i.free_quantity ? ` +${i.free_quantity} free` : "";
+      const promo = i.promo_label ? ` [${i.promo_label}]` : "";
+      return `• ${i.quantity}× ${i.name}${variant}${free}${promo} — ${money(i.line_total)}`;
+    }
+
+    function message(o) {
+      const name = ((o.customer && o.customer.name) || "").trim();
+      const cancelled = o.status === "cancelled";
+      const L = [];
+
+      L.push(name ? `Namaste ${name} 🙏` : "Namaste 🙏");
+      L.push(cancelled
+        ? `Your order with *${SHOP}* has been cancelled. Here are the details for your records.`
+        : `Thank you for ordering from *${SHOP}* — welcome, and we're glad to have you with us!`);
+      L.push("");
+
+      L.push(`*Order ${o.public_id}*`);
+      if (o.created_at) L.push(`🗓 ${fmtDateTime(o.created_at)}`);
+      L.push(`${TYPE_EMOJI[o.order_type] || "🍽️"} ${TYPE_LABEL[o.order_type] || o.order_type}`);
+      L.push("");
+
+      L.push("*Your bill*");
+      o.items.forEach((i) => L.push(itemLine(i)));
+
+      /* Same rule as the card: show the subtotal only when something moves it,
+         otherwise the subtotal and the total are the same number twice. */
+      if (o.promo_discount > 0 || o.coupon_discount > 0 || o.delivery_fee > 0) {
+        L.push(`Subtotal: ${money(o.subtotal)}`);
+      }
+      if (o.promo_discount > 0) {
+        const labels = [...new Set(o.items.map((i) => i.promo_label).filter(Boolean))];
+        L.push(`Offers${labels.length ? ` · ${labels.join(", ")}` : ""}: − ${money(o.promo_discount)}`);
+      }
+      if (o.coupon_discount > 0) {
+        L.push(`Coupon${o.coupon_code ? ` ${o.coupon_code}` : ""}: − ${money(o.coupon_discount)}`);
+      }
+      if (o.delivery_fee > 0) {
+        L.push(`Delivery${o.delivery_area ? ` · ${o.delivery_area}` : ""}: ${money(o.delivery_fee)}`);
+      }
+      L.push(`*Total: ${money(o.total)}*`);
+      L.push("");
+
+      if (o.payment) {
+        L.push(`💳 ${payLabel(o.payment)}${o.payment.upi_reference ? ` · UTR ${o.payment.upi_reference}` : ""}`);
+      }
+      if (o.order_type === "delivery" && o.customer && o.customer.address) {
+        L.push(`🛵 Deliver to: ${o.customer.address}`);
+      }
+      if (!cancelled) L.push(`📦 Status: ${statusLabel(o.status)}`);
+      L.push("");
+
+      if (cancelled) {
+        L.push("Sorry for the trouble — do order again, we'd love to make it right.");
+      } else {
+        L.push(`Track your order: ${pageUrl("track.html", o.public_id)}`);
+        if (reviewsOn) L.push(`Tell us how we did: ${pageUrl("review.html", o.public_id)}`);
+        L.push("");
+        L.push("See you again soon! 🌯");
+      }
+      L.push(`— ${SHOP}`);
+      return L.join("\n");
+    }
+
+    function open(o) {
+      const phone = number(o.customer && o.customer.phone);
+      const m = modal({
+        title: `WhatsApp bill · ${o.public_id}`,
+        bodyHTML: `
+          <p class="text-sm text-muted" style="margin-top:0;">Edit anything you like, then open WhatsApp — the message goes in ready to send.</p>
+          <textarea class="input wa-draft" id="waText" rows="18"></textarea>
+          ${phone
+            ? `<p class="text-sm text-muted" style="margin-bottom:0;">Sending to +${esc(phone)}</p>`
+            : `<p class="text-sm" style="color:var(--err-ink);margin-bottom:0;">No usable phone number on this order — copy the bill and send it yourself.</p>`}`,
+        footHTML: `<div class="row">
+            <button class="btn btn-outline grow" id="waCopy">Copy</button>
+            <button class="btn btn-primary grow" id="waSend" ${phone ? "" : "disabled"}>💬 Open WhatsApp</button>
+          </div>`,
+      });
+
+      /* Set as .value, never as markup: the bill carries customer-typed names
+         and addresses, and this keeps them text. */
+      const ta = el("#waText", m.backdrop);
+      ta.value = message(o);
+
+      el("#waCopy", m.backdrop).addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(ta.value); toast("Bill copied", "ok"); }
+        catch { ta.select(); toast("Press Ctrl+C to copy", ""); }
+      });
+      if (phone) {
+        el("#waSend", m.backdrop).addEventListener("click", () => {
+          window.open(`https://wa.me/${phone}?text=${encodeURIComponent(ta.value)}`, "_blank", "noopener");
+          m.close();
+        });
+      }
+    }
+
+    return { init, open, number };
+  })();
+
   // Highlight whichever date shortcut matches the current selection.
   function syncDateButtons() {
     const isToday = dateFilter === istDateISO();
@@ -365,12 +499,17 @@
         <p class="text-muted">Pick another date or tap “All dates” to see more.</p></div>`;
       return;
     }
+    ordersById = Object.fromEntries(orders.map((o) => [o.public_id, o]));
     el("#ordersBoard").innerHTML = `<div class="orders-grid">${orders.map(card).join("")}</div>`;
     els("[data-advance]").forEach((b) => b.addEventListener("click", () => setStatus(b.dataset.id, b.dataset.advance)));
     els("[data-cancel]").forEach((b) => b.addEventListener("click", () => {
       if (confirm("Cancel this order?")) setStatus(b.dataset.cancel, "cancelled");
     }));
     els("[data-verify]").forEach((b) => b.addEventListener("click", () => verifyPay(b.dataset.verify, b.dataset.result)));
+    els("[data-wa]").forEach((b) => b.addEventListener("click", () => {
+      const o = ordersById[b.dataset.wa];
+      if (o) WA.open(o);
+    }));
   }
 
   function card(o) {
@@ -434,6 +573,12 @@
            <button class="btn btn-sm btn-danger" data-cancel="${esc(o.public_id)}">Cancel</button>
          </div>`;
 
+    /* The bill goes out on WhatsApp, so it sits on its own row rather than
+       competing for width with the status and cancel buttons. */
+    const waBtn = `<div class="row" style="margin-bottom:8px;">
+        <button class="btn btn-sm btn-outline grow" data-wa="${esc(o.public_id)}">💬 WhatsApp bill</button>
+      </div>`;
+
     return `<article class="order-card type-${o.order_type}">
       <div class="oc-head">
         <div><div class="oc-id">${esc(o.public_id)}</div><div class="oc-meta">${esc(created)}</div></div>
@@ -451,6 +596,7 @@
       <div class="oc-foot">
         ${payRow}
         ${verifyBtns}
+        ${waBtn}
         ${actions}
       </div>
     </article>`;
