@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..deps import require_owner
 from ..models import Order
+from ..services.phones import norm_phone as _norm_phone
 
 router = APIRouter(prefix="/api/admin/customers", tags=["admin-customers"])
 
@@ -41,17 +42,6 @@ REPEAT_AT = 2
 MIN_LAPSE_DAYS = 21
 
 SORTS = {"recent", "orders", "spend", "name"}
-
-
-def _norm_phone(raw: str) -> str:
-    """Digits only, last 10 kept — one identity per person.
-
-    The same customer types 9876543210, +91 98765 43210 and 098765-43210 across
-    three orders. Without this they would show up as three one-time customers,
-    which is exactly the thing this page exists to disprove.
-    """
-    digits = re.sub(r"\D", "", raw or "")
-    return digits[-10:] if len(digits) >= 10 else digits
 
 
 def _item_key(item) -> tuple[str, str]:

@@ -369,11 +369,14 @@
       L.push(name ? `Namaste ${name} 🙏` : "Namaste 🙏");
       L.push(cancelled
         ? `Your order with *${SHOP}* has been cancelled. Here are the details for your records.`
-        : `Thank you for ordering from *${SHOP}* — welcome, and we're glad to have you with us!`);
+        : o.repeat_no > 1
+          ? `Thank you for coming back to *${SHOP}* — good to see you again!`
+          : `Thank you for ordering from *${SHOP}* — welcome, and we're glad to have you with us!`);
       L.push("");
 
       L.push(`*Order ${o.public_id}*`);
       if (o.created_at) L.push(`🗓 ${fmtDateTime(o.created_at)}`);
+      if (o.repeat_no > 1) L.push(`🔁 Your ${ordinal(o.repeat_no)} order with us`);
       L.push(`${TYPE_EMOJI[o.order_type] || "🍽️"} ${TYPE_LABEL[o.order_type] || o.order_type}`);
       L.push("");
 
@@ -455,6 +458,16 @@
     return { init, open };
   })();
 
+  /* "3rd order" reads faster than a bare count. Orders placed before the
+     repeat count was recorded have none, and are left unlabelled rather than
+     shown as a first visit. */
+  function ordinal(n) {
+    if (!n) return "";
+    const tens = n % 100;
+    const suffix = tens >= 11 && tens <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" })[n % 10] || "th";
+    return `${n}${suffix}`;
+  }
+
   // Highlight whichever date shortcut matches the current selection.
   function syncDateButtons() {
     const isToday = dateFilter === istDateISO();
@@ -535,8 +548,11 @@
       bill.push(`<div class="oc-line"><span>${o.delivery_area ? `Delivery · ${esc(o.delivery_area)}` : "Delivery fee"}</span><span>${money(o.delivery_fee)}</span></div>`);
     }
 
+    /* A returning customer is worth seeing before the order is even started —
+       it changes how the counter greets them. */
+    const repeat = o.repeat_no > 1 ? `<span class="oc-repeat">🔁 ${esc(ordinal(o.repeat_no))} order</span>` : "";
     const cust = o.customer ? `<div class="oc-cust">
-      👤 ${esc(o.customer.name || "—")} · 📞 ${esc(o.customer.phone || "—")}
+      👤 ${esc(o.customer.name || "—")} · 📞 ${esc(o.customer.phone || "—")} ${repeat}
       ${o.order_type === "delivery" && o.customer.address ? `<br/>🛵 ${esc(o.customer.address)}` : ""}
       ${o.customer.lat ? `<br/><a href="https://maps.google.com/?q=${o.customer.lat},${o.customer.lng}" target="_blank" rel="noopener">📍 View on map</a>` : ""}
     </div>` : "";

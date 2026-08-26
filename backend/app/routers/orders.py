@@ -6,6 +6,7 @@ from ..models import (
 )
 from ..schemas.models import CreateOrderRequest, QuoteRequest
 from ..services.order_ids import generate_order_id
+from ..services.phones import norm_phone
 from ..services.scratch import close_open_awards
 from ..services.pricing import price_cart
 from ..services.upi import build_upi_uri, build_qr_data_url
@@ -64,8 +65,16 @@ def create_order(body: CreateOrderRequest):
     else:
         pay_status = "pending"
 
+    # Which visit this is for this customer. Counted here rather than derived on
+    # read so the number is frozen onto the order, and capped so one regular
+    # with a long history can never turn placing an order into an unbounded read.
+    phone_key = norm_phone(body.customer.phone)
+    repeat_no = Order.query(Order.phone_key == phone_key).count(limit=1000) + 1 if phone_key else 1
+
     order = Order(
         public_id=generate_order_id(),
+        repeat_no=repeat_no,
+        phone_key=phone_key,
         order_type=body.order_type,
         items=[
             OrderItem(

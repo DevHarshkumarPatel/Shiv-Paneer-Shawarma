@@ -404,3 +404,7 @@
    than the modal. */
 .inv-preview { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-3); max-height: 46vh; overflow-y: auto; display: grid; place-items: center; min-height: 160px; }
 .inv-preview img { display: block; width: 100%; max-width: 300px; background: #fff; box-shadow: var(--shadow-sm); }
+
+/* A returning customer, called out on the order card. Kept as a quiet pill
+   rather than a warning colour: it is a greeting cue, not a problem. */
+.oc-repeat { display: inline-block; background: var(--brand-soft); color: var(--brand-ink); border-radius: var(--r-pill); padding: 1px 8px; font-size: var(--fs-xs); font-weight: 800; white-space: nowrap; }

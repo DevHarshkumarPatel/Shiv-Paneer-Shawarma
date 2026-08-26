@@ -26,6 +26,16 @@ const Invoice = (function () {
   const SCALE = 2;
   const TYPE_LABEL = { dine_in: "Dine-in", takeaway: "Takeaway", delivery: "Delivery" };
 
+  /* "3rd order" reads faster on a bill than "repeat_no: 3". Orders placed
+     before the count was recorded have none, and say so rather than claiming
+     a first visit. */
+  function ordinal(n) {
+    if (!n) return "—";
+    const tens = n % 100;
+    const suffix = tens >= 11 && tens <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" })[n % 10] || "th";
+    return `${n}${suffix}`;
+  }
+
   const paper = () => PAPERS[localStorage.getItem(PAPER_KEY)] || PAPERS["58"];
   const setPaper = (k) => localStorage.setItem(PAPER_KEY, k);
 
@@ -145,6 +155,7 @@ const Invoice = (function () {
     const cust = o.customer || {};
     line(`📅 Date: ${o.created_at ? fmtDateTime(o.created_at) : "—"}`, { gap: 1 });
     line(`🧾 Order No: ${o.public_id}`, { gap: 1 });
+    line(`🔁 Repeat Number: ${o.repeat_no ? `${ordinal(o.repeat_no)} order` : "—"}`, { gap: 1 });
     line(`${o.order_type === "delivery" ? "🛵" : o.order_type === "dine_in" ? "🍽️" : "🥡"} Order Type: ${TYPE_LABEL[o.order_type] || o.order_type}`, { gap: 1 });
     line(`👤 Client Name: ${cust.name || "—"}`, { gap: 1 });
     line(`📞 Phone Number: ${cust.phone || "—"}`, { gap: 1 });
@@ -203,7 +214,10 @@ const Invoice = (function () {
 
     /* ---- Thank you ---- */
     line("🙏 THANK YOU!", { size: 16, bold: true, center: true, gap: 2 });
-    line(`Welcome to the ${SHOP} family — we're glad you're here.`, { size: 12, center: true, gap: 2 });
+    line(o.repeat_no > 1
+      ? `Thank you for coming back — this is your ${ordinal(o.repeat_no)} order with us.`
+      : `Welcome to the ${SHOP} family — we're glad you're here.`,
+      { size: 12, center: true, gap: 2 });
     line("See you again soon! 🌯", { size: 12, center: true, gap: 5 });
     line("Track your order", { size: 11, center: true, gap: 0 });
     line(trackUrl(o.public_id), { size: 10, center: true, gap: 2 });

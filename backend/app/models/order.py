@@ -90,6 +90,15 @@ class Order(ndb.Model):
     public_id = ndb.StringProperty(required=True)   # e.g. SPS-260718-0042
     order_type = ndb.StringProperty(choices=["dine_in", "takeaway", "delivery"], required=True)
 
+    # Which visit this is for this customer — 1 on their first ever order.
+    # Written at creation and never recomputed: a bill already handed over has
+    # to keep saying what it said, whatever the history does afterwards.
+    repeat_no = ndb.IntegerProperty()
+    # Last 10 digits of the customer's phone. Stored so "how many orders has
+    # this person placed" is one indexed query rather than a scan — the raw
+    # phone is typed differently every time (+91, spaces, a leading 0).
+    phone_key = ndb.StringProperty(default="")
+
     items = ndb.StructuredProperty(OrderItem, repeated=True)
     customer = ndb.StructuredProperty(CustomerInfo)
     payment = ndb.StructuredProperty(PaymentInfo)
@@ -117,6 +126,7 @@ class Order(ndb.Model):
         data = {
             "public_id": self.public_id,
             "order_type": self.order_type,
+            "repeat_no": self.repeat_no,
             "items": [i.to_dict() for i in self.items],
             "payment": self.payment.to_dict() if self.payment else None,
             "subtotal": self.subtotal,
