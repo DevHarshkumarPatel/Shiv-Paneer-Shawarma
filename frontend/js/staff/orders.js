@@ -1,6 +1,6 @@
 /* Staff/owner live orders board: list, advance status, verify payment. */
 (function () {
-  const { money, esc, el, els, toast, modal, statusLabel, fmtDateTime, fmtTime, istDateISO, fmtDate } = UI;
+  const { money, esc, el, els, toast, modal, statusLabel, fmtDateTime, fmtTime, istDateISO, fmtDate, phoneIntl } = UI;
 
   const FLOW = {
     delivery: ["placed", "confirmed", "preparing", "packing", "ready", "on_the_way", "delivered"],
@@ -352,16 +352,6 @@
       catch { /* the review line is optional; drop it if settings can't be read */ }
     }
 
-    /* wa.me needs a full international number with no punctuation. This shop
-       serves India only, so a bare 10-digit number gets the 91 prefix. */
-    function number(raw) {
-      const d = String(raw || "").replace(/\D/g, "");
-      if (d.length === 10) return "91" + d;
-      if (d.length === 11 && d.startsWith("0")) return "91" + d.slice(1);
-      if (d.length === 12 && d.startsWith("91")) return d;
-      return d.length >= 11 ? d : "";
-    }
-
     const pageUrl = (file, id) => new URL(`../${file}?id=${encodeURIComponent(id)}`, location.href).href;
 
     function itemLine(i) {
@@ -430,7 +420,7 @@
     }
 
     function open(o) {
-      const phone = number(o.customer && o.customer.phone);
+      const phone = phoneIntl(o.customer && o.customer.phone);
       const m = modal({
         title: `WhatsApp bill · ${o.public_id}`,
         bodyHTML: `
@@ -462,7 +452,7 @@
       }
     }
 
-    return { init, open, number };
+    return { init, open };
   })();
 
   // Highlight whichever date shortcut matches the current selection.
@@ -509,6 +499,10 @@
     els("[data-wa]").forEach((b) => b.addEventListener("click", () => {
       const o = ordersById[b.dataset.wa];
       if (o) WA.open(o);
+    }));
+    els("[data-invoice]").forEach((b) => b.addEventListener("click", () => {
+      const o = ordersById[b.dataset.invoice];
+      if (o) Invoice.open(o);
     }));
   }
 
@@ -577,6 +571,7 @@
        competing for width with the status and cancel buttons. */
     const waBtn = `<div class="row" style="margin-bottom:8px;">
         <button class="btn btn-sm btn-outline grow" data-wa="${esc(o.public_id)}">💬 WhatsApp bill</button>
+        <button class="btn btn-sm btn-outline grow" data-invoice="${esc(o.public_id)}">🖨 Invoice</button>
       </div>`;
 
     return `<article class="order-card type-${o.order_type}">

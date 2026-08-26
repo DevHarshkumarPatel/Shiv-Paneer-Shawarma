@@ -396,3 +396,11 @@
    line stand out before it is sent, and it stays tall enough to read the
    whole bill without scrolling on a laptop. */
 .wa-draft { width: 100%; min-height: 340px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; line-height: 1.55; }
+
+/* ---- Printed invoice preview ----
+   Shown at the paper's own proportions on a grey mat, so the owner is looking
+   at the receipt as it will come out of the printer rather than at a page
+   element. Capped in height because an 80mm bill with many lines is longer
+   than the modal. */
+.inv-preview { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-3); max-height: 46vh; overflow-y: auto; display: grid; place-items: center; min-height: 160px; }
+.inv-preview img { display: block; width: 100%; max-width: 300px; background: #fff; box-shadow: var(--shadow-sm); }

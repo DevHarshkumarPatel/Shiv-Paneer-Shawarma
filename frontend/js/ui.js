@@ -96,5 +96,18 @@ const UI = (() => {
     });
   }
 
-  return { money, esc, el, els, toast, modal, statusLabel, fmtDateTime, fmtTime, istDateISO, fmtDate };
+  /* wa.me links and tel: need a full international number with no punctuation,
+     and the same customer types 9429271514, +91 94292 71514 and 09429271514.
+     This shop serves India only, so a bare 10-digit number gets the 91 prefix;
+     anything too short to be a real number comes back empty so callers can
+     hide the action rather than open a broken chat. */
+  function phoneIntl(raw) {
+    const d = String(raw == null ? "" : raw).replace(/\D/g, "");
+    if (d.length === 10) return "91" + d;
+    if (d.length === 11 && d.startsWith("0")) return "91" + d.slice(1);
+    if (d.length === 12 && d.startsWith("91")) return d;
+    return d.length >= 11 ? d : "";
+  }
+
+  return { money, esc, el, els, toast, modal, statusLabel, fmtDateTime, fmtTime, istDateISO, fmtDate, phoneIntl };
 })();
