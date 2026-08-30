@@ -410,49 +410,159 @@
 .oc-repeat { display: inline-block; background: var(--brand-soft); color: var(--brand-ink); border-radius: var(--r-pill); padding: 1px 8px; font-size: var(--fs-xs); font-weight: 800; white-space: nowrap; }
 
 /* ---- Counter ordering (new-order.html) ----
-   Two panels: the whole menu on the left, the ticket on the right. The ticket
-   is sticky because it is the part being read out to the customer — on a
-   laptop at the till it has to stay put while the menu scrolls under it. Under
-   1000px the two stack, menu first, so a phone still works as an order pad. */
-.pos-grid { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: var(--sp-4); align-items: start; margin: var(--sp-4) 0 var(--sp-6); }
-@media (max-width: 1000px) { .pos-grid { grid-template-columns: 1fr; } }
 
-.pos-menu .chips { padding-top: var(--sp-2); }
+   Written phone-first: the till this replaces is somebody's Android or iPhone
+   held in one hand, so the small screen gets the straightforward rules and the
+   desktop two-column layout is the enhancement at the bottom.
+
+   On a phone only one panel is on screen at a time — the menu, or the ticket —
+   swapped by the fixed bar at the foot of the page, which also carries the
+   running total and the Place order button. Stacking both panels meant
+   scrolling past forty items to reach the coupon box, and left the total
+   somewhere off screen while the customer was asking what they owed. */
+
+/* minmax(0, 1fr), never a bare 1fr: a grid column sized `auto` takes its
+   minimum from the widest thing inside it — here a <select> whose longest
+   option is "Whole Wheat · Regular · ₹129" — and the whole page ends up wider
+   than the phone, which is exactly how this screen shipped. */
+.pos-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); margin: var(--sp-3) 0 var(--sp-4); align-items: start; }
+.pos-menu, .pos-ticket { min-width: 0; }
+.pos-grid[data-view="menu"] .pos-ticket { display: none; }
+.pos-grid[data-view="ticket"] .pos-menu { display: none; }
+
+/* Room for the fixed bar, plus the iPhone home indicator under it. */
+body.has-pos-bar { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+
+/* ---- menu side ---- */
+.pos-menu .search-field .input { min-height: 46px; }
+.pos-menu .chips { padding: var(--sp-2) 2px; margin: 0; }
 .pos-items { display: grid; gap: 8px; }
-.pos-item { display: flex; align-items: center; gap: var(--sp-3); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px var(--sp-3); }
+
+.pos-item { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 9px var(--sp-3); display: grid; gap: 6px; }
 .pos-item.out { opacity: .55; }
-.pos-item .pi-main { flex: 1; min-width: 0; }
-.pos-item .pi-name { font-weight: 700; font-size: var(--fs-sm); display: flex; align-items: center; gap: 6px; }
-.pos-item .pi-sub { font-size: var(--fs-xs); color: var(--ink-3); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.pos-item .pi-price { font-weight: 800; font-size: var(--fs-sm); white-space: nowrap; }
-.pos-item .pi-var { width: auto; max-width: 210px; padding: 6px 8px; font-size: var(--fs-xs); }
-.pos-item .btn { white-space: nowrap; }
-/* The veg mark: the menu shows it as a photo overlay, here it is the only
-   thing distinguishing two similarly named items in a long list. */
-.veg-dot { width: 11px; height: 11px; border: 2px solid var(--veg); border-radius: 3px; position: relative; display: inline-block; }
+.pos-item .pi-main { min-width: 0; }
+.pos-item .pi-name { font-weight: 700; font-size: 0.95rem; line-height: 1.3; display: flex; align-items: center; gap: 6px; }
+.pos-item .pi-sub { font-size: var(--fs-xs); color: var(--ink-3); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.pos-item .pi-sub .badge { padding: 2px 8px; }
+/* Price and the buy control sit on their own line on a phone: the dish name
+   gets the full width instead of being squeezed to three words by a dropdown
+   and a button beside it. */
+.pos-item .pi-buy { display: flex; align-items: center; gap: 8px; }
+.pos-item .pi-var { flex: 1; min-width: 0; padding: 8px 10px; min-height: 40px; font-size: var(--fs-sm); }
+.pos-item .pi-price { font-weight: 800; font-size: 0.95rem; white-space: nowrap; margin-left: auto; }
+.pos-item .pi-buy .btn { min-height: 40px; min-width: 74px; }
+.pos-item .pi-out { font-size: var(--fs-xs); font-weight: 800; color: var(--err); }
+/* An item already on the ticket steps up and down from its own row, so a
+   second helping never costs a trip to the ticket and back. */
+.pos-item .stepper button { width: 40px; height: 40px; font-size: 20px; }
+.pos-item .stepper span { min-width: 32px; font-size: 0.95rem; }
+/* An item with only one option needs no second line — name on the left, price
+   and the button on the right, so a Bowl or a Kullad costs half the screen a
+   two-line row would. */
+.pos-item.single { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.pos-item.single .pi-buy { grid-column: 2; }
+
+/* Narrow phones: the option dropdown takes a line of its own. Sharing one with
+   the price and a stepper left it about 120px wide, showing "Whole Whea…" —
+   the one thing on the row that must be readable, because it decides what gets
+   sold. */
+@media (max-width: 560px) {
+  .pos-item .pi-buy { flex-wrap: wrap; }
+  .pos-item .pi-var { flex: 1 1 100%; order: -1; }
+}
+
+/* The veg mark: the customer menu shows it as a photo overlay, here it is the
+   only thing separating two similarly named items in a long list. */
+.veg-dot { width: 11px; height: 11px; border: 2px solid var(--veg); border-radius: 3px; position: relative; display: inline-block; flex: 0 0 auto; }
 .veg-dot::after { content: ""; position: absolute; inset: 2px; background: var(--veg); border-radius: 50%; }
 
-.pos-ticket { position: sticky; top: 74px; }
-@media (max-width: 1000px) { .pos-ticket { position: static; } }
+/* ---- ticket side ---- */
+.pos-ticket .card + .card { margin-top: var(--sp-3); }
 .pos-ticket .seg { display: flex; width: 100%; }
-.pos-ticket .seg button { flex: 1; justify-content: center; padding: 8px 6px; font-size: var(--fs-xs); }
-.pos-lines { margin-top: var(--sp-3); max-height: 42vh; overflow-y: auto; }
-.pos-line { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+.pos-ticket .seg button { flex: 1; justify-content: center; padding: 10px 4px; font-size: var(--fs-xs); min-height: 44px; }
+.pos-lines { margin-top: var(--sp-3); }
+.pos-line { display: flex; align-items: center; gap: 8px; padding: 10px 0; border-bottom: 1px dashed var(--line); }
 .pos-line:last-child { border-bottom: none; }
-.pos-line.dead { opacity: .8; }
+.pos-line.dead { opacity: .85; }
 .pos-line .pl-main { flex: 1; min-width: 0; }
 .pos-line .pl-name { font-weight: 700; font-size: var(--fs-sm); }
 .pos-line .pl-sub { font-size: var(--fs-xs); color: var(--ink-3); }
-.pos-line .pl-amt { font-weight: 800; font-size: var(--fs-sm); min-width: 62px; text-align: right; }
-.pos-line .stepper button { width: 30px; height: 30px; font-size: 16px; }
+.pos-line .pl-amt { font-weight: 800; font-size: var(--fs-sm); min-width: 60px; text-align: right; }
+.pos-line .stepper button { width: 36px; height: 36px; }
+.pos-coupon { margin-top: var(--sp-3); }
+/* Code and Apply stay on one line. The shared .input-row wraps under 460px,
+   which is right for a pair of form fields and wrong here: it left Apply
+   stranded on a line of its own under a full-width box. */
+.pos-coupon .input-row { flex-wrap: nowrap; }
+.pos-coupon .input { flex: 1 1 auto; min-width: 0; min-height: 44px; }
+.pos-coupon .btn { flex: 0 0 auto; min-height: 44px; }
+/* One scrolling line of codes. Ten of the owner's codes wrapped into four rows
+   pushed the totals off a phone screen entirely. */
+.pos-codes { display: flex; gap: 6px; margin-top: 8px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.pos-codes::-webkit-scrollbar { display: none; }
+.pos-codes .chip { font-size: var(--fs-xs); padding: 6px 12px; white-space: nowrap; }
 .pos-totals { margin-top: var(--sp-3); }
-.pos-codes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-.pos-codes .chip { font-size: var(--fs-xs); padding: 4px 10px; }
+.pos-ticket .pill-toggle { min-height: 44px; }
+.pos-ticket #posClear { margin-top: 8px; }
+/* The wide Place order button belongs to the desktop layout; on a phone the
+   fixed bar is the one place that job lives, and two of them a screen apart
+   is one too many. */
+.pos-place-wide { display: none; }
 
-/* Totals + receipt bits. The customer-facing checkout defines its own copies in
-   checkout.css, which the staff pages do not load. */
-.summary-line { display: flex; justify-content: space-between; font-size: var(--fs-sm); margin-bottom: 6px; }
+/* Every control the thumb has to hit is at least 44px, and the text fields are
+   16px so iOS Safari does not zoom the page the moment one takes focus. */
+.pos-grid .input, .pos-grid .select, .pos-grid textarea.input { font-size: 16px; }
+.pos-grid .btn { min-height: 44px; }
+
+/* ---- fixed bar (phones + tablets) ---- */
+.pos-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 45;
+  display: flex; align-items: center; gap: var(--sp-2);
+  background: var(--surface); border-top: 1px solid var(--line);
+  box-shadow: 0 -2px 12px rgba(30, 20, 10, .10);
+  padding: 10px var(--sp-3) calc(10px + env(safe-area-inset-bottom, 0px));
+}
+.pos-bar .pb-side { border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2); font-weight: 700; font-size: var(--fs-sm); border-radius: var(--r-pill); padding: 0 14px; min-height: 44px; }
+.pos-bar .pb-info { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.pos-bar .pb-info strong { font-size: var(--fs-sm); }
+.pos-bar .pb-info span { font-size: var(--fs-xs); color: var(--ink-3); }
+.pos-bar .pb-action { margin-left: auto; min-height: 46px; padding: 10px 18px; white-space: nowrap; max-width: 62%; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---- desktop: both panels at once, no bar ---- */
+@media (min-width: 1000px) {
+  .pos-grid { grid-template-columns: minmax(0, 1fr) 390px; gap: var(--sp-4); margin: var(--sp-4) 0 var(--sp-6); }
+  .pos-grid[data-view="menu"] .pos-ticket,
+  .pos-grid[data-view="ticket"] .pos-menu { display: block; }
+  .pos-ticket { position: sticky; top: 74px; }
+  .pos-lines { max-height: 40vh; overflow-y: auto; }
+  /* Back to one line per item: there is room for the name, the option and the
+     button side by side. */
+  .pos-item { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .pos-item .pi-buy { grid-column: 2; }
+  .pos-item .pi-var { max-width: 210px; flex: 0 1 210px; }
+  .pos-item .pi-price { margin-left: 0; }
+  .pos-bar { display: none; }
+  body.has-pos-bar { padding-bottom: 0; }
+  .pos-place-wide { display: block; margin-top: var(--sp-3); }
+}
+
+/* ---- totals + receipt bits ----
+   The customer-facing checkout defines its own copies in checkout.css, which
+   the staff pages do not load. */
+.summary-line { display: flex; justify-content: space-between; gap: var(--sp-3); font-size: var(--fs-sm); margin-bottom: 6px; }
 .summary-line.grand { font-size: var(--fs-lg); font-weight: 800; border-top: 1px solid var(--line); padding-top: var(--sp-2); margin-top: var(--sp-2); }
 .summary-line.free-note { color: #0f7a32; font-weight: 700; }
 .badge-out { background: #fdecea; color: var(--err); }
 .order-id-badge { display: inline-block; font-size: var(--fs-xl); font-weight: 800; letter-spacing: .05em; background: var(--brand-soft); border: 1px solid var(--line); color: var(--brand-700); padding: 8px 18px; border-radius: var(--r-md); margin: var(--sp-2) 0; }
+
+/* ---- receipt after placing ----
+   The next action is almost always "start the next order", so it leads and
+   every button is a full-width target on a phone; they sit in a row once
+   there is width for one. */
+.pos-receipt { max-width: 520px; margin: var(--sp-4) auto; }
+.pr-actions { display: grid; gap: var(--sp-2); margin-top: var(--sp-4); }
+.pr-actions .btn { width: 100%; min-height: 46px; }
+@media (min-width: 560px) {
+  .pr-actions { display: flex; justify-content: center; flex-wrap: wrap; }
+  .pr-actions .btn { width: auto; }
+}
