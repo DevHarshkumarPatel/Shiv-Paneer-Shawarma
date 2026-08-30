@@ -1,7 +1,7 @@
 /* Guided first-time-user tour. Self-contained (no dependency on ui.js/api.js).
  * - Welcome overview on the home page, then spotlight coachmarks per page.
  * - Flows across pages: home -> menu -> checkout -> track.
- * - Runs once per page (localStorage); replayable via the header "Guide" button.
+ * - Never auto-starts: it opens only from the header "❔ Guide" button.
  */
 (function () {
   "use strict";
@@ -339,9 +339,8 @@
       setTimeout(() => startForPage("menu", true), 400);
       return;
     }
-    if (pg !== "track" && !seen(pg)) {   // auto once for index / menu / checkout
-      setTimeout(() => startForPage(pg, false), 500);
-    }
+    // Nothing starts on its own. A first-time visitor gets the shop, not a
+    // tour over the top of it — the "❔ Guide" button is how the tour opens.
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

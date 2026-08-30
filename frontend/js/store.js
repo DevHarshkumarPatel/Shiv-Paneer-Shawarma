@@ -3,24 +3,27 @@
 const Store = (() => {
   const KEY = "sps_cart_v1";
   const MODE_KEY = "sps_mode_v1";
-  const COUPON_KEY = "sps_coupon_v1";
+  const COUPON_KEY = "sps_coupon_v1";   // legacy: cleared on load, see below
   const subs = new Set();
 
   let state = load();
 
+  /* A coupon is not part of the cart. It belongs to the order being placed
+     right now, and is entered on the checkout page only — a code kept in
+     localStorage came back weeks later and applied itself to a stranger of an
+     order. Any code left over from that older build is dropped here. */
   function load() {
+    try { localStorage.removeItem(COUPON_KEY); } catch { /* private mode */ }
     try {
       const raw = JSON.parse(localStorage.getItem(KEY) || "[]");
       const mode = localStorage.getItem(MODE_KEY) || "takeaway";
-      const coupon = localStorage.getItem(COUPON_KEY) || "";
-      return { lines: Array.isArray(raw) ? raw : [], mode, coupon };
-    } catch { return { lines: [], mode: "takeaway", coupon: "" }; }
+      return { lines: Array.isArray(raw) ? raw : [], mode };
+    } catch { return { lines: [], mode: "takeaway" }; }
   }
 
   function persist() {
     localStorage.setItem(KEY, JSON.stringify(state.lines));
     localStorage.setItem(MODE_KEY, state.mode);
-    localStorage.setItem(COUPON_KEY, state.coupon || "");
     subs.forEach((fn) => fn(state));
   }
 
@@ -68,17 +71,8 @@ const Store = (() => {
     state.lines = state.lines.filter((l) => !drop.has(lineKey(l)));
     persist();
   }
-  function clear() { state.lines = []; state.coupon = ""; persist(); }
+  function clear() { state.lines = []; persist(); }
   function setMode(mode) { state.mode = mode; persist(); }
-  // No-op when unchanged: requestQuote() calls this from inside a Store
-  // subscriber, so re-persisting on every quote would notify subscribers again
-  // and spin an endless quote loop.
-  function setCoupon(code) {
-    const next = code || "";
-    if (next === state.coupon) return;
-    state.coupon = next;
-    persist();
-  }
 
   const count = () => state.lines.reduce((s, l) => s + l.quantity, 0);
   // Cart lines reduced to what the backend /quote and /orders endpoints expect.
@@ -86,5 +80,5 @@ const Store = (() => {
 
   function subscribe(fn) { subs.add(fn); return () => subs.delete(fn); }
 
-  return { get: () => state, add, setQty, remove, removeMany, swap, clear, setMode, setCoupon, count, lineKey, toCartPayload, subscribe };
+  return { get: () => state, add, setQty, remove, removeMany, swap, clear, setMode, count, lineKey, toCartPayload, subscribe };
 })();

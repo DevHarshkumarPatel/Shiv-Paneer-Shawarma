@@ -134,6 +134,15 @@ def submit_review(body: ReviewSubmitRequest):
         if Review.for_order(pid):
             raise HTTPException(status.HTTP_409_CONFLICT, "This order has already been reviewed. Thank you!")
 
+    # Name and number are compulsory. A review nobody can be reached about is a
+    # dead end: the whole point of collecting an unhappy one is calling back.
+    name = (body.name or "").strip()
+    if len(name) < 2:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Please tell us your name.")
+    phone = norm_phone(body.phone)
+    if len(phone) != 10 or phone[0] not in "6789":
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Please enter a valid 10-digit mobile number.")
+
     submitted = {a.question_id: a for a in body.answers}
     answers: list[ReviewAnswer] = []
     for q in questions:
@@ -149,8 +158,8 @@ def submit_review(body: ReviewSubmitRequest):
 
     review = Review(
         order_public_id=pid,
-        name=(body.name or "").strip()[:60],
-        phone=norm_phone(body.phone),
+        name=name[:60],
+        phone=phone,
         rating=next((a.score for a in answers if a.qtype == "rating"), None),
         nps=next((a.score for a in answers if a.qtype == "nps"), None),
         answers=answers,

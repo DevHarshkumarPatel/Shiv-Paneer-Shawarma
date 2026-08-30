@@ -221,11 +221,12 @@
     return `<div class="rv-card">
       <div>
         <h1 class="rv-q">${rated >= 4 ? "Glad you enjoyed it! 🎉" : "Thanks for telling us"}</h1>
-        <p class="rv-help">Last bit — your name, so we know who to thank. Both fields are optional.</p>
+        <p class="rv-help">Last bit — your name and mobile number, so we know who to thank.</p>
+        <div style="margin-top:6px;"><span class="rv-req">Required</span></div>
       </div>
       <div class="rv-who">
         <input class="input" id="rvName" placeholder="Your name" autocomplete="name" value="${esc(who.name)}" />
-        <input class="input" id="rvPhone" placeholder="Phone number" inputmode="numeric" maxlength="14"
+        <input class="input" id="rvPhone" placeholder="Mobile number" inputmode="numeric" maxlength="14"
                autocomplete="tel" enterkeyhint="send" value="${esc(who.phone)}" />
         <p class="rv-help">We only use this to reach you if something went wrong.</p>
       </div>
@@ -235,6 +236,30 @@
   function ratingGiven() {
     const q = questions.find((x) => x.qtype === "rating");
     return q && answers[q.id] ? answers[q.id].score || 0 : 0;
+  }
+
+  /* Name and number are the one thing we ask for outright. A review with no
+     one behind it cannot be answered, and answering an unhappy customer is the
+     whole point of collecting this — so the send button holds until both are
+     real. The number is checked the way the backend stores it: digits only,
+     last ten, and an Indian mobile starts 6-9. */
+  function whoError() {
+    if ((who.name || "").trim().length < 2) return { field: "#rvName", msg: "Please type your name." };
+    const digits = (who.phone || "").replace(/\D/g, "").slice(-10);
+    if (digits.length < 10 || !/^[6-9]/.test(digits)) {
+      return { field: "#rvPhone", msg: "Please enter a valid 10-digit mobile number." };
+    }
+    return null;
+  }
+
+  function shakeCard() {
+    const card = el(".rv-card");
+    if (!card) return;
+    card.animate(
+      [{ transform: "translateX(0)" }, { transform: "translateX(-7px)" },
+       { transform: "translateX(7px)" }, { transform: "translateX(0)" }],
+      { duration: 220 },
+    );
   }
 
   /* ---------------------------------------------------------------- bar -- */
@@ -380,12 +405,7 @@
       const q = cur();
       if (q.required && !hasAnswer(q)) {
         toast("This one is needed — a single tap is enough.", "err");
-        const card = el(".rv-card");
-        card.animate(
-          [{ transform: "translateX(0)" }, { transform: "translateX(-7px)" },
-           { transform: "translateX(7px)" }, { transform: "translateX(0)" }],
-          { duration: 220 },
-        );
+        shakeCard();
         return;
       }
     }
@@ -408,6 +428,15 @@
     if (missing) {
       idx = questions.indexOf(missing); dir = "back"; render();
       toast("Just this one left to answer.", "err");
+      return;
+    }
+    const bad = whoError();
+    if (bad) {
+      if (idx !== questions.length) { idx = questions.length; dir = "fwd"; render(); }
+      toast(bad.msg, "err");
+      shakeCard();
+      const box = el(bad.field);
+      if (box) box.focus();
       return;
     }
     const payload = {

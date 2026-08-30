@@ -4,7 +4,7 @@
 
   const state = {
     mode: Store.get().mode,
-    coupon: Store.get().coupon || "",
+    coupon: "",           // typed on this page only; never carried over from a past order
     quote: null,
     customer: { name: "", phone: "", address: "", lat: null, lng: null },
     areas: [],            // owner-defined delivery areas (id, name, fee)
@@ -69,7 +69,7 @@
       // preview has to be priced against the same number the order will carry.
       phone: state.customer.phone,
     });
-    if (state.coupon && state.quote.coupon_error) { toast(state.quote.coupon_error, "err"); state.coupon = ""; Store.setCoupon(""); }
+    if (state.coupon && state.quote.coupon_error) { toast(state.quote.coupon_error, "err"); state.coupon = ""; }
     // Changing the total invalidates any generated QR (amount is baked into it).
     state.qr = null;
     // A reference typed against a now-void QR would be a reference for the wrong
@@ -254,7 +254,6 @@
     state.scratch = { enabled: true, state: "revealed", award };
     if (!award.won || !award.code) return;
     state.coupon = award.code;
-    Store.setCoupon(state.coupon);
     await refreshQuote();
     render();
     if (state.quote.coupon_code === award.code) toast(`🎉 ${award.label} applied!`, "ok");
@@ -420,7 +419,6 @@
     const applyBtn = el("#coApplyCoupon");
     if (applyBtn) applyBtn.addEventListener("click", async () => {
       state.coupon = el("#coCoupon").value.trim().toUpperCase();
-      Store.setCoupon(state.coupon);
       await refreshQuote(); render();
     });
     el("#placeOrder").addEventListener("click", placeOrder);

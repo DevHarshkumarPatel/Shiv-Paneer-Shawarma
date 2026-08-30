@@ -4,7 +4,6 @@
   let MENU = null;
   let quoteTimer = null;
   let lastQuote = null;
-  let couponCode = Store.get().coupon || "";
   let orderingEnabled = true;   // owner master switch (from /api/settings)
 
   const MODE_HINTS = {
@@ -464,7 +463,7 @@
     el("#modeHint").textContent = MODE_HINTS[mode] || "";
   }
   function bindStatic() {
-    el("#clearCart").addEventListener("click", () => { Store.clear(); couponCode = ""; });
+    el("#clearCart").addEventListener("click", () => Store.clear());
     el("#cartBar").addEventListener("click", openCartDrawer);
     el("#headerCart").addEventListener("click", openCartDrawer);
   }
@@ -487,9 +486,9 @@
     if (!lines.length) { lastQuote = null; renderCart(el("#cartBody")); refreshDrawer(); return; }
     quoteTimer = setTimeout(async () => {
       try {
-        lastQuote = await API.post("/api/orders/quote", { cart: lines, order_type: Store.get().mode, coupon_code: couponCode });
-        if (couponCode && lastQuote.coupon_error) { toast(lastQuote.coupon_error, "err"); couponCode = ""; }
-        Store.setCoupon(couponCode);
+        // No coupon here on purpose: the cart prices the food, the checkout
+        // page applies the code. See the note in store.js.
+        lastQuote = await API.post("/api/orders/quote", { cart: lines, order_type: Store.get().mode });
         el("#cbTotal").textContent = money(lastQuote.total);
         renderCart(el("#cartBody"));
         refreshDrawer();
@@ -582,12 +581,6 @@
     target.innerHTML = `
       <div class="cart-items">${lineHTML}</div>
       ${gone}
-      <div class="field" style="margin:0 0 var(--sp-3);">
-        <div class="input-row">
-          <input class="input" id="couponInput" placeholder="Coupon code" value="${esc(couponCode)}" />
-          <button class="btn btn-outline" id="applyCoupon">Apply</button>
-        </div>
-      </div>
       <div class="cart-totals">${totals}</div>
       <button class="btn btn-primary btn-block btn-lg" id="goCheckout" style="margin-top:var(--sp-3);"
         ${orderingEnabled && !dead.size ? "" : "disabled"}>${
@@ -623,8 +616,6 @@
     target.querySelectorAll("[data-dec]").forEach((b) => b.addEventListener("click", () => {
       const l = Store.get().lines.find((x) => Store.lineKey(x) === b.dataset.dec); Store.setQty(b.dataset.dec, l.quantity - 1);
     }));
-    const applyBtn = el("#applyCoupon", target);
-    if (applyBtn) applyBtn.addEventListener("click", () => { couponCode = el("#couponInput", target).value.trim().toUpperCase(); requestQuote(); });
     const co = el("#goCheckout", target);
     if (co) co.addEventListener("click", () => { location.href = "checkout.html"; });
   }
