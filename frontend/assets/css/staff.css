@@ -408,3 +408,51 @@
 /* A returning customer, called out on the order card. Kept as a quiet pill
    rather than a warning colour: it is a greeting cue, not a problem. */
 .oc-repeat { display: inline-block; background: var(--brand-soft); color: var(--brand-ink); border-radius: var(--r-pill); padding: 1px 8px; font-size: var(--fs-xs); font-weight: 800; white-space: nowrap; }
+
+/* ---- Counter ordering (new-order.html) ----
+   Two panels: the whole menu on the left, the ticket on the right. The ticket
+   is sticky because it is the part being read out to the customer — on a
+   laptop at the till it has to stay put while the menu scrolls under it. Under
+   1000px the two stack, menu first, so a phone still works as an order pad. */
+.pos-grid { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: var(--sp-4); align-items: start; margin: var(--sp-4) 0 var(--sp-6); }
+@media (max-width: 1000px) { .pos-grid { grid-template-columns: 1fr; } }
+
+.pos-menu .chips { padding-top: var(--sp-2); }
+.pos-items { display: grid; gap: 8px; }
+.pos-item { display: flex; align-items: center; gap: var(--sp-3); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px var(--sp-3); }
+.pos-item.out { opacity: .55; }
+.pos-item .pi-main { flex: 1; min-width: 0; }
+.pos-item .pi-name { font-weight: 700; font-size: var(--fs-sm); display: flex; align-items: center; gap: 6px; }
+.pos-item .pi-sub { font-size: var(--fs-xs); color: var(--ink-3); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pos-item .pi-price { font-weight: 800; font-size: var(--fs-sm); white-space: nowrap; }
+.pos-item .pi-var { width: auto; max-width: 210px; padding: 6px 8px; font-size: var(--fs-xs); }
+.pos-item .btn { white-space: nowrap; }
+/* The veg mark: the menu shows it as a photo overlay, here it is the only
+   thing distinguishing two similarly named items in a long list. */
+.veg-dot { width: 11px; height: 11px; border: 2px solid var(--veg); border-radius: 3px; position: relative; display: inline-block; }
+.veg-dot::after { content: ""; position: absolute; inset: 2px; background: var(--veg); border-radius: 50%; }
+
+.pos-ticket { position: sticky; top: 74px; }
+@media (max-width: 1000px) { .pos-ticket { position: static; } }
+.pos-ticket .seg { display: flex; width: 100%; }
+.pos-ticket .seg button { flex: 1; justify-content: center; padding: 8px 6px; font-size: var(--fs-xs); }
+.pos-lines { margin-top: var(--sp-3); max-height: 42vh; overflow-y: auto; }
+.pos-line { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+.pos-line:last-child { border-bottom: none; }
+.pos-line.dead { opacity: .8; }
+.pos-line .pl-main { flex: 1; min-width: 0; }
+.pos-line .pl-name { font-weight: 700; font-size: var(--fs-sm); }
+.pos-line .pl-sub { font-size: var(--fs-xs); color: var(--ink-3); }
+.pos-line .pl-amt { font-weight: 800; font-size: var(--fs-sm); min-width: 62px; text-align: right; }
+.pos-line .stepper button { width: 30px; height: 30px; font-size: 16px; }
+.pos-totals { margin-top: var(--sp-3); }
+.pos-codes { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.pos-codes .chip { font-size: var(--fs-xs); padding: 4px 10px; }
+
+/* Totals + receipt bits. The customer-facing checkout defines its own copies in
+   checkout.css, which the staff pages do not load. */
+.summary-line { display: flex; justify-content: space-between; font-size: var(--fs-sm); margin-bottom: 6px; }
+.summary-line.grand { font-size: var(--fs-lg); font-weight: 800; border-top: 1px solid var(--line); padding-top: var(--sp-2); margin-top: var(--sp-2); }
+.summary-line.free-note { color: #0f7a32; font-weight: 700; }
+.badge-out { background: #fdecea; color: var(--err); }
+.order-id-badge { display: inline-block; font-size: var(--fs-xl); font-weight: 800; letter-spacing: .05em; background: var(--brand-soft); border: 1px solid var(--line); color: var(--brand-700); padding: 8px 18px; border-radius: var(--r-md); margin: var(--sp-2) 0; }

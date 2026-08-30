@@ -64,6 +64,18 @@ class CreateOrderRequest(BaseModel):
     notes: str = ""
 
 
+class StaffOrderRequest(CreateOrderRequest):
+    """An order a staff member or the owner takes at the counter or on a call.
+
+    Same cart, coupons and offers as the customer's own checkout — the extra
+    field is the one thing only someone standing at the till can know: whether
+    the money is already in hand. It is kept off `CreateOrderRequest` on purpose
+    so a customer can never mark their own order paid.
+    """
+
+    payment_collected: bool = False
+
+
 class StatusUpdateRequest(BaseModel):
     status: str
 

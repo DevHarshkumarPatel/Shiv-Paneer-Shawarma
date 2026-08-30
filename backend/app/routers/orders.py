@@ -1,13 +1,9 @@
 """Customer-facing order creation and public tracking."""
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from ..models import (
-    Order, OrderItem, CustomerInfo, PaymentInfo, StatusEvent, Coupon, Setting,
-)
+from ..models import Order, Setting
 from ..schemas.models import CreateOrderRequest, QuoteRequest
-from ..services.order_ids import generate_order_id
-from ..services.phones import norm_phone
-from ..services.scratch import close_open_awards
+from ..services.orders import persist_order, price_or_reject
 from ..services.pricing import price_cart
 from ..services.upi import build_upi_uri, build_qr_data_url
 from ..config import settings
@@ -32,21 +28,10 @@ def create_order(body: CreateOrderRequest):
     if body.order_type not in ("dine_in", "takeaway", "delivery"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid order type")
 
-    priced = price_cart(
+    priced = price_or_reject(
         [c.model_dump() for c in body.cart], body.order_type, body.coupon_code,
         body.delivery_area_id, body.customer.phone,
     )
-    # Refuse rather than quietly place a short order. A cart lives in
-    # localStorage and can be days old, so anything that sold out in the
-    # meantime has to be shown to the customer before money changes hands.
-    if priced.unavailable:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            "Sold out since you added it: " + ", ".join(u["label"] for u in priced.unavailable)
-            + ". Please review your cart and try again.",
-        )
-    if not priced.lines:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Your cart is empty or items are unavailable.")
 
     # Delivery requires a selected area, an address + a paid-upfront UPI payment.
     if body.order_type == "delivery":
@@ -65,58 +50,11 @@ def create_order(body: CreateOrderRequest):
     else:
         pay_status = "pending"
 
-    # Which visit this is for this customer. Counted here rather than derived on
-    # read so the number is frozen onto the order, and capped so one regular
-    # with a long history can never turn placing an order into an unbounded read.
-    phone_key = norm_phone(body.customer.phone)
-    repeat_no = Order.query(Order.phone_key == phone_key).count(limit=1000) + 1 if phone_key else 1
-
-    order = Order(
-        public_id=generate_order_id(),
-        repeat_no=repeat_no,
-        phone_key=phone_key,
-        order_type=body.order_type,
-        items=[
-            OrderItem(
-                item_id=l.item_id, name=l.name, variant_label=l.variant_label,
-                base=l.base, size=l.size, unit_price=l.unit_price, quantity=l.quantity,
-                free_quantity=l.free_quantity, line_total=round(l.line_total, 2),
-                promo_label=l.promo_label,
-            )
-            for l in priced.lines
-        ],
-        customer=CustomerInfo(
-            name=body.customer.name, phone=body.customer.phone,
-            address=body.customer.address, lat=body.customer.lat, lng=body.customer.lng,
-        ),
-        payment=PaymentInfo(
-            method=body.payment_method, status=pay_status,
-            upi_reference=body.upi_reference.strip(), amount=round(priced.total, 2),
-        ),
-        subtotal=round(priced.subtotal, 2),
-        promo_discount=round(priced.promo_discount, 2),
-        coupon_code=priced.coupon_code,
-        coupon_discount=round(priced.coupon_discount, 2),
-        delivery_fee=round(priced.delivery_fee, 2),
-        delivery_area=priced.delivery_area_name,
-        total=round(priced.total, 2),
-        status="placed",
-        history=[StatusEvent(status="placed", by="customer")],
-        notes=body.notes,
+    order = persist_order(
+        priced, order_type=body.order_type, customer=body.customer, notes=body.notes,
+        payment_method=body.payment_method, payment_status=pay_status,
+        upi_reference=body.upi_reference, by="customer", channel="online",
     )
-    order.put()
-
-    # Increment coupon usage (best-effort; not transactional across the order).
-    if priced.coupon_code:
-        coupon = Coupon.by_code(priced.coupon_code)
-        if coupon:
-            coupon.used_count += 1
-            coupon.put()
-
-    # Settle this phone's open scratch draw. The card is one per order, so
-    # placing the order is exactly what re-arms it for the next one.
-    close_open_awards(body.customer.phone, order.public_id, priced.coupon_code)
-
     return order.to_dict()
 
 

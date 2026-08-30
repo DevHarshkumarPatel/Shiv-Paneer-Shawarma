@@ -592,7 +592,8 @@
 
     return `<article class="order-card type-${o.order_type}">
       <div class="oc-head">
-        <div><div class="oc-id">${esc(o.public_id)}</div><div class="oc-meta">${esc(created)}</div></div>
+        <div><div class="oc-id">${esc(o.public_id)}</div><div class="oc-meta">${esc(created)}${
+          o.channel === "counter" ? ` · 🧑‍🍳 counter${o.placed_by ? ` · ${esc(o.placed_by)}` : ""}` : ""}</div></div>
         <div style="text-align:right;">
           <span class="type-tag ${o.order_type}">${esc(TYPE_LABEL[o.order_type])}</span>
           <div style="margin-top:6px;"><span class="status-pill ${o.status}">${esc(statusLabel(o.status))}</span></div>

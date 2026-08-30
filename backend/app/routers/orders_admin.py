@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from ..deps import get_current_user, require_owner
 from ..models import Order, StatusEvent
 from ..models.order import STATUS_FLOW
-from ..schemas.models import StatusUpdateRequest, VerifyPaymentRequest
+from ..schemas.models import StaffOrderRequest, StatusUpdateRequest, VerifyPaymentRequest
+from ..services.orders import persist_order, price_or_reject
 
 router = APIRouter(prefix="/api/admin/orders", tags=["admin-orders"])
 
@@ -52,6 +53,62 @@ def list_orders(
         if len(orders) >= limit:
             break
     return {"orders": orders}
+
+
+@router.post("", status_code=status.HTTP_201_CREATED)
+def create_counter_order(body: StaffOrderRequest, user=Depends(get_current_user)):
+    """Place an order on a customer's behalf — counter, phone call or walk-in.
+
+    Prices through the same module as the customer's own checkout, so every
+    offer, B1G1 pool and coupon (including a scratch-card code, which still only
+    works for the phone that won it) behaves identically. Three things differ,
+    and only these three:
+
+    * the owner's online-ordering switch is not consulted — closing online
+      ordering closes the website, not the shop;
+    * delivery need not be prepaid, because staff can hand a cash order to the
+      rider — an area and an address are still required;
+    * staff can record that the money is already in hand, which the customer's
+      own checkout must never be able to say about itself.
+    """
+    if body.order_type not in ("dine_in", "takeaway", "delivery"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid order type")
+    if body.payment_method not in ("cash", "upi"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Payment method must be 'cash' or 'upi'.")
+
+    priced = price_or_reject(
+        [c.model_dump() for c in body.cart], body.order_type, body.coupon_code,
+        body.delivery_area_id, body.customer.phone,
+    )
+    # A coupon the staff member typed that did not hold up is reported rather
+    # than dropped: they are standing in front of the customer who handed it
+    # over, so the bill must not quietly come out at full price.
+    if body.coupon_code and not priced.coupon_code:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            priced.coupon_error or "That coupon cannot be used on this order.")
+
+    if body.order_type == "delivery":
+        if priced.delivery_area_required:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Select the delivery area.")
+        if not (body.customer.address.strip() and body.customer.name.strip()
+                and body.customer.phone.strip()):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Delivery needs name, phone and address.")
+
+    if body.payment_collected:
+        pay_status = "paid"
+    elif body.payment_method == "upi" and body.upi_reference.strip():
+        pay_status = "awaiting_verification"
+    else:
+        pay_status = "pending"
+
+    order = persist_order(
+        priced, order_type=body.order_type, customer=body.customer, notes=body.notes,
+        payment_method=body.payment_method, payment_status=pay_status,
+        upi_reference=body.upi_reference, by=user.email, channel="counter",
+        placed_by=user.email,
+        verified_by=user.email if pay_status == "paid" else "",
+    )
+    return order.to_dict()
 
 
 @router.get("/latest")

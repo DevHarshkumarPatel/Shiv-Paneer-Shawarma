@@ -3,7 +3,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <meta name="robots" content="noindex, nofollow" />
-<title>Reviews — Shiv Paneer Shawarma Owner</title>
+<title>New order — Shiv Paneer Shawarma Staff</title>
 <link rel="icon" href="/favicon.ico" sizes="48x48" />
 <link rel="icon" type="image/png" sizes="96x96" href="/assets/img/icon-96.png" />
 <link rel="stylesheet" href="../assets/css/tokens.css" />
@@ -20,10 +20,10 @@
     </a>
     <nav class="nav">
       <a href="orders.html">Orders</a>
-      <a href="new-order.html">New order</a>
-      <a href="customers.html">Customers</a>
-      <a href="reviews.html" class="active">Reviews</a>
-      <a href="menu-admin.html">Menu &amp; Offers</a>
+      <a href="new-order.html" class="active">New order</a>
+      <a href="customers.html" id="navCustomers" class="hidden">Customers</a>
+      <a href="reviews.html" id="navReviews" class="hidden">Reviews</a>
+      <a href="menu-admin.html" id="navMenu" class="hidden">Menu &amp; Offers</a>
     </nav>
     <div class="who">
       <span id="whoami"></span>
@@ -34,7 +34,7 @@
 
 <main>
   <div class="container">
-    <div id="reviewRoot"><div class="center-load"><div class="spinner"></div><div>Loading…</div></div></div>
+    <div id="posRoot"><div class="center-load"><div class="spinner"></div><div>Loading the menu…</div></div></div>
   </div>
 </main>
 
@@ -42,4 +42,5 @@
 <script src="../js/api.js"></script>
 <script src="../js/ui.js"></script>
 <script src="../js/staff/auth.js"></script>
-<script src="../js/staff/reviews.js"></script>
+<script src="../js/staff/invoice.js"></script>
+<script src="../js/staff/new-order.js"></script>

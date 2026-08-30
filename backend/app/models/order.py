@@ -99,6 +99,13 @@ class Order(ndb.Model):
     # phone is typed differently every time (+91, spaces, a leading 0).
     phone_key = ndb.StringProperty(default="")
 
+    # Where the order came from: the customer's own checkout, or a staff member
+    # taking it at the counter / over the phone. Orders written before counter
+    # ordering existed have no value stored and read back as "online", which is
+    # what they were.
+    channel = ndb.StringProperty(choices=["online", "counter"], default="online")
+    placed_by = ndb.StringProperty(default="")   # staff email, for counter orders
+
     items = ndb.StructuredProperty(OrderItem, repeated=True)
     customer = ndb.StructuredProperty(CustomerInfo)
     payment = ndb.StructuredProperty(PaymentInfo)
@@ -127,6 +134,8 @@ class Order(ndb.Model):
             "public_id": self.public_id,
             "order_type": self.order_type,
             "repeat_no": self.repeat_no,
+            "channel": self.channel or "online",
+            "placed_by": self.placed_by,
             "items": [i.to_dict() for i in self.items],
             "payment": self.payment.to_dict() if self.payment else None,
             "subtotal": self.subtotal,
