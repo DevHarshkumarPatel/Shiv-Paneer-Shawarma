@@ -22,7 +22,7 @@
   // fails to load, so a missing -sm encode degrades instead of breaking.
   //
   // H.264 MP4 only, no WebM: VP9 encodes of this clip came out *larger* than
-  // x264 (1.7M vs 1.4M), and every target browser plays H.264. Re-test if the
+  // x264 (4.9M vs 3.4M), and every target browser plays H.264. Re-test if the
   // source clip ever changes character — the answer is content-dependent.
   const small = window.matchMedia("(max-width: 700px)").matches;
   const sources = small

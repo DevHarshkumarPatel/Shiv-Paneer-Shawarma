@@ -211,10 +211,13 @@ The homepage now carries the phrases. To go further, in rough value order:
   301 is cleaner — do it as a Cloudflare **Redirect Rule**
   (`www.shivpaneershawarma.com/*` → `https://shivpaneershawarma.com/$1`, 301).
   See [CLOUDFLARE_DOMAIN_SETUP.md](CLOUDFLARE_DOMAIN_SETUP.md).
-- **Hero video weight.** `assets/video/hero.mp4` is the heaviest thing on the
-  landing page. `bgvideo.js` already defers it and serves a smaller phone encode,
-  so this is fine — but if PageSpeed flags LCP, drop the video on 4G/slow
-  connections too, not just Save-Data.
+- **Hero video weight.** `assets/video/hero-v2.mp4` is the heaviest thing on the
+  landing page, and at 3.4 MB desktop / 1.5 MB phone it is over the ~1.5 MB /
+  ~750 KB budget in `assets/video/README.md`. `bgvideo.js` defers it behind
+  `preload="none"` and serves a smaller phone encode, so LCP is the poster, not
+  the video — the cost is mobile data. If PageSpeed flags LCP anyway, drop the
+  video on 4G/slow connections too, not just Save-Data; to cut the bytes
+  instead, trim the clip to its food-only first 20.5 s (see that README).
 
 ## 8. How you will know whether it worked
 
