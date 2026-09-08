@@ -5,10 +5,12 @@
  * prints, what downloads and what the customer receives are the same bill —
  * and a page-sized image is what a Bluetooth thermal printer handles best.
  *
- * Printing goes through the phone's normal print dialog, which is where a
- * paired Bluetooth printer appears. The browser cannot tell whether a printer
- * is connected, so the PDF download and the share button sit next to Print
- * rather than behind a "no printer" check.
+ * There are two ways out to a printer. "Bluetooth" goes straight to a thermal
+ * printer as ESC/POS raster (see bt-print.js) and is the one to reach for at the
+ * counter. "Dialog" hands the image to the system print dialog, which is where
+ * an OS-level printer — including one paired outside the browser — shows up.
+ * The browser cannot tell whether any printer is connected, so the PDF download
+ * and the share button sit next to both rather than behind a "no printer" check.
  */
 const Invoice = (function () {
   const { money, esc, el, toast, modal, statusLabel, fmtDateTime, phoneIntl } = UI;
@@ -55,9 +57,12 @@ const Invoice = (function () {
   /* Draw the receipt and return a canvas cropped to the height it actually
      used. The height isn't known until the last line is placed, so it is drawn
      on an over-tall scratch canvas first and copied into a snug one. */
-  async function render(o, logo) {
+  async function render(o, logo, scale) {
     const p = paper();
-    const W = p.dots * SCALE;
+    // The preview and the PDF want 2x for a readable phone screen; the thermal
+    // raster wants 1x, because the printer maps one canvas pixel to one dot and
+    // wraps anything wider than its head.
+    const W = p.dots * (scale || SCALE);
     const PAD = Math.round(W * 0.045);
     const RIGHT = W - PAD;
     const INNER = W - PAD * 2;
@@ -374,6 +379,11 @@ const Invoice = (function () {
    * ---------------------------------------------------------------- */
 
   async function open(o) {
+    /* Only offer the direct route where one can exist. On an iPhone, or in
+       desktop Safari and Firefox, there is no Web Bluetooth and no RawBT, so a
+       Bluetooth button there would be a button that always fails. */
+    const direct = typeof BTPrint !== "undefined" && (BTPrint.supported() || BTPrint.isAndroid());
+
     const m = modal({
       title: `Invoice · ${o.public_id}`,
       bodyHTML: `
@@ -387,16 +397,29 @@ const Invoice = (function () {
         <div class="inv-preview" id="invPreview">
           <div class="center-load"><div class="spinner"></div><div>Building the bill…</div></div>
         </div>
-        <p class="text-sm text-muted" style="margin-bottom:0;">Print sends it to your phone's print dialog — pick your Bluetooth printer there. No printer connected? Save the PDF or send it on WhatsApp.</p>`,
+        <p class="text-sm text-muted" style="margin-bottom:0;" id="invHint"></p>`,
       footHTML: `<div class="row wrap">
-          <button class="btn btn-primary grow" id="invPrint" disabled>🖨 Print</button>
+          ${direct ? `<button class="btn btn-primary grow" id="invBt" disabled>🖨 Bluetooth</button>` : ""}
+          <button class="btn btn-${direct ? "outline" : "primary"} grow" id="invPrint" disabled>🖨 Dialog</button>
           <button class="btn btn-outline grow" id="invPdf" disabled>⬇ PDF</button>
           <button class="btn btn-outline grow" id="invShare" disabled>💬 Send PDF</button>
         </div>`,
     });
 
     const preview = el("#invPreview", m.backdrop);
-    const buttons = ["#invPrint", "#invPdf", "#invShare"].map((s) => el(s, m.backdrop));
+    const buttons = ["#invBt", "#invPrint", "#invPdf", "#invShare"]
+      .map((s) => el(s, m.backdrop))
+      .filter(Boolean);
+
+    function hint() {
+      const saved = direct && BTPrint.savedName();
+      el("#invHint", m.backdrop).innerHTML = direct
+        ? `Bluetooth prints straight to your thermal printer${saved ? ` — ${esc(saved)}` : ""}. `
+          + `Dialog goes through the system print sheet instead. No printer? Save the PDF or send it on WhatsApp.`
+        : `Dialog sends it to this device's print sheet — pick your printer there. `
+          + `No printer connected? Save the PDF or send it on WhatsApp.`;
+    }
+    hint();
     // The logo is fetched once and reused when the paper size changes.
     const logo = await loadImage(LOGO_SRC);
     let built = null;
@@ -421,6 +444,38 @@ const Invoice = (function () {
       setPaper(b.dataset.paper);
       build();
     }));
+    /* The thermal raster is drawn on demand rather than with the preview: it is
+       a second full render, and most bills are opened to look at, not to print. */
+    if (direct) {
+      const btn = el("#invBt", m.backdrop);
+      btn.addEventListener("click", async () => {
+        const label = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "… printing";
+        try {
+          const { canvas } = await render(o, logo, 1);
+          const route = await BTPrint.printCanvas(canvas);
+          if (route === "ble") toast("Sent to the printer", "ok");
+          hint();
+        } catch (e) {
+          if (e && e.name === "NotFoundError") {
+            toast("No printer picked", "");
+          } else if (!BTPrint.supported() && !BTPrint.isAndroid()) {
+            toast("This browser can't print over Bluetooth — use Dialog", "err");
+          } else {
+            /* Nothing here distinguishes "printer is off" from "printer speaks
+               SPP and RawBT isn't installed", so name the two things the owner
+               can actually check. */
+            toast(`Bluetooth print failed: ${e && e.message ? e.message : e}. `
+                + `Check the printer is on, or use Dialog.`, "err");
+          }
+        } finally {
+          btn.disabled = false;
+          btn.textContent = label;
+        }
+      });
+    }
+
     el("#invPrint", m.backdrop).addEventListener("click", () => print(built.dataUrl, built.paper, o.public_id));
     el("#invPdf", m.backdrop).addEventListener("click", () => download(built.pdf, `${o.public_id}.pdf`));
     el("#invShare", m.backdrop).addEventListener("click", () => sendOnWhatsApp(o, built.pdf));
