@@ -52,21 +52,14 @@
     el("#refreshBtn").addEventListener("click", load);
     Alerts.init();
     WA.init();
-    startAutoRefresh();
     await load();
   }
 
-  /* Auto-refresh the board every 2 min so staff/owner needn't tap ↻.
-     Only fires while the tab is visible (a backgrounded tab does no work),
-     and refreshes once on becoming visible again so a returning user sees
-     current orders without waiting for the next tick. */
-  function startAutoRefresh() {
-    const EVERY_MS = 120000;
-    setInterval(() => { if (document.visibilityState === "visible") load(); }, EVERY_MS);
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") load();
-    });
-  }
+  /* No board auto-refresh. The 2-min timer and the reload-on-tab-visible that
+     used to sit here were removed at the owner's request (2026-09-09): the
+     board reloads when ↻ is tapped, when a filter or date changes, when a
+     status is set — and when the alert poll spots a new order, if alerts are
+     on. Every other reload was a request nobody asked for. */
 
   /* ------------------------------------------------------------------ *
    * New-order sound alerts (owner-only, opt-in, page-open only).
