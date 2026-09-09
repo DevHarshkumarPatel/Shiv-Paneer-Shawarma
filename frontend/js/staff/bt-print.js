@@ -51,7 +51,7 @@ const BTPrint = (function () {
    * A thermal head has one ink and no greys, so the image is dithered rather
    * than thresholded: Floyd–Steinberg keeps the logo photograph readable, where
    * a flat cutoff turns it into a blob and thins the small type. */
-  function escposRaster(canvas) {
+  function rasterBands(canvas) {
     const w = canvas.width;
     const h = canvas.height;
     const bytesPerRow = Math.ceil(w / 8);
@@ -89,7 +89,6 @@ const BTPrint = (function () {
     const BAND = 64;
     const out = [];
     const push = (...b) => out.push(...b);
-    push(0x1b, 0x40);                                   // ESC @    reset
     for (let y0 = 0; y0 < h; y0 += BAND) {
       const rows = Math.min(BAND, h - y0);
       push(0x1d, 0x76, 0x30, 0x00,                      // GS v 0, mode 0
@@ -98,8 +97,19 @@ const BTPrint = (function () {
       const from = y0 * bytesPerRow;
       for (let i = 0; i < rows * bytesPerRow; i++) push(bits[from + i]);
     }
-    push(0x1b, 0x64, 0x03);                             // ESC d 3  clear the tear bar
     return new Uint8Array(out);
+  }
+
+  /* A whole bill as one image: reset, the raster, and enough feed to clear the
+     tear bar. The text-mode builder embeds `rasterBands` on its own instead,
+     because there the logo is one block inside a longer stream of commands. */
+  function escposRaster(canvas) {
+    const bands = rasterBands(canvas);
+    const out = new Uint8Array(bands.length + 5);
+    out.set([0x1b, 0x40], 0);                           // ESC @    reset
+    out.set(bands, 2);
+    out.set([0x1b, 0x64, 0x03], bands.length + 2);      // ESC d 3  clear the tear bar
+    return out;
   }
 
   /* ---------------------------------------------------------------- *
@@ -228,10 +238,10 @@ const BTPrint = (function () {
    * What the invoice modal calls
    * ---------------------------------------------------------------- */
 
-  /* Print a canvas already drawn at the printer's dot width. Returns which
-     route ran, or throws with a message worth showing the user. */
-  async function printCanvas(canvas) {
-    const bytes = escposRaster(canvas);
+  /* Push a finished ESC/POS stream — raster or text mode, it makes no
+     difference to the transport. Returns which route ran, or throws with a
+     message worth showing the user. */
+  async function printBytes(bytes) {
     if (supported()) {
       try {
         await send(bytes);
@@ -249,6 +259,9 @@ const BTPrint = (function () {
     throw new Error("No direct Bluetooth route on this device");
   }
 
+  /* Print a canvas already drawn at the printer's dot width. */
+  const printCanvas = (canvas) => printBytes(escposRaster(canvas));
+
   function forget() {
     if (device && device.gatt && device.gatt.connected) device.gatt.disconnect();
     device = null;
@@ -258,6 +271,6 @@ const BTPrint = (function () {
 
   return {
     supported, isAndroid, connected, savedName,
-    connect, forget, send, escposRaster, viaRawBT, printCanvas,
+    connect, forget, send, rasterBands, escposRaster, viaRawBT, printBytes, printCanvas,
   };
 })();

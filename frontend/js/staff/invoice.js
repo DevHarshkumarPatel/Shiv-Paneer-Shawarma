@@ -6,8 +6,10 @@
  * and a page-sized image is what a Bluetooth thermal printer handles best.
  *
  * There are two ways out to a printer. "Bluetooth" goes straight to a thermal
- * printer as ESC/POS raster (see bt-print.js) and is the one to reach for at the
- * counter. "Dialog" hands the image to the system print dialog, which is where
+ * printer (see bt-print.js) and is the one to reach for at the counter; it sends
+ * either the printer's own text mode (escpos-text.js — fast, sharp, and what
+ * the Text style below selects) or this canvas as raster, whichever style the
+ * device is set to. "Dialog" hands the image to the system print dialog, which is where
  * an OS-level printer — including one paired outside the browser — shows up.
  * The browser cannot tell whether any printer is connected, so the PDF download
  * and the share button sit next to both rather than behind a "no printer" check.
@@ -18,6 +20,7 @@ const Invoice = (function () {
   const SHOP = "Shiv Paneer Shawarma";
   const LOGO_SRC = "../assets/img/logo.jpeg";
   const PAPER_KEY = "sps_invoice_paper";   // "58" | "80", per device
+  const STYLE_KEY = "sps_invoice_style";   // "text" | "image", per device
 
   // Printable dot width per paper size; the canvas is drawn at 2× that so the
   // PDF stays readable on a phone screen and the print still lands on whole dots.
@@ -40,6 +43,14 @@ const Invoice = (function () {
 
   const paper = () => PAPERS[localStorage.getItem(PAPER_KEY)] || PAPERS["58"];
   const setPaper = (k) => localStorage.setItem(PAPER_KEY, k);
+
+  /* Text is the default: it prints in a second or two against the raster's
+     twenty-odd, and the printer's own font is sharper than any dithered
+     bitmap. Image is kept for a bill whose layout has to match the PDF exactly
+     — and for a printer whose firmware mangles GS ( k QR codes. */
+  const style = () => (localStorage.getItem(STYLE_KEY) === "image" ? "image" : "text");
+  const setStyle = (k) => localStorage.setItem(STYLE_KEY, k);
+  const textMode = () => style() === "text" && typeof ESCPOSText !== "undefined";
 
   /* ---------------------------------------------------------------- *
    * Drawing
@@ -244,6 +255,115 @@ const Invoice = (function () {
     return `${p.method === "upi" ? "UPI" : "Cash"} · ${map[p.status] || p.status}`;
   }
 
+  /* ---------------------------------------------------------------- *
+   * Text mode
+   * ---------------------------------------------------------------- */
+
+  /* The logo alone, on its own canvas at the printer's dot width. Text mode
+     sends characters, but a logo is not a character, so this one block goes as
+     raster inside the stream. Kept to ~55% of the paper and to a whole number
+     of bytes wide: GS v 0 works in 8-dot columns, and a width that isn't a
+     multiple of 8 leaves a ragged edge. */
+  function logoCanvas(logo, dots) {
+    if (!logo) return null;
+    const w = Math.floor((dots * 0.55) / 8) * 8;
+    const h = Math.max(8, Math.round((logo.height / logo.width) * w));
+    const cv = document.createElement("canvas");
+    cv.width = w;
+    cv.height = h;
+    const c = cv.getContext("2d");
+    c.fillStyle = "#fff";
+    c.fillRect(0, 0, w, h);
+    c.drawImage(logo, 0, 0, w, h);
+    return cv;
+  }
+
+  /* Redraw the server's QR PNG on the printer's dot grid, one module to a solid
+     square of `dots` pixels.
+     Plain scaling is no good here: scale a QR by a fraction and resampling eats
+     whole module rows, leaving a code that looks fine and scans never. So the
+     PNG's own grid is measured instead — the quiet zone is walked down the
+     diagonal, and the top-left finder pattern's outer ring is exactly 7 modules
+     wide, which gives the module size in source pixels — and every module is
+     then sampled at its centre and painted at the size we want. */
+  function qrCanvas(img, dots) {
+    if (!img) return null;
+    const w = img.naturalWidth || img.width;
+    const h = img.naturalHeight || img.height;
+    if (!w || !h) return null;
+
+    const src = document.createElement("canvas");
+    src.width = w;
+    src.height = h;
+    const sc = src.getContext("2d");
+    sc.fillStyle = "#fff";
+    sc.fillRect(0, 0, w, h);
+    sc.drawImage(img, 0, 0);
+    const px = sc.getImageData(0, 0, w, h).data;
+    const dark = (x, y) => {
+      const p = (y * w + x) * 4;
+      const a = px[p + 3] / 255;
+      return 255 - a * (255 - (px[p] * 299 + px[p + 1] * 587 + px[p + 2] * 114) / 1000) < 128;
+    };
+
+    const edge = Math.min(w, h);
+    let quiet = 0;
+    while (quiet < edge && !dark(quiet, quiet)) quiet++;
+    if (quiet >= edge) return null;                 // no dark pixel: not a QR
+    let run = 0;
+    while (quiet + run < w && dark(quiet + run, quiet)) run++;
+    const box = run / 7;
+    const modules = Math.round((w - 2 * quiet) / box);
+    // 21 modules is QR version 1; anything smaller means the grid was misread.
+    if (!(box >= 1) || modules < 21 || Math.abs(modules * box - (w - 2 * quiet)) > box) return null;
+
+    // Two modules of white all round. The paper is white anyway, but the quiet
+    // zone has to survive the bill's own rules and the "Scan to pay" line.
+    const PAD = 2;
+    const side = (modules + PAD * 2) * dots;
+    const out = document.createElement("canvas");
+    out.width = side;
+    out.height = side;
+    const oc = out.getContext("2d");
+    oc.fillStyle = "#fff";
+    oc.fillRect(0, 0, side, side);
+    oc.fillStyle = "#000";
+    for (let r = 0; r < modules; r++) {
+      for (let c = 0; c < modules; c++) {
+        const x = Math.floor(quiet + c * box + box / 2);
+        const y = Math.floor(quiet + r * box + box / 2);
+        if (dark(Math.min(x, w - 1), Math.min(y, h - 1))) {
+          oc.fillRect((c + PAD) * dots, (r + PAD) * dots, dots, dots);
+        }
+      }
+    }
+    return out;
+  }
+
+  /* The UPI intent link and a QR image for what this bill still owes. The bill
+     prints without them if the call fails — a receipt is worth more than a
+     payment shortcut. */
+  async function upiFor(o) {
+    try {
+      return await API.get(`/api/orders/${encodeURIComponent(o.public_id)}/payment`);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function buildText(o, logo, pay, qrImg) {
+    const p = paper();
+    const dots = (ESCPOSText.QR_MODULE && ESCPOSText.QR_MODULE[p.mm]) || 3;
+    return ESCPOSText.build(o, {
+      shop: SHOP,
+      paperMm: p.mm,
+      logo: logoCanvas(logo, p.dots),
+      qrCanvas: qrCanvas(qrImg, dots),
+      dateText: o.created_at ? fmtDateTime(o.created_at) : "",
+      upiUri: pay && pay.upi_uri,
+    });
+  }
+
   const trackUrl = (id) => new URL(`../track.html?id=${encodeURIComponent(id)}`, location.href).href;
 
   /* ---------------------------------------------------------------- *
@@ -387,13 +507,20 @@ const Invoice = (function () {
     const m = modal({
       title: `Invoice · ${o.public_id}`,
       bodyHTML: `
-        <div class="row-between wrap" style="gap:var(--sp-2);margin-bottom:var(--sp-3);">
+        <div class="row-between wrap" style="gap:var(--sp-2);margin-bottom:var(--sp-2);">
           <span class="text-sm text-muted">Paper width</span>
           <div class="chips" style="padding:0;overflow:visible;">
             <button class="chip" data-paper="58">58 mm</button>
             <button class="chip" data-paper="80">80 mm</button>
           </div>
         </div>
+        ${direct ? `<div class="row-between wrap" style="gap:var(--sp-2);margin-bottom:var(--sp-3);">
+          <span class="text-sm text-muted">Print style</span>
+          <div class="chips" style="padding:0;overflow:visible;">
+            <button class="chip" data-style="text">Text</button>
+            <button class="chip" data-style="image">Image</button>
+          </div>
+        </div>` : ""}
         <div class="inv-preview" id="invPreview">
           <div class="center-load"><div class="spinner"></div><div>Building the bill…</div></div>
         </div>
@@ -406,6 +533,11 @@ const Invoice = (function () {
         </div>`,
     });
 
+    /* Text mode is an ESC/POS stream, so it only means anything over
+       Bluetooth. Where there is no Bluetooth route the bill is the drawn one,
+       whatever the device last chose. */
+    const asText = () => direct && textMode();
+
     const preview = el("#invPreview", m.backdrop);
     const buttons = ["#invBt", "#invPrint", "#invPdf", "#invShare"]
       .map((s) => el(s, m.backdrop))
@@ -413,8 +545,14 @@ const Invoice = (function () {
 
     function hint() {
       const saved = direct && BTPrint.savedName();
+      /* The style only changes what goes over Bluetooth. Dialog, PDF and the
+         WhatsApp copy are always the drawn bill, because a print sheet and a
+         PDF have no use for printer commands. */
+      const styleNote = asText()
+        ? `Text style sends the printer characters — fast, sharp, and it prints the UPI QR itself.`
+        : `Image style sends the bill exactly as previewed — slower, and it needs no printer font.`;
       el("#invHint", m.backdrop).innerHTML = direct
-        ? `Bluetooth prints straight to your thermal printer${saved ? ` — ${esc(saved)}` : ""}. `
+        ? `Bluetooth prints straight to your thermal printer${saved ? ` — ${esc(saved)}` : ""}. ${styleNote} `
           + `Dialog goes through the system print sheet instead. No printer? Save the PDF or send it on WhatsApp.`
         : `Dialog sends it to this device's print sheet — pick your printer there. `
           + `No printer connected? Save the PDF or send it on WhatsApp.`;
@@ -423,12 +561,34 @@ const Invoice = (function () {
     // The logo is fetched once and reused when the paper size changes.
     const logo = await loadImage(LOGO_SRC);
     let built = null;
+    // Fetched once per invoice, whatever the style or paper size: the amount
+    // owed doesn't change when the paper does.
+    let pay = null;
+    let payTried = false;
+    let qrImg = null;
+
+    /* The link and its QR image, once. The image is decoded here rather than in
+       the builder so that switching paper size or restyling the bill doesn't
+       re-decode it. */
+    async function ensurePay() {
+      if (payTried) return;
+      payTried = true;
+      pay = await upiFor(o);
+      qrImg = pay && pay.qr_data_url ? await loadImage(pay.qr_data_url) : null;
+    }
 
     async function build() {
       buttons.forEach((b) => { b.disabled = true; });
       el("[data-paper=\"58\"]", m.backdrop).classList.toggle("active", paper().mm === 58);
       el("[data-paper=\"80\"]", m.backdrop).classList.toggle("active", paper().mm === 80);
+      if (direct) {
+        el("[data-style=\"text\"]", m.backdrop).classList.toggle("active", asText());
+        el("[data-style=\"image\"]", m.backdrop).classList.toggle("active", !asText());
+      }
+      hint();
 
+      // The drawn bill is built either way — Dialog, PDF and Send PDF all need
+      // it, and the buttons should not wait for a second render on a tap.
       const { canvas, paper: p } = await render(o, logo);
       const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
       built = {
@@ -436,7 +596,14 @@ const Invoice = (function () {
         paper: p,
         pdf: buildPdf(dataUrlBytes(dataUrl), canvas.width, canvas.height, p.mm),
       };
-      preview.innerHTML = `<img src="${dataUrl}" alt="Invoice preview for ${esc(o.public_id)}" />`;
+
+      if (asText()) {
+        await ensurePay();
+        preview.innerHTML = `<pre class="inv-text" aria-label="Invoice preview for ${esc(o.public_id)}">`
+          + `${esc(buildText(o, logo, pay, qrImg).text)}</pre>`;
+      } else {
+        preview.innerHTML = `<img src="${dataUrl}" alt="Invoice preview for ${esc(o.public_id)}" />`;
+      }
       buttons.forEach((b) => { b.disabled = false; });
     }
 
@@ -444,8 +611,13 @@ const Invoice = (function () {
       setPaper(b.dataset.paper);
       build();
     }));
-    /* The thermal raster is drawn on demand rather than with the preview: it is
-       a second full render, and most bills are opened to look at, not to print. */
+    m.backdrop.querySelectorAll("[data-style]").forEach((b) => b.addEventListener("click", () => {
+      setStyle(b.dataset.style);
+      build();
+    }));
+    /* In image style the thermal raster is drawn on demand rather than with the
+       preview: it is a second full render, and most bills are opened to look at,
+       not to print. */
     if (direct) {
       const btn = el("#invBt", m.backdrop);
       btn.addEventListener("click", async () => {
@@ -453,8 +625,16 @@ const Invoice = (function () {
         btn.disabled = true;
         btn.textContent = "… printing";
         try {
-          const { canvas } = await render(o, logo, 1);
-          const route = await BTPrint.printCanvas(canvas);
+          let route;
+          if (asText()) {
+            // Nothing to re-render: text mode is the same bytes the preview was
+            // built from, and the QR is drawn by the printer.
+            await ensurePay();
+            route = await BTPrint.printBytes(buildText(o, logo, pay, qrImg).bytes);
+          } else {
+            // 1x, because the printer maps one canvas pixel to one dot.
+            route = await BTPrint.printCanvas((await render(o, logo, 1)).canvas);
+          }
           if (route === "ble") toast("Sent to the printer", "ok");
           hint();
         } catch (e) {

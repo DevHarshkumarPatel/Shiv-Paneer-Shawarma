@@ -404,6 +404,11 @@
    than the modal. */
 .inv-preview { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-3); max-height: 46vh; overflow-y: auto; display: grid; place-items: center; min-height: 160px; }
 .inv-preview img { display: block; width: 100%; max-width: 300px; background: #fff; box-shadow: var(--shadow-sm); }
+/* Text-mode preview: the printer's monospace grid, on paper. Fixed colours,
+   not theme tokens — receipt paper is white in dark mode too. */
+.inv-preview pre.inv-text { margin: 0; background: #fff; color: #111; box-shadow: var(--shadow-sm);
+  padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px; line-height: 1.35; white-space: pre; overflow-x: auto; max-width: 100%; }
 
 /* A returning customer, called out on the order card. Kept as a quiet pill
    rather than a warning colour: it is a greeting cue, not a problem. */
