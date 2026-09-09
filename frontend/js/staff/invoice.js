@@ -18,7 +18,11 @@ const Invoice = (function () {
   const { money, esc, el, toast, modal, statusLabel, fmtDateTime, phoneIntl } = UI;
 
   const SHOP = "Shiv Paneer Shawarma";
-  const LOGO_SRC = "../assets/img/logo.jpeg";
+  /* Line art, not the photographic logo: a thermal head has one ink, and flat
+     black strokes on white survive the dot grid where a photo turns to mush.
+     The photo stays the fallback in case the file is missing. */
+  const LOGO_SRC = "../assets/img/logo-print.png";
+  const LOGO_FALLBACK = "../assets/img/logo.jpeg";
   const PAPER_KEY = "sps_invoice_paper";   // "58" | "80", per device
   const STYLE_KEY = "sps_invoice_style";   // "text" | "image", per device
 
@@ -261,12 +265,12 @@ const Invoice = (function () {
 
   /* The logo alone, on its own canvas at the printer's dot width. Text mode
      sends characters, but a logo is not a character, so this one block goes as
-     raster inside the stream. Kept to ~55% of the paper and to a whole number
+     raster inside the stream. Kept to ~80% of the paper and to a whole number
      of bytes wide: GS v 0 works in 8-dot columns, and a width that isn't a
      multiple of 8 leaves a ragged edge. */
   function logoCanvas(logo, dots) {
     if (!logo) return null;
-    const w = Math.floor((dots * 0.55) / 8) * 8;
+    const w = Math.floor((dots * 0.8) / 8) * 8;
     const h = Math.max(8, Math.round((logo.height / logo.width) * w));
     const cv = document.createElement("canvas");
     cv.width = w;
@@ -559,7 +563,7 @@ const Invoice = (function () {
     }
     hint();
     // The logo is fetched once and reused when the paper size changes.
-    const logo = await loadImage(LOGO_SRC);
+    const logo = (await loadImage(LOGO_SRC)) || (await loadImage(LOGO_FALLBACK));
     let built = null;
     // Fetched once per invoice, whatever the style or paper size: the amount
     // owed doesn't change when the paper does.
