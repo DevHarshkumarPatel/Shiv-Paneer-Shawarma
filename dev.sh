@@ -134,7 +134,10 @@ start_api() {
 start_frontend() {
   if alive frontend || port_up "$WEB_PORT"; then ok "Frontend already running on :$WEB_PORT"; return 0; fi
   say "  Serving frontend on :$WEB_PORT …"
-  ( cd "$FRONTEND" && start_bg frontend python3 -m http.server "$WEB_PORT" --bind 127.0.0.1 )
+  # devserver.py, not `python3 -m http.server`: the stdlib server sends no
+  # Cache-Control at all, so edited CSS and JS go on being served from the
+  # browser's cache with nothing to show it happened.
+  ( cd "$FRONTEND" && start_bg frontend python3 "$ROOT/devserver.py" "$WEB_PORT" --bind 127.0.0.1 )
   for _ in $(seq 1 20); do port_up "$WEB_PORT" && break; sleep 0.2; done
   port_up "$WEB_PORT" && ok "Frontend ready → http://127.0.0.1:$WEB_PORT/index.html" || err "Frontend failed — see $(logfile frontend)"
 }
