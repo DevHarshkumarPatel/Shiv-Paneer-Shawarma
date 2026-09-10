@@ -559,8 +559,22 @@ const Invoice = (function () {
       const styleNote = asText()
         ? `Text style sends the printer characters — fast, sharp, and it prints the UPI QR itself.`
         : `Image style sends the bill exactly as previewed — slower, and it needs no printer font.`;
+      /* Say plainly when the printer will have to be picked again, because the
+         answer is not the owner's fault and there is something they can do
+         about it. Once picked, the printer is reused for every bill; a page
+         reload is the one thing that loses it, and only in a browser without
+         the Web Bluetooth permissions backend. */
+      const memoryNote = !saved
+        ? ""
+        : BTPrint.remembered()
+          ? ` Already picked — the next bill goes straight to it, even if it has gone to sleep.`
+          : BTPrint.canReattach()
+            ? ` Picked once, it is reused for every bill after — no need to pick it again.`
+            : ` Pick it once and every bill after goes straight to it. Reloading this page makes `
+              + `Chrome ask again, unless you turn on “Use the new permissions backend for Web `
+              + `Bluetooth” in chrome://flags.`;
       el("#invHint", m.backdrop).innerHTML = direct
-        ? `Bluetooth prints straight to your thermal printer${saved ? ` — ${esc(saved)}` : ""}. ${styleNote} `
+        ? `Bluetooth prints straight to your thermal printer${saved ? ` — ${esc(saved)}` : ""}.${memoryNote} ${styleNote} `
           + `Dialog goes through the system print sheet instead. No printer? Save the PDF or send it on WhatsApp.`
         : `Dialog sends it to this device's print sheet — pick your printer there. `
           + `No printer connected? Save the PDF or send it on WhatsApp.`;
