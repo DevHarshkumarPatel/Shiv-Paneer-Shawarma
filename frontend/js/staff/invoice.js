@@ -259,7 +259,7 @@ const Invoice = (function () {
   /* Draw the receipt and return a canvas cropped to the height it actually
      used. The height isn't known until the last line is placed, so it is drawn
      on an over-tall scratch canvas first and copied into a snug one. */
-  async function render(o, art, scale) {
+  async function render(o, art, scale, qrImg) {
     const p = paper();
     // The preview and the PDF want 2x for a readable phone screen; the thermal
     // raster wants 1x, because the printer maps one canvas pixel to one dot and
@@ -431,6 +431,22 @@ const Invoice = (function () {
       { size: 12, center: true, gap: 2 });
     line("See you again soon! 🌯", { size: 12, center: true, gap: 5 });
 
+    /* ---- Scan to pay ---- *
+     *
+     * On every bill with something to pay, paid or not — the same rule the text
+     * bill uses. The drawn bill had no QR block at all, which meant the Image
+     * style printed a bill the Text style put a payment code on, and, worse,
+     * the PDF sent to the customer on WhatsApp had no way to pay from it. */
+    if (qrImg && o.total > 0) {
+      const qr = qrFit(qrImg, Math.round(W * 0.56));
+      if (qr) {
+        line(`Scan to pay ${money(o.total)}`, { size: 13, bold: true, center: true, gap: 3 });
+        // 1:1, never scaled — see qrFit.
+        c.drawImage(qr, Math.round((W - qr.width) / 2), y);
+        y += qr.height + S(8);
+      }
+    }
+
     line("Track your order", { size: 11, center: true, gap: 0 });
     line(trackUrl(o.public_id), { size: 10, center: true, gap: 2 });
 
@@ -515,6 +531,21 @@ const Invoice = (function () {
       }
     }
     return out;
+  }
+
+  /* The QR at the largest whole number of pixels per module that fits
+     `targetW`, and never wider.
+
+     Whole pixels, because that is the whole point of `qrCanvas`: scale a QR by
+     a fraction and resampling eats module rows, leaving a code that still looks
+     like a QR and scans never. The first pass is one pixel per module purely to
+     count them, which is cheap — a 57x57 canvas — and saves threading the count
+     back out of `qrCanvas` and past its other caller. */
+  function qrFit(img, targetW) {
+    const probe = qrCanvas(img, 1);
+    if (!probe) return null;
+    const px = Math.max(1, Math.floor(targetW / probe.width));
+    return px === 1 ? probe : qrCanvas(img, px);
   }
 
   /* The UPI intent link and a QR image for what this bill still owes. The bill
@@ -783,9 +814,15 @@ const Invoice = (function () {
       }
       hint();
 
+      /* Before the render, not inside the text branch. The drawn bill carries
+         the payment QR too now, so Image style, the PDF and the WhatsApp copy
+         all need the link — fetching it only for Text style was what left the
+         drawn bill without one. */
+      await ensurePay();
+
       // The drawn bill is built either way — Dialog, PDF and Send PDF all need
       // it, and the buttons should not wait for a second render on a tap.
-      const { canvas, paper: p } = await render(o, art);
+      const { canvas, paper: p } = await render(o, art, undefined, qrImg);
       const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
       built = {
         dataUrl,
@@ -794,7 +831,6 @@ const Invoice = (function () {
       };
 
       if (asText()) {
-        await ensurePay();
         preview.innerHTML = `<pre class="inv-text" aria-label="Invoice preview for ${esc(o.public_id)}">`
           + `${esc(buildText(o, art, pay, qrImg).text)}</pre>`;
       } else {
@@ -824,12 +860,11 @@ const Invoice = (function () {
           let route;
           if (asText()) {
             // Nothing to re-render: text mode is the same bytes the preview was
-            // built from, and the QR is drawn by the printer.
-            await ensurePay();
+            // built from.
             route = await BTPrint.printBytes(buildText(o, art, pay, qrImg).bytes);
           } else {
             // 1x, because the printer maps one canvas pixel to one dot.
-            route = await BTPrint.printCanvas((await render(o, art, 1)).canvas);
+            route = await BTPrint.printCanvas((await render(o, art, 1, qrImg)).canvas);
           }
           if (route === "ble") toast("Sent to the printer", "ok");
           hint();
