@@ -573,6 +573,34 @@ const Invoice = (function () {
     });
   }
 
+  /* The text bill as a preview: monospace runs spaced exactly as the printer
+     will space them, and the raster blocks as the images themselves.
+   *
+   * Worth the extra work over a single <pre>. Text mode is the default, so this
+   * is the preview the owner actually looks at, and with `[ logo ]` standing in
+   * for the artwork it could not show whether the header was right — the only
+   * way to check a logo was to spend a bill on it.
+   *
+   * Each image is sized as a percentage of the paper width rather than by its
+   * own pixel size, so a block that will run off the edge of the paper runs off
+   * the edge here too. */
+  function textPreviewHTML(built, id) {
+    const html = built.blocks.map((b) => {
+      if (b.t === "text") return `<pre class="inv-text">${esc(b.text)}</pre>`;
+      if (b.t === "raster" && b.canvas) {
+        const pct = Math.min(100, (b.canvas.width / paper().dots) * 100).toFixed(2);
+        return `<img class="inv-text-img" style="width:${pct}%" src="${b.canvas.toDataURL("image/png")}" `
+             + `alt="${esc(b.label || "image")}" />`;
+      }
+      /* A GS ( k code has no image on this side — the printer draws it from the
+         URI. Name it rather than leaving a gap the owner reads as a lost QR. */
+      const label = "[ UPI QR, drawn by printer ]";
+      const pad = " ".repeat(Math.max(0, Math.floor((built.cols - label.length) / 2)));
+      return `<pre class="inv-text">${esc(pad + label)}</pre>`;
+    }).join("");
+    return `<div class="inv-text-wrap" aria-label="Invoice preview for ${esc(id)}">${html}</div>`;
+  }
+
   const trackUrl = (id) => new URL(`../track.html?id=${encodeURIComponent(id)}`, location.href).href;
 
   /* ---------------------------------------------------------------- *
@@ -831,8 +859,7 @@ const Invoice = (function () {
       };
 
       if (asText()) {
-        preview.innerHTML = `<pre class="inv-text" aria-label="Invoice preview for ${esc(o.public_id)}">`
-          + `${esc(buildText(o, art, pay, qrImg).text)}</pre>`;
+        preview.innerHTML = textPreviewHTML(buildText(o, art, pay, qrImg), o.public_id);
       } else {
         preview.innerHTML = `<img src="${dataUrl}" alt="Invoice preview for ${esc(o.public_id)}" />`;
       }
