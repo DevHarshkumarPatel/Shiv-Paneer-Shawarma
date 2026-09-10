@@ -477,8 +477,12 @@ const Invoice = (function () {
      opened, leaving the owner one drag away from the same result. */
   async function sendOnWhatsApp(o, blob) {
     const filename = `${o.public_id}.pdf`;
-    const note = `Namaste${o.customer && o.customer.name ? " " + o.customer.name : ""} 🙏 `
-      + `Thank you for ordering from ${SHOP}. Here is your invoice for ${o.public_id} — total ${money(o.total)}.`;
+    /* The same voice as the WhatsApp bill in orders.js, kept short: this one is
+       a caption on a PDF, and the bill it is thanking them for is the file. */
+    const note = `Namaste${o.customer && o.customer.name ? " " + o.customer.name : ""} 🙏\n`
+      + `🌯❤️ Thank you for being a part of our Shawarma Family!❤️🌯\n\n`
+      + `Here is your invoice for ${o.public_id} — total ${money(o.total)}.\n\n`
+      + `Thank you for choosing us! See you again soon! ❤️`;
     const file = new File([blob], filename, { type: "application/pdf" });
 
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
