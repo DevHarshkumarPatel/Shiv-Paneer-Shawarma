@@ -347,6 +347,16 @@
 
     const pageUrl = (file, id) => new URL(`../${file}?id=${encodeURIComponent(id)}`, location.href).href;
 
+    /* What they actually ate, for the thank-you line. Deduped and listed the
+       way a person would say it: "your Paneer Shawarma and Chicken Roll" is the
+       line the owner wrote, and an item count is not a substitute for it. */
+    function itemNames(o) {
+      const names = [...new Set((o.items || []).map((i) => String(i.name || "").trim()).filter(Boolean))];
+      if (!names.length) return "shawarma";
+      if (names.length === 1) return names[0];
+      return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+    }
+
     function itemLine(i) {
       const variant = i.variant_label ? ` (${i.variant_label})` : "";
       const free = i.free_quantity ? ` +${i.free_quantity} free` : "";
@@ -360,11 +370,13 @@
       const L = [];
 
       L.push(name ? `Namaste ${name} 🙏` : "Namaste 🙏");
+      /* The greeting no longer splits on repeat_no. The order block below
+         already carries "your 3rd order with us", and the owner's wording
+         welcomes a returning customer and a first-timer the same way — as
+         family — which is the point of it. */
       L.push(cancelled
         ? `Your order with *${SHOP}* has been cancelled. Here are the details for your records.`
-        : o.repeat_no > 1
-          ? `Thank you for coming back to *${SHOP}* — good to see you again!`
-          : `Thank you for ordering from *${SHOP}* — welcome, and we're glad to have you with us!`);
+        : "🌯❤️ Thank you for being a part of our Shawarma Family!❤️🌯");
       L.push("");
 
       L.push(`*Order ${o.public_id}*`);
@@ -407,9 +419,23 @@
         L.push("Sorry for the trouble — do order again, we'd love to make it right.");
       } else {
         L.push(`Track your order: ${pageUrl("track.html", o.public_id)}`);
-        if (reviewsOn) L.push(`Tell us how we did: ${pageUrl("review.html", o.public_id)}`);
         L.push("");
-        L.push("See you again soon! 🌯");
+        /* The owner's own words, kept as written. Blank lines between each part
+           on purpose: WhatsApp renders one long paragraph as a wall of text on
+           a phone, and this is the half of the message the customer is meant to
+           read rather than check. */
+        L.push(`We truly hope you loved your *${itemNames(o)}* and that every bite made you happy! 😋`);
+        L.push("");
+        L.push("We'd love to see you again and again. Your love and support mean a lot to us! 🥰");
+        L.push("");
+        L.push("And hey, if you have any suggestions or feedback, please don't hesitate to share them "
+             + "with us. Tell us honestly — just like you would with a friend or family member. ❤️");
+        // The review link belongs with the ask for feedback, not off on its own.
+        if (reviewsOn) L.push(`Tell us here: ${pageUrl("review.html", o.public_id)}`);
+        L.push("");
+        L.push("Your feedback helps us make your next shawarma even better! 🌯✨");
+        L.push("");
+        L.push("Thank you for choosing us! See you again soon! ❤️");
       }
       L.push(`— ${SHOP}`);
       return L.join("\n");

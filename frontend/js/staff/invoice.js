@@ -18,11 +18,62 @@ const Invoice = (function () {
   const { money, esc, el, toast, modal, statusLabel, fmtDateTime, phoneIntl } = UI;
 
   const SHOP = "Shiv Paneer Shawarma";
-  /* Line art, not the photographic logo: a thermal head has one ink, and flat
-     black strokes on white survive the dot grid where a photo turns to mush.
-     The photo stays the fallback in case the file is missing. */
-  const LOGO_SRC = "../assets/img/logo-print.png";
-  const LOGO_FALLBACK = "../assets/img/logo.jpeg";
+
+  /* The three marks across the top of the bill. All line art, not photographs:
+     a thermal head has one ink, and flat black strokes survive the dot grid
+     where a photo turns to mush. The photo stays the last resort for the name
+     block in case the file is missing.
+
+     The filenames are versioned rather than overwritten. A receipt printer is
+     used from one phone all day and that phone caches `logo-print.png` for as
+     long as it likes, so replacing artwork in place ships an update the counter
+     never sees. A new name is a cache miss, which is the point. */
+  const ART = {
+    logo: ["../assets/img/logo-print-v2.png", "../assets/img/logo-print.png", "../assets/img/logo.jpeg"],
+    left: ["../assets/img/badge-p3y-left.png"],
+    right: ["../assets/img/badge-p3y-right.png"],
+    tagline: ["../assets/img/tagline-p3y.png"],
+  };
+
+  /* The tagline, set as live text rather than placed as artwork.
+   *
+   * The supplied strip is 7:1, so at the size the owner wants it the bitmap had
+   * to come down about 14x and Lanczos turned the matras into grey mush. Drawing
+   * the string lets the font rasteriser work at the final size instead, which is
+   * the whole difference between a smear and readable Devanagari.
+   *
+   * It still cannot travel as ESC/POS characters: a thermal printer's ROM font
+   * has no Devanagari (see `ascii` in escpos-text.js, which drops every
+   * non-ASCII codepoint), so the header stays one raster block — just a far
+   * better one. The artwork remains on disk as the fallback for a browser with
+   * no Devanagari face at all. */
+  const TAGLINE = "P3Y शक्ति से काम बने।";
+  /* Devanagari named first and explicitly. Left to a Latin-first stack the
+     engine falls back glyph by glyph, which lands the vowel marks at the wrong
+     height; Android and the desktop browsers this runs on ship a Noto
+     Devanagari face, with Nirmala/Mangal covering Windows. */
+  const TAGLINE_FAMILY = '"Noto Sans Devanagari", "Noto Serif Devanagari", '
+    + '"Nirmala UI", Mangal, system-ui, "Segoe UI", Roboto, sans-serif';
+
+  /* Header geometry, as fractions of the paper width. Two rows: the tagline
+     across the top, then the badges in the corners with the name block between
+     them.
+   *
+   * `tagline` is a font size now, not a width — the point of drawing the string
+   * is that the type size becomes the thing being chosen. It is capped to the
+   * paper in `taglineBox`, so a longer motto shrinks to fit rather than running
+   * off the edge.
+   *
+   * The badges are sized separately, and not because one matters more: the left
+   * crest is a wide mark and the right one is a circle, so an equal *width*
+   * made the circle the taller of the two and it read as the bigger badge. */
+  const HEADER = {
+    tagline: 0.048,
+    badgeLeft: 0.17, badgeRight: 0.1,
+    logo: 0.6,
+    pad: 0.02, gap: 0.02, rowGap: 0.02,
+  };
+
   const PAPER_KEY = "sps_invoice_paper";   // "58" | "80", per device
   const STYLE_KEY = "sps_invoice_style";   // "text" | "image", per device
 
@@ -69,10 +120,146 @@ const Invoice = (function () {
     });
   }
 
+  /* First of a list of sources that decodes. */
+  async function loadFirst(sources) {
+    for (const src of sources) {
+      const img = await loadImage(src);
+      if (img) return img;
+    }
+    return null;
+  }
+
+  /* The three marks, once per invoice. A missing badge is a missing badge —
+     the header falls back to whatever loaded rather than failing the bill. */
+  async function loadArt() {
+    const [logo, left, right, tagline] = await Promise.all([
+      loadFirst(ART.logo), loadFirst(ART.left), loadFirst(ART.right), loadFirst(ART.tagline),
+    ]);
+    return { logo, left, right, tagline };
+  }
+
+  /* Whether the browser can actually draw Devanagari, memoised.
+
+     Only catches total failure — a face missing entirely, so the string
+     rasterises to nothing. A font that draws .notdef boxes still puts ink down
+     and passes here; there is no way to tell tofu from type through a canvas.
+     That is the accepted risk: every device this runs on ships a Noto
+     Devanagari face, and the artwork fallback covers what can be detected. */
+  let devanagariOK = null;
+  function canDrawDevanagari() {
+    if (devanagariOK !== null) return devanagariOK;
+    const cv = document.createElement("canvas");
+    cv.width = 80;
+    cv.height = 40;
+    const c = cv.getContext("2d");
+    c.fillStyle = "#fff";
+    c.fillRect(0, 0, 80, 40);
+    c.fillStyle = "#000";
+    c.font = `700 28px ${TAGLINE_FAMILY}`;
+    c.textBaseline = "middle";
+    c.fillText("शक्ति", 2, 20);
+    const px = c.getImageData(0, 0, 80, 40).data;
+    let ink = 0;
+    for (let i = 0; i < px.length; i += 4) if (px[i] < 200) ink++;
+    devanagariOK = ink > 20;      // a handful of stray pixels is not a word
+    return devanagariOK;
+  }
+
+  /* The tagline's type size and the box it needs, for a header `W` wide.
+     Devanagari hangs matras above the cap line and vowel signs below the
+     baseline, so the box is 1.5x the font size rather than the ~1.2x Latin
+     would want — at 1.2 the danda and the top marks get clipped. */
+  function taglineBox(W) {
+    if (!TAGLINE || !canDrawDevanagari()) return null;
+    const probe = document.createElement("canvas").getContext("2d");
+    const maxW = Math.round(W * 0.92);
+    let px = Math.max(6, Math.round(W * HEADER.tagline));
+    probe.font = `700 ${px}px ${TAGLINE_FAMILY}`;
+    let w = probe.measureText(TAGLINE).width;
+    if (w > maxW) {
+      // Scale the type down to the paper rather than letting it overflow.
+      px = Math.max(6, Math.floor((px * maxW) / w));
+      probe.font = `700 ${px}px ${TAGLINE_FAMILY}`;
+      w = probe.measureText(TAGLINE).width;
+    }
+    return { px, w: Math.ceil(w), h: Math.ceil(px * 1.5) };
+  }
+
+  /* The whole header as one canvas `W` pixels wide: the P3Y crest in the top
+     left corner, the P3Y 11 badge in the top right, and the shop's name block
+     centred between them.
+   *
+   * One canvas rather than three draws, because text mode can only put an image
+   * on the paper as a raster block and three blocks would be three bands with
+   * printer line feeds between them — the badges would stack above the name
+   * instead of flanking it. Building the arrangement here means the raster bill,
+   * the text bill, the PDF and the preview all get the identical header.
+   *
+   * `W` should be a whole number of bytes wide (a multiple of 8): GS v 0 works
+   * in 8-dot columns and anything else leaves a ragged right edge. Every caller
+   * passes a printer dot width or a 2x multiple of one, so all of them are. */
+  function headerCanvas(art, W) {
+    if (!art || !(art.logo || art.left || art.right || art.tagline)) return null;
+
+    const pad = Math.round(W * HEADER.pad);
+    const gap = Math.round(W * HEADER.gap);
+    const rowGap = Math.round(W * HEADER.rowGap);
+
+    // Each mark keeps its own aspect ratio; width is given, height follows.
+    const box = (img, w) => (img ? { img, w, h: Math.max(1, Math.round((img.height / img.width) * w)) } : null);
+
+    /* Row 1 — the tagline, centred across the paper. Drawn as type when the
+       browser has the script, and only then falling back to the artwork. */
+    const tag = taglineBox(W);
+    const tagArt = tag ? null : box(art.tagline, Math.round(W * 0.19));
+
+    /* Row 2 — badges in the corners, the name block between them. */
+    const lbw = Math.round(W * HEADER.badgeLeft);
+    const rbw = Math.round(W * HEADER.badgeRight);
+    // Without badges the name block has the whole paper, so it takes it.
+    const side = (art.left ? lbw + gap : 0) + (art.right ? rbw + gap : 0);
+    const lw = side
+      ? Math.min(Math.round(W * HEADER.logo), W - pad * 2 - side)
+      : W - pad * 2;
+    const left = box(art.left, lbw);
+    const right = box(art.right, rbw);
+    const mid = box(art.logo, lw);
+    const row = [left, right, mid].filter(Boolean);
+    const rowH = row.length ? Math.max(...row.map((b) => b.h)) : 0;
+
+    const top = tag || tagArt;
+    const H = (top ? top.h + (rowH ? rowGap : 0) : 0) + rowH;
+    const cv = document.createElement("canvas");
+    cv.width = W;
+    cv.height = H;
+    const c = cv.getContext("2d");
+    c.fillStyle = "#fff";
+    c.fillRect(0, 0, W, H);
+
+    let y = 0;
+    if (tag) {
+      c.fillStyle = "#000";
+      c.font = `700 ${tag.px}px ${TAGLINE_FAMILY}`;
+      c.textBaseline = "middle";
+      c.fillText(TAGLINE, Math.round((W - tag.w) / 2), Math.round(tag.h / 2));
+    } else if (tagArt) {
+      c.drawImage(tagArt.img, Math.round((W - tagArt.w) / 2), y, tagArt.w, tagArt.h);
+    }
+    if (top) y += top.h + (rowH ? rowGap : 0);
+    /* The badges hang from the top of their row — they are corner marks, and
+       centring them against a much taller name block would float them in the
+       middle of nothing. The name block is centred, because it is the thing the
+       eye lands on. */
+    if (left) c.drawImage(left.img, pad, y, left.w, left.h);
+    if (right) c.drawImage(right.img, W - pad - right.w, y, right.w, right.h);
+    if (mid) c.drawImage(mid.img, Math.round((W - mid.w) / 2), y + Math.round((rowH - mid.h) / 2), mid.w, mid.h);
+    return cv;
+  }
+
   /* Draw the receipt and return a canvas cropped to the height it actually
      used. The height isn't known until the last line is placed, so it is drawn
      on an over-tall scratch canvas first and copied into a snug one. */
-  async function render(o, logo, scale) {
+  async function render(o, art, scale, qrImg) {
     const p = paper();
     // The preview and the PDF want 2x for a readable phone screen; the thermal
     // raster wants 1x, because the printer maps one canvas pixel to one dot and
@@ -160,13 +347,17 @@ const Invoice = (function () {
     }
 
     /* ---- Header ---- */
-    if (logo) {
-      const h = S(52);
-      const w = Math.min(INNER, (logo.width / logo.height) * h);
-      c.drawImage(logo, (W - w) / 2, y, w, h);
-      y += h + S(8);
+    /* The same composite the printer gets, so the preview, the PDF and the
+       paper carry the badges in the same corners. The shop name is only set as
+       text when nothing decoded — the name block spells it out already, and
+       printing it twice is what the old header did. */
+    const head = headerCanvas(art, W);
+    if (head) {
+      c.drawImage(head, 0, y);
+      y += head.height + S(6);
+    } else {
+      line(SHOP, { size: 19, bold: true, center: true, gap: 1 });
     }
-    line(SHOP, { size: 19, bold: true, center: true, gap: 1 });
     line("Order receipt", { size: 11, center: true, gap: 4 });
     rule(true);
 
@@ -239,6 +430,23 @@ const Invoice = (function () {
       : `Welcome to the ${SHOP} family — we're glad you're here.`,
       { size: 12, center: true, gap: 2 });
     line("See you again soon! 🌯", { size: 12, center: true, gap: 5 });
+
+    /* ---- Scan to pay ---- *
+     *
+     * On every bill with something to pay, paid or not — the same rule the text
+     * bill uses. The drawn bill had no QR block at all, which meant the Image
+     * style printed a bill the Text style put a payment code on, and, worse,
+     * the PDF sent to the customer on WhatsApp had no way to pay from it. */
+    if (qrImg && o.total > 0) {
+      const qr = qrFit(qrImg, Math.round(W * 0.56));
+      if (qr) {
+        line(`Scan to pay ${money(o.total)}`, { size: 13, bold: true, center: true, gap: 3 });
+        // 1:1, never scaled — see qrFit.
+        c.drawImage(qr, Math.round((W - qr.width) / 2), y);
+        y += qr.height + S(8);
+      }
+    }
+
     line("Track your order", { size: 11, center: true, gap: 0 });
     line(trackUrl(o.public_id), { size: 10, center: true, gap: 2 });
 
@@ -262,25 +470,6 @@ const Invoice = (function () {
   /* ---------------------------------------------------------------- *
    * Text mode
    * ---------------------------------------------------------------- */
-
-  /* The logo alone, on its own canvas at the printer's dot width. Text mode
-     sends characters, but a logo is not a character, so this one block goes as
-     raster inside the stream. Kept to ~80% of the paper and to a whole number
-     of bytes wide: GS v 0 works in 8-dot columns, and a width that isn't a
-     multiple of 8 leaves a ragged edge. */
-  function logoCanvas(logo, dots) {
-    if (!logo) return null;
-    const w = Math.floor((dots * 0.8) / 8) * 8;
-    const h = Math.max(8, Math.round((logo.height / logo.width) * w));
-    const cv = document.createElement("canvas");
-    cv.width = w;
-    cv.height = h;
-    const c = cv.getContext("2d");
-    c.fillStyle = "#fff";
-    c.fillRect(0, 0, w, h);
-    c.drawImage(logo, 0, 0, w, h);
-    return cv;
-  }
 
   /* Redraw the server's QR PNG on the printer's dot grid, one module to a solid
      square of `dots` pixels.
@@ -344,6 +533,21 @@ const Invoice = (function () {
     return out;
   }
 
+  /* The QR at the largest whole number of pixels per module that fits
+     `targetW`, and never wider.
+
+     Whole pixels, because that is the whole point of `qrCanvas`: scale a QR by
+     a fraction and resampling eats module rows, leaving a code that still looks
+     like a QR and scans never. The first pass is one pixel per module purely to
+     count them, which is cheap — a 57x57 canvas — and saves threading the count
+     back out of `qrCanvas` and past its other caller. */
+  function qrFit(img, targetW) {
+    const probe = qrCanvas(img, 1);
+    if (!probe) return null;
+    const px = Math.max(1, Math.floor(targetW / probe.width));
+    return px === 1 ? probe : qrCanvas(img, px);
+  }
+
   /* The UPI intent link and a QR image for what this bill still owes. The bill
      prints without them if the call fails — a receipt is worth more than a
      payment shortcut. */
@@ -355,17 +559,46 @@ const Invoice = (function () {
     }
   }
 
-  function buildText(o, logo, pay, qrImg) {
+  function buildText(o, art, pay, qrImg) {
     const p = paper();
     const dots = (ESCPOSText.QR_MODULE && ESCPOSText.QR_MODULE[p.mm]) || 3;
     return ESCPOSText.build(o, {
       shop: SHOP,
       paperMm: p.mm,
-      logo: logoCanvas(logo, p.dots),
+      // Full paper width, so the badges reach the corners the owner asked for.
+      logo: headerCanvas(art, p.dots),
       qrCanvas: qrCanvas(qrImg, dots),
       dateText: o.created_at ? fmtDateTime(o.created_at) : "",
       upiUri: pay && pay.upi_uri,
     });
+  }
+
+  /* The text bill as a preview: monospace runs spaced exactly as the printer
+     will space them, and the raster blocks as the images themselves.
+   *
+   * Worth the extra work over a single <pre>. Text mode is the default, so this
+   * is the preview the owner actually looks at, and with `[ logo ]` standing in
+   * for the artwork it could not show whether the header was right — the only
+   * way to check a logo was to spend a bill on it.
+   *
+   * Each image is sized as a percentage of the paper width rather than by its
+   * own pixel size, so a block that will run off the edge of the paper runs off
+   * the edge here too. */
+  function textPreviewHTML(built, id) {
+    const html = built.blocks.map((b) => {
+      if (b.t === "text") return `<pre class="inv-text">${esc(b.text)}</pre>`;
+      if (b.t === "raster" && b.canvas) {
+        const pct = Math.min(100, (b.canvas.width / paper().dots) * 100).toFixed(2);
+        return `<img class="inv-text-img" style="width:${pct}%" src="${b.canvas.toDataURL("image/png")}" `
+             + `alt="${esc(b.label || "image")}" />`;
+      }
+      /* A GS ( k code has no image on this side — the printer draws it from the
+         URI. Name it rather than leaving a gap the owner reads as a lost QR. */
+      const label = "[ UPI QR, drawn by printer ]";
+      const pad = " ".repeat(Math.max(0, Math.floor((built.cols - label.length) / 2)));
+      return `<pre class="inv-text">${esc(pad + label)}</pre>`;
+    }).join("");
+    return `<div class="inv-text-wrap" aria-label="Invoice preview for ${esc(id)}">${html}</div>`;
   }
 
   const trackUrl = (id) => new URL(`../track.html?id=${encodeURIComponent(id)}`, location.href).href;
@@ -477,8 +710,12 @@ const Invoice = (function () {
      opened, leaving the owner one drag away from the same result. */
   async function sendOnWhatsApp(o, blob) {
     const filename = `${o.public_id}.pdf`;
-    const note = `Namaste${o.customer && o.customer.name ? " " + o.customer.name : ""} 🙏 `
-      + `Thank you for ordering from ${SHOP}. Here is your invoice for ${o.public_id} — total ${money(o.total)}.`;
+    /* The same voice as the WhatsApp bill in orders.js, kept short: this one is
+       a caption on a PDF, and the bill it is thanking them for is the file. */
+    const note = `Namaste${o.customer && o.customer.name ? " " + o.customer.name : ""} 🙏\n`
+      + `🌯❤️ Thank you for being a part of our Shawarma Family!❤️🌯\n\n`
+      + `Here is your invoice for ${o.public_id} — total ${money(o.total)}.\n\n`
+      + `Thank you for choosing us! See you again soon! ❤️`;
     const file = new File([blob], filename, { type: "application/pdf" });
 
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -555,15 +792,29 @@ const Invoice = (function () {
       const styleNote = asText()
         ? `Text style sends the printer characters — fast, sharp, and it prints the UPI QR itself.`
         : `Image style sends the bill exactly as previewed — slower, and it needs no printer font.`;
+      /* Say plainly when the printer will have to be picked again, because the
+         answer is not the owner's fault and there is something they can do
+         about it. Once picked, the printer is reused for every bill; a page
+         reload is the one thing that loses it, and only in a browser without
+         the Web Bluetooth permissions backend. */
+      const memoryNote = !saved
+        ? ""
+        : BTPrint.remembered()
+          ? ` Already picked — the next bill goes straight to it, even if it has gone to sleep.`
+          : BTPrint.canReattach()
+            ? ` Picked once, it is reused for every bill after — no need to pick it again.`
+            : ` Pick it once and every bill after goes straight to it. Reloading this page makes `
+              + `Chrome ask again, unless you turn on “Use the new permissions backend for Web `
+              + `Bluetooth” in chrome://flags.`;
       el("#invHint", m.backdrop).innerHTML = direct
-        ? `Bluetooth prints straight to your thermal printer${saved ? ` — ${esc(saved)}` : ""}. ${styleNote} `
+        ? `Bluetooth prints straight to your thermal printer${saved ? ` — ${esc(saved)}` : ""}.${memoryNote} ${styleNote} `
           + `Dialog goes through the system print sheet instead. No printer? Save the PDF or send it on WhatsApp.`
         : `Dialog sends it to this device's print sheet — pick your printer there. `
           + `No printer connected? Save the PDF or send it on WhatsApp.`;
     }
     hint();
-    // The logo is fetched once and reused when the paper size changes.
-    const logo = (await loadImage(LOGO_SRC)) || (await loadImage(LOGO_FALLBACK));
+    // Fetched once and reused when the paper size or the style changes.
+    const art = await loadArt();
     let built = null;
     // Fetched once per invoice, whatever the style or paper size: the amount
     // owed doesn't change when the paper does.
@@ -591,9 +842,15 @@ const Invoice = (function () {
       }
       hint();
 
+      /* Before the render, not inside the text branch. The drawn bill carries
+         the payment QR too now, so Image style, the PDF and the WhatsApp copy
+         all need the link — fetching it only for Text style was what left the
+         drawn bill without one. */
+      await ensurePay();
+
       // The drawn bill is built either way — Dialog, PDF and Send PDF all need
       // it, and the buttons should not wait for a second render on a tap.
-      const { canvas, paper: p } = await render(o, logo);
+      const { canvas, paper: p } = await render(o, art, undefined, qrImg);
       const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
       built = {
         dataUrl,
@@ -602,9 +859,7 @@ const Invoice = (function () {
       };
 
       if (asText()) {
-        await ensurePay();
-        preview.innerHTML = `<pre class="inv-text" aria-label="Invoice preview for ${esc(o.public_id)}">`
-          + `${esc(buildText(o, logo, pay, qrImg).text)}</pre>`;
+        preview.innerHTML = textPreviewHTML(buildText(o, art, pay, qrImg), o.public_id);
       } else {
         preview.innerHTML = `<img src="${dataUrl}" alt="Invoice preview for ${esc(o.public_id)}" />`;
       }
@@ -632,12 +887,11 @@ const Invoice = (function () {
           let route;
           if (asText()) {
             // Nothing to re-render: text mode is the same bytes the preview was
-            // built from, and the QR is drawn by the printer.
-            await ensurePay();
-            route = await BTPrint.printBytes(buildText(o, logo, pay, qrImg).bytes);
+            // built from.
+            route = await BTPrint.printBytes(buildText(o, art, pay, qrImg).bytes);
           } else {
             // 1x, because the printer maps one canvas pixel to one dot.
-            route = await BTPrint.printCanvas((await render(o, logo, 1)).canvas);
+            route = await BTPrint.printCanvas((await render(o, art, 1, qrImg)).canvas);
           }
           if (route === "ble") toast("Sent to the printer", "ok");
           hint();

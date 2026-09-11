@@ -235,22 +235,47 @@ const ESCPOSText = (function () {
     return new Uint8Array(out);
   }
 
-  /* The preview, aligned the way the printer will align it. Double-width text
-     is stretched with a space between letters, so a line that will overflow the
-     paper overflows here too instead of looking fine on screen and wrapping on
-     paper. */
+  /* One op as the line the paper will carry, padded the way the printer will
+     align it. Double-width text is stretched with a space between letters, so a
+     line that will overflow the paper overflows here too instead of looking
+     fine on screen and wrapping on paper. */
+  function placed(op, cols) {
+    const s = op.dw ? op.s.trimEnd().split("").join(" ") : op.s;
+    const pad = Math.max(0, cols - s.length);
+    if (op.center) return " ".repeat(Math.floor(pad / 2)) + s;
+    if (op.right) return " ".repeat(pad) + s;
+    return s;
+  }
+
+  /* The whole bill as one string, images named in square brackets. Still what a
+     plain-text copy of the bill wants; `toBlocks` is what a preview wants. */
   function toText(ops, cols) {
-    const place = (s, op) => {
-      const pad = Math.max(0, cols - s.length);
-      if (op.center) return " ".repeat(Math.floor(pad / 2)) + s;
-      if (op.right) return " ".repeat(pad) + s;
-      return s;
-    };
     return ops.map((op) => {
-      if (op.t === "raster") return place(`[ ${op.label || "image"} ]`, { center: true });
-      if (op.t === "qr") return place("[ UPI QR code ]", { center: true });
-      return place(op.dw ? op.s.trimEnd().split("").join(" ") : op.s, op);
+      if (op.t === "raster") return placed({ s: `[ ${op.label || "image"} ]`, center: true }, cols);
+      if (op.t === "qr") return placed({ s: "[ UPI QR code ]", center: true }, cols);
+      return placed(op, cols);
     }).join("\n");
+  }
+
+  /* The same lines, but broken at every image, with the image itself carried
+     through rather than named. A preview built from these shows the logo and
+     the QR where the paper will actually have them — the placeholder version
+     showed neither, so the owner could not tell a bill with the wrong artwork
+     from a bill with the right artwork until it was printed.
+     Runs of text stay in one block so the monospace grid is unbroken. */
+  function toBlocks(ops, cols) {
+    const out = [];
+    ops.forEach((op) => {
+      if (op.t !== "text") {
+        out.push({ ...op });
+        return;
+      }
+      const line = placed(op, cols);
+      const last = out[out.length - 1];
+      if (last && last.t === "text") last.text += `\n${line}`;
+      else out.push({ t: "text", text: line });
+    });
+    return out;
   }
 
   /* ---------------------------------------------------------------- *
@@ -374,9 +399,10 @@ const ESCPOSText = (function () {
     return {
       bytes: toBytes(d.ops, mm, opts),
       text: toText(d.ops, cols),
+      blocks: toBlocks(d.ops, cols),
       cols,
     };
   }
 
-  return { build, ascii, amount, COLS, QR_MODULE };
+  return { build, ascii, amount, toText, toBlocks, COLS, QR_MODULE };
 })();

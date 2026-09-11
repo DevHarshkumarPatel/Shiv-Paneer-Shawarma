@@ -18,7 +18,13 @@
  * dialog.
  */
 const BTPrint = (function () {
-  const NAME_KEY = "sps_bt_printer";     // remembered for the button's label only
+  /* The printer is remembered by id as well as name. `getDevices()` hands back
+     ids, not a picker, so an id is what lets a fresh page load reattach to the
+     right printer silently; the name is only ever shown to the owner. Two
+     identical printers on one counter share a name and would otherwise be a
+     coin toss. */
+  const NAME_KEY = "sps_bt_printer";
+  const ID_KEY = "sps_bt_printer_id";
 
   /* Printers from the same handful of factories reuse these. The first is on
      almost every 58mm BLE unit; the rest cover the common relabels. */
@@ -37,6 +43,16 @@ const BTPrint = (function () {
   const isAndroid = () => /Android/i.test(navigator.userAgent);
   const savedName = () => localStorage.getItem(NAME_KEY) || "";
   const connected = () => !!(device && device.gatt && device.gatt.connected && chr);
+
+  /* Whether a print can find the printer again without the browser's picker.
+     Two different things count, and they cover different gaps:
+       a device still held in this page's memory — survives the printer going to
+         sleep between orders, which is the common case at the counter
+       getDevices() — survives a page reload, but only in a browser that has the
+         permissions backend, so the hint can tell the owner when it is missing
+     Neither means the printer is in range; both mean no picker is needed. */
+  const remembered = () => !!device;
+  const canReattach = () => !!(supported() && navigator.bluetooth.getDevices);
 
   /* ---------------------------------------------------------------- *
    * ESC/POS raster
@@ -116,8 +132,27 @@ const BTPrint = (function () {
    * BLE transport
    * ---------------------------------------------------------------- */
 
+  /* A BLE printer hangs up whenever it feels like it — a minute idle is enough
+     on most of them. Only the characteristic handle dies with the link; the
+     device object, and the browser's permission for it, both survive. So drop
+     the handle and keep the device: that is what lets the next print reattach
+     without the picker. */
   function onDrop() {
-    chr = null;         // the handle is dead; the next send reconnects
+    chr = null;
+  }
+
+  /* Attach to a device we are already allowed to use. Shared by both reconnect
+     routes, since past `gatt.connect()` they are the same job. */
+  async function attach(dev) {
+    dev.removeEventListener("gattserverdisconnected", onDrop);
+    dev.addEventListener("gattserverdisconnected", onDrop);
+    const gatt = dev.gatt.connected ? dev.gatt : await dev.gatt.connect();
+    const found = await bind(gatt);
+    if (!found) return false;
+    device = dev;
+    chr = found;
+    chunk = 180;
+    return true;
   }
 
   async function bind(gatt) {
@@ -140,47 +175,64 @@ const BTPrint = (function () {
      a click — Chrome refuses a picker that no gesture asked for. */
   async function connect() {
     if (!supported()) throw new Error("This browser has no Bluetooth printing");
-    device = await navigator.bluetooth.requestDevice({
+    const picked = await navigator.bluetooth.requestDevice({
       // A thermal printer rarely advertises its service UUID, so filtering by
       // service hides it from the picker. Show everything and bind afterwards.
       acceptAllDevices: true,
       optionalServices: SERVICES,
     });
-    device.addEventListener("gattserverdisconnected", onDrop);
-    const gatt = await device.gatt.connect();
-    chr = await bind(gatt);
-    if (!chr) {
-      device.gatt.disconnect();
+    if (!(await attach(picked))) {
+      picked.gatt.disconnect();
       device = null;
       throw new Error("That device isn't a Bluetooth LE printer");
     }
-    chunk = 180;
-    localStorage.setItem(NAME_KEY, device.name || "Bluetooth printer");
-    return device.name || "Bluetooth printer";
+    localStorage.setItem(NAME_KEY, picked.name || "Bluetooth printer");
+    if (picked.id) localStorage.setItem(ID_KEY, picked.id);
+    return picked.name || "Bluetooth printer";
   }
 
-  /* Reconnect to a printer already granted, so a reprint doesn't reopen the
-     picker. Only some Chrome builds expose this, hence the quiet failure. */
+  /* Reattach to a printer already granted, so a reprint never reopens the
+     picker. Two routes, cheapest first:
+
+       1. the device object this page already holds. Free, needs no browser
+          feature, and covers the case that actually bites at the counter — the
+          printer slept between two orders.
+       2. getDevices(), which returns the printers the owner granted in an
+          earlier page load. Chrome only exposes it with the Web Bluetooth
+          permissions backend enabled, so it is a bonus, not the mechanism.
+
+     Returns false only when neither route can produce a live handle; the caller
+     then falls back to the picker. */
   async function reconnect() {
-    if (!supported() || !navigator.bluetooth.getDevices) return false;
+    if (!supported()) return false;
+
+    if (device) {
+      try {
+        if (await attach(device)) return true;
+      } catch (e) {
+        /* Powered off, out of range, or a handle the browser has invalidated.
+           Fall through to getDevices() rather than giving up: after a Bluetooth
+           stack reset the old object is dead but the grant is not. */
+      }
+    }
+
+    if (!navigator.bluetooth.getDevices) return false;
     let known = [];
     try {
       known = await navigator.bluetooth.getDevices();
     } catch (e) {
       return false;
     }
+    // By id first: it is what getDevices() actually keys on, and two printers of
+    // the same model share a name.
+    const id = localStorage.getItem(ID_KEY) || "";
     const name = savedName();
-    const pick = known.find((d) => (d.name || "") === name) || known[0];
+    const pick = (id && known.find((d) => d.id === id))
+              || (name && known.find((d) => (d.name || "") === name))
+              || known[0];
     if (!pick) return false;
     try {
-      pick.addEventListener("gattserverdisconnected", onDrop);
-      const gatt = await pick.gatt.connect();
-      const found = await bind(gatt);
-      if (!found) return false;
-      device = pick;
-      chr = found;
-      chunk = 180;
-      return true;
+      return await attach(pick);
     } catch (e) {
       return false;     // out of range or powered off; the picker will ask again
     }
@@ -196,15 +248,29 @@ const BTPrint = (function () {
      receipt from arriving as noise. */
   async function send(bytes) {
     if (!connected()) {
+      // Silent reattach first, every time. The picker is the last resort, not
+      // the way a print normally starts.
       if (!(await reconnect())) await connect();
     }
+    // A printer that drops twice in one bill is a printer with a real problem —
+    // low battery, usually. Stop and say so rather than reprinting forever.
+    let restarts = 2;
     for (let i = 0; i < bytes.length; i += chunk) {
       const slice = bytes.slice(i, i + chunk);
       try {
         await write(slice);
       } catch (e) {
-        // Almost always a slice wider than the negotiated MTU. Shrink once to
-        // the 20 bytes every BLE link is guaranteed, and resend this slice.
+        if (!connected()) {
+          /* The link went down mid-bill. Reattach and start the bill again: the
+             printer's buffer went down with the link, so resuming from here
+             would print the tail of a bill with no head. */
+          if (!restarts || !(await reconnect())) throw e;
+          restarts--;
+          i = -chunk;                 // the loop's += puts us back at 0
+          continue;
+        }
+        // Otherwise almost always a slice wider than the negotiated MTU. Shrink
+        // once to the 20 bytes every BLE link is guaranteed, and resend it.
         if (chunk === 20) throw e;
         chunk = 20;
         for (let j = 0; j < slice.length; j += 20) await write(slice.slice(j, j + 20));
@@ -263,14 +329,16 @@ const BTPrint = (function () {
   const printCanvas = (canvas) => printBytes(escposRaster(canvas));
 
   function forget() {
+    if (device) device.removeEventListener("gattserverdisconnected", onDrop);
     if (device && device.gatt && device.gatt.connected) device.gatt.disconnect();
     device = null;
     chr = null;
     localStorage.removeItem(NAME_KEY);
+    localStorage.removeItem(ID_KEY);
   }
 
   return {
-    supported, isAndroid, connected, savedName,
-    connect, forget, send, rasterBands, escposRaster, viaRawBT, printBytes, printCanvas,
+    supported, isAndroid, connected, savedName, remembered, canReattach,
+    connect, reconnect, forget, send, rasterBands, escposRaster, viaRawBT, printBytes, printCanvas,
   };
 })();

@@ -50,7 +50,9 @@ pids+=($!)
 # --- frontend ---
 echo "Serving frontend on :$WEB_PORT …"
 cd "$FRONTEND"
-python3 -m http.server "$WEB_PORT" --bind 127.0.0.1 > /tmp/sps-web.log 2>&1 &
+# devserver.py rather than `python3 -m http.server`: the stdlib server sends no
+# Cache-Control, which lets the browser serve stale CSS and JS after an edit.
+python3 "$ROOT/devserver.py" "$WEB_PORT" --bind 127.0.0.1 > /tmp/sps-web.log 2>&1 &
 pids+=($!)
 
 sleep 1

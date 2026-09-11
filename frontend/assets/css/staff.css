@@ -405,10 +405,22 @@
 .inv-preview { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-3); max-height: 46vh; overflow-y: auto; display: grid; place-items: center; min-height: 160px; }
 .inv-preview img { display: block; width: 100%; max-width: 300px; background: #fff; box-shadow: var(--shadow-sm); }
 /* Text-mode preview: the printer's monospace grid, on paper. Fixed colours,
-   not theme tokens — receipt paper is white in dark mode too. */
-.inv-preview pre.inv-text { margin: 0; background: #fff; color: #111; box-shadow: var(--shadow-sm);
-  padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px; line-height: 1.35; white-space: pre; overflow-x: auto; max-width: 100%; }
+   not theme tokens — receipt paper is white in dark mode too.
+
+   The paper is the wrapper, and the runs of text and the logo blocks sit inside
+   it unstyled. That way one strip of white runs the length of the bill: giving
+   each <pre> its own background broke the paper into slabs with the grey mat
+   showing between them wherever an image interrupted the text. The wrapper is
+   also what scrolls, so a line wider than the paper carries the images with
+   it instead of sliding out from under them. */
+.inv-preview .inv-text-wrap { width: 100%; max-width: 300px; background: #fff; color: #111;
+  box-shadow: var(--shadow-sm); padding: 10px 12px; overflow-x: auto; }
+.inv-preview pre.inv-text { margin: 0; background: none; color: inherit; box-shadow: none; padding: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px; line-height: 1.35; white-space: pre; }
+/* Width comes from the markup — it is the block's share of the paper. */
+.inv-preview img.inv-text-img { display: block; margin: 3px auto; max-width: 100%;
+  background: none; box-shadow: none; }
 
 /* A returning customer, called out on the order card. Kept as a quiet pill
    rather than a warning colour: it is a greeting cue, not a problem. */
