@@ -453,9 +453,11 @@
           ${esc((order.customer && order.customer.name) || "Walk-in")}${order.customer && order.customer.phone ? ` · ${esc(order.customer.phone)}` : ""}
           ${order.repeat_no ? ` · visit #${order.repeat_no}` : ""}
         </p>
+        <p class="text-sm text-muted" id="posPrintState" style="margin:var(--sp-2) 0 0;"></p>
         <div class="pr-actions">
           <button class="btn btn-primary btn-lg" id="posAnother">+ New order</button>
-          <button class="btn btn-dark" id="posInvoice">🧾 Bill / invoice</button>
+          <button class="btn btn-dark" id="posPrint">🖨 Print bill</button>
+          <button class="btn btn-outline" id="posInvoice">🧾 Bill / invoice</button>
           <a class="btn btn-outline" href="orders.html">Orders board →</a>
         </div>
       </div></div>`;
@@ -474,6 +476,9 @@
       el("#posRoot").innerHTML = receipt(state.placed);
       el("#posInvoice").addEventListener("click", () => Invoice.open(state.placed));
       el("#posAnother").addEventListener("click", () => { state.placed = null; render(); });
+      /* The only print that may open the picker, because this one is a click.
+         Everything else about it is the automatic print. */
+      el("#posPrint").addEventListener("click", () => printBill(state.placed, true));
       document.body.classList.remove("has-pos-bar");
       return;
     }
@@ -497,10 +502,18 @@
     paintBar();
   }
 
+  /* Whether this device has a direct route to the thermal printer at all. On an
+     iPhone, or in desktop Safari and Firefox, there is none, and the button
+     must not promise a bill it cannot print. */
+  const canPrint = () => typeof BTPrint !== "undefined" && BTPrint.supported();
+
   function placeLabel() {
     if (!state.lines.length) return "Add items to place an order";
     if (deadList().length) return "Remove sold-out items to continue";
-    return `Place order · ${money(state.quote ? state.quote.total : 0)}`;
+    const total = money(state.quote ? state.quote.total : 0);
+    // One tap places the order and prints the bill, so the button says the part
+    // the counter is waiting for.
+    return canPrint() ? `Print bill · ${total}` : `Place order · ${total}`;
   }
 
   /* The fixed bar is the phone's whole navigation: it always says what the
@@ -669,6 +682,72 @@
     }
   }
 
+  /* ---------------- printing ---------------- */
+
+  /* Send the bill to the counter's thermal printer.
+   *
+   * Called twice for one order and deliberately so: once on its own the moment
+   * the order lands, which is the whole point — the printer was picked once for
+   * this session and placing the order is meant to be the last tap — and again
+   * from the Print button when the first attempt found no printer, or the paper
+   * jammed, or someone wants a second copy.
+   *
+   * `fromClick` is the difference between them. Only a click may open the
+   * browser's device picker, so the automatic attempt stays silent when there is
+   * nothing to reach and leaves the button to do the asking. */
+  async function printBill(order, fromClick) {
+    const say = (text) => {
+      const box = el("#posPrintState");
+      if (box) box.textContent = text;
+    };
+    const btn = el("#posPrint");
+    if (btn) btn.disabled = true;
+    say(fromClick ? "Connecting to the printer…" : "Printing the bill…");
+    try {
+      const r = await Invoice.autoPrint(order, { force: !!fromClick });
+      if (r.ok) {
+        say("Bill sent to the printer.");
+        toast("Bill printed", "ok");
+      } else if (r.reason === "unsupported") {
+        say("This browser cannot print over Bluetooth — open Bill / invoice and use Dialog.");
+      } else {
+        say("No printer connected yet — tap Print bill to pick it once for this session.");
+      }
+    } catch (e) {
+      if (e && e.name === "NotFoundError") {
+        say("No printer picked — tap Print bill when the printer is on.");
+      } else {
+        /* Nothing here can tell a sleeping printer from one that speaks SPP, so
+           name what the counter can actually check. */
+        say(`Print failed: ${e && e.message ? e.message : e}. Check the printer is on, then tap Print bill.`);
+      }
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  /* Make sure there is a printer to print to, while the tap that asked for it
+     is still fresh.
+
+     This runs before the order is posted, and that order matters: the browser
+     only opens its device picker inside a few seconds of a real click, and a
+     POST plus a render spends them. Picking first is what lets one tap place
+     the order and print the bill on the very first order of a session.
+
+     Never fatal. A dismissed picker, a printer left switched off, a browser
+     with no Bluetooth — all of them still place the order, and the receipt
+     screen keeps its own Print button for the second try. */
+  async function ensurePrinter() {
+    if (!canPrint()) return;
+    try {
+      if (await BTPrint.ready()) return;
+      await BTPrint.connect();
+    } catch (e) {
+      /* Reported after the order lands, not here: the order is the thing being
+         placed, and a print problem must not read like a failed order. */
+    }
+  }
+
   /* ---------------- place ---------------- */
 
   async function placeOrder() {
@@ -691,6 +770,7 @@
     // and the one in the fixed bar on a phone.
     state.placing = true;
     els("#posPlace, #posBarAction").forEach((b) => { b.disabled = true; b.textContent = "Placing…"; });
+    await ensurePrinter();
     try {
       const order = await API.post("/api/admin/orders", {
         cart: cartPayload(),
@@ -720,6 +800,10 @@
       state.view = "menu";
       render();
       window.scrollTo({ top: 0 });
+      // Not awaited: the receipt is already on screen and the print reports
+      // itself into it. A printer that has gone to sleep takes a few seconds to
+      // answer, and nothing on this screen should wait for it.
+      printBill(order, false);
     } catch (e) {
       toast(e.message, "err");
       state.placing = false;
