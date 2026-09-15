@@ -921,5 +921,43 @@ const Invoice = (function () {
     await build();
   }
 
-  return { open };
+  /* Print a bill with nothing asked: no modal, no paper prompt, no picker.
+     This is the counter's normal path — the order is placed and the bill comes
+     out of the printer, so placing it is the last tap. Paper size and style are
+     whatever this device last chose in the invoice modal.
+
+     `nodevice` is returned rather than thrown when no printer can be reached
+     without the picker, because the picker needs a click and by the time an
+     order has been posted this click is gone. The caller offers a button.
+     `force` is that button: it may open the picker, and it is only ever passed
+     from a real click.
+
+     BLE only. RawBT would work, but it prints by navigating the tab to a
+     rawbt: URL, and a print nobody asked for must not take the counter off the
+     receipt screen — the Bluetooth button in the modal keeps that route. */
+  async function autoPrint(o, opts) {
+    const force = !!(opts && opts.force);
+    if (typeof BTPrint === "undefined" || !BTPrint.supported()) return { ok: false, reason: "unsupported" };
+
+    /* The printer is secured before the bill is drawn, not after. Chrome only
+       opens the picker while the click that asked for it is still fresh — a few
+       seconds — and drawing the bill first spends that on artwork and the
+       payment link, so the picker would be refused on the one path that needs
+       it. */
+    if (!(await BTPrint.ready())) {
+      if (!force) return { ok: false, reason: "nodevice" };
+      await BTPrint.connect();
+    }
+
+    const art = await loadArt();
+    const pay = await upiFor(o);
+    const qrImg = pay && pay.qr_data_url ? await loadImage(pay.qr_data_url) : null;
+    const route = textMode()
+      ? await BTPrint.printBytes(buildText(o, art, pay, qrImg).bytes)
+      // 1x, because the printer maps one canvas pixel to one dot.
+      : await BTPrint.printCanvas((await render(o, art, 1, qrImg)).canvas);
+    return { ok: true, route };
+  }
+
+  return { open, autoPrint };
 })();

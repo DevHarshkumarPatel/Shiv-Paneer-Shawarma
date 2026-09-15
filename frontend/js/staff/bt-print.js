@@ -26,6 +26,40 @@ const BTPrint = (function () {
   const NAME_KEY = "sps_bt_printer";
   const ID_KEY = "sps_bt_printer_id";
 
+  /* The pick is written to sessionStorage first and localStorage second, and
+     read back in that order.
+
+     sessionStorage is what the counter asked for: pick the printer once when
+     the tab is opened for the shift and every bill after goes straight to it,
+     while a machine shared between people does not inherit yesterday's choice.
+     localStorage is kept underneath it because losing the id costs a picker,
+     and a tab reopened mid-shift should not have to pay it.
+
+     Both can throw rather than return null — a browser with site data blocked,
+     or a private window — so every access is wrapped. Nothing here is load
+     bearing: without storage the printer is simply picked again. */
+  function readKey(k) {
+    try {
+      const v = sessionStorage.getItem(k);
+      if (v) return v;
+    } catch (e) { /* no session storage; fall through to the longer-lived copy */ }
+    try {
+      return localStorage.getItem(k) || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function writeKey(k, v) {
+    try { sessionStorage.setItem(k, v); } catch (e) { /* not fatal; see readKey */ }
+    try { localStorage.setItem(k, v); } catch (e) { /* not fatal; see readKey */ }
+  }
+
+  function clearKey(k) {
+    try { sessionStorage.removeItem(k); } catch (e) { /* not fatal; see readKey */ }
+    try { localStorage.removeItem(k); } catch (e) { /* not fatal; see readKey */ }
+  }
+
   /* Printers from the same handful of factories reuse these. The first is on
      almost every 58mm BLE unit; the rest cover the common relabels. */
   const SERVICES = [
@@ -41,7 +75,7 @@ const BTPrint = (function () {
 
   const supported = () => !!(navigator.bluetooth && navigator.bluetooth.requestDevice);
   const isAndroid = () => /Android/i.test(navigator.userAgent);
-  const savedName = () => localStorage.getItem(NAME_KEY) || "";
+  const savedName = () => readKey(NAME_KEY);
   const connected = () => !!(device && device.gatt && device.gatt.connected && chr);
 
   /* Whether a print can find the printer again without the browser's picker.
@@ -186,8 +220,8 @@ const BTPrint = (function () {
       device = null;
       throw new Error("That device isn't a Bluetooth LE printer");
     }
-    localStorage.setItem(NAME_KEY, picked.name || "Bluetooth printer");
-    if (picked.id) localStorage.setItem(ID_KEY, picked.id);
+    writeKey(NAME_KEY, picked.name || "Bluetooth printer");
+    if (picked.id) writeKey(ID_KEY, picked.id);
     return picked.name || "Bluetooth printer";
   }
 
@@ -225,7 +259,7 @@ const BTPrint = (function () {
     }
     // By id first: it is what getDevices() actually keys on, and two printers of
     // the same model share a name.
-    const id = localStorage.getItem(ID_KEY) || "";
+    const id = readKey(ID_KEY);
     const name = savedName();
     const pick = (id && known.find((d) => d.id === id))
               || (name && known.find((d) => (d.name || "") === name))
@@ -235,6 +269,20 @@ const BTPrint = (function () {
       return await attach(pick);
     } catch (e) {
       return false;     // out of range or powered off; the picker will ask again
+    }
+  }
+
+  /* Whether a bill can go out right now without the browser's picker: already
+     attached, or a silent reattach works. The place-order flow asks this before
+     it prints, because printing there must never pop a picker on its own — the
+     picker needs a click, and the click that placed the order was spent on the
+     order. When this says no, the counter gets a Print button instead. */
+  async function ready() {
+    if (connected()) return true;
+    try {
+      return await reconnect();
+    } catch (e) {
+      return false;
     }
   }
 
@@ -333,12 +381,12 @@ const BTPrint = (function () {
     if (device && device.gatt && device.gatt.connected) device.gatt.disconnect();
     device = null;
     chr = null;
-    localStorage.removeItem(NAME_KEY);
-    localStorage.removeItem(ID_KEY);
+    clearKey(NAME_KEY);
+    clearKey(ID_KEY);
   }
 
   return {
-    supported, isAndroid, connected, savedName, remembered, canReattach,
+    supported, isAndroid, connected, savedName, remembered, canReattach, ready,
     connect, reconnect, forget, send, rasterBands, escposRaster, viaRawBT, printBytes, printCanvas,
   };
 })();

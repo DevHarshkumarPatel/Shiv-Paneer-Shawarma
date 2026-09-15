@@ -1,6 +1,7 @@
 """Staff / owner order management: live board, status updates, payment verify."""
 import csv
 import io
+import re
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -76,6 +77,16 @@ def create_counter_order(body: StaffOrderRequest, user=Depends(get_current_user)
     if body.payment_method not in ("cash", "upi"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Payment method must be 'cash' or 'upi'.")
 
+    # Name and number are required on every counter order, walk-ins included.
+    # They are how an order is found again afterwards — the customer's history,
+    # a reward code, a call back about a wrong bill — and an order with neither
+    # belongs to nobody. Checked here as well as on the counter screen because
+    # this endpoint is what actually writes the order.
+    if not body.customer.name.strip():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Customer name is needed.")
+    if not re.fullmatch(r"[0-9]{10}", body.customer.phone.strip()):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "A 10-digit phone number is needed.")
+
     priced = price_or_reject(
         [c.model_dump() for c in body.cart], body.order_type, body.coupon_code,
         body.delivery_area_id, body.customer.phone,
@@ -90,9 +101,8 @@ def create_counter_order(body: StaffOrderRequest, user=Depends(get_current_user)
     if body.order_type == "delivery":
         if priced.delivery_area_required:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Select the delivery area.")
-        if not (body.customer.address.strip() and body.customer.name.strip()
-                and body.customer.phone.strip()):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Delivery needs name, phone and address.")
+        if not body.customer.address.strip():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Delivery needs an address.")
 
     if body.payment_collected:
         pay_status = "paid"
