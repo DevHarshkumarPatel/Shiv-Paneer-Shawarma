@@ -396,10 +396,10 @@
         <div class="card" style="margin-top:var(--sp-3);"><div class="card-pad">
           <h3 style="margin:0 0 var(--sp-3);font-size:var(--fs-md);">Customer</h3>
           <div class="input-row">
-            <div class="field grow"><label>Name${delivery ? " *" : ""}</label>
-              <input class="input" id="posName" value="${esc(c.name)}" placeholder="Walk-in"
+            <div class="field grow"><label>Name *</label>
+              <input class="input" id="posName" value="${esc(c.name)}" placeholder="Customer name"
                      autocomplete="off" autocapitalize="words" enterkeyhint="next" /></div>
-            <div class="field grow"><label>Phone${delivery ? " *" : ""}</label>
+            <div class="field grow"><label>Phone *</label>
               <input class="input" id="posPhone" value="${esc(c.phone)}" placeholder="10-digit mobile"
                      type="tel" inputmode="numeric" autocomplete="tel" enterkeyhint="done" /></div>
           </div>
@@ -408,7 +408,7 @@
               <select class="select" id="posArea">${areaOptions()}</select></div>
             <div class="field"><label>Delivery address *</label>
               <textarea class="input" id="posAddress" placeholder="Flat / house, street, area, landmark">${esc(c.address)}</textarea></div>`
-          : `<p class="text-sm text-muted" style="margin:0;">A phone number is optional for a walk-in, but it is what puts the
+          : `<p class="text-sm text-muted" style="margin:0;">Both are needed on every order — the number is what puts the
              order in the customer's history and lets a reward code work.</p>`}
         </div></div>
 
@@ -676,11 +676,14 @@
     if (!state.lines.length) return toast("Add at least one item", "err");
     if (deadList().length) return toast("Remove the sold-out items first", "err");
     const c = state.customer;
-    if (c.phone && !/^[0-9]{10}$/.test(c.phone)) return toast("Phone must be 10 digits", "err");
+    /* Name and number are asked for on every order, walk-in included. They are
+       what the order is found by afterwards — history, reward codes, a call
+       back about a wrong bill — and a counter that can skip them ends up with
+       a day of orders belonging to nobody. */
+    if (!c.name.trim()) return toast("Customer name is needed", "err");
+    if (!/^[0-9]{10}$/.test(c.phone)) return toast("A 10-digit phone number is needed", "err");
     if (state.mode === "delivery") {
       if (!state.deliveryAreaId) return toast("Select the delivery area", "err");
-      if (!c.name.trim()) return toast("Delivery needs the customer's name", "err");
-      if (!/^[0-9]{10}$/.test(c.phone)) return toast("Delivery needs a 10-digit phone number", "err");
       if (!c.address.trim()) return toast("Delivery needs an address", "err");
     }
 
