@@ -358,87 +358,34 @@
       return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
     }
 
-    function itemLine(i) {
-      const variant = i.variant_label ? ` (${i.variant_label})` : "";
-      const free = i.free_quantity ? ` +${i.free_quantity} free` : "";
-      const promo = i.promo_label ? ` [${i.promo_label}]` : "";
-      return `• ${i.quantity}× ${i.name}${variant}${free}${promo} — ${money(i.line_total)}`;
-    }
-
     function message(o) {
-      const name = ((o.customer && o.customer.name) || "").trim();
-      const cancelled = o.status === "cancelled";
+      /* Not a bill any more, on purpose (2026-09-19): the owner sends the
+         printed bill at the counter and this message afterwards, and putting
+         the item list, the totals and the track link in front of the thank-you
+         buried the only part of it the customer was meant to read. What is left
+         is the owner's own words, and the one link that asks something of them.
+
+         Blank lines between each part are load-bearing: WhatsApp renders one
+         long paragraph as a wall of text on a phone. */
+      if (o.status === "cancelled") {
+        return [
+          `Your order *${o.public_id}* with *${SHOP}* has been cancelled.`,
+          "",
+          "Sorry for the trouble — do order again, we'd love to make it right. ❤️",
+        ].join("\n");
+      }
+
       const L = [];
-
-      L.push(name ? `Namaste ${name} 🙏` : "Namaste 🙏");
-      /* The greeting no longer splits on repeat_no. The order block below
-         already carries "your 3rd order with us", and the owner's wording
-         welcomes a returning customer and a first-timer the same way — as
-         family — which is the point of it. */
-      L.push(cancelled
-        ? `Your order with *${SHOP}* has been cancelled. Here are the details for your records.`
-        : "🌯❤️ Thank you for being a part of our Shawarma Family!❤️🌯");
+      L.push(`We truly hope you loved your *${itemNames(o)}* and that every bite made you happy! 😋`);
       L.push("");
-
-      L.push(`*Order ${o.public_id}*`);
-      if (o.created_at) L.push(`🗓 ${fmtDateTime(o.created_at)}`);
-      if (o.repeat_no > 1) L.push(`🔁 Your ${ordinal(o.repeat_no)} order with us`);
-      L.push(`${TYPE_EMOJI[o.order_type] || "🍽️"} ${TYPE_LABEL[o.order_type] || o.order_type}`);
+      L.push("We'd love to see you again and again. Your love and support mean a lot to us! 🥰");
       L.push("");
-
-      L.push("*Your bill*");
-      o.items.forEach((i) => L.push(itemLine(i)));
-
-      /* Same rule as the card: show the subtotal only when something moves it,
-         otherwise the subtotal and the total are the same number twice. */
-      if (o.promo_discount > 0 || o.coupon_discount > 0 || o.delivery_fee > 0) {
-        L.push(`Subtotal: ${money(o.subtotal)}`);
-      }
-      if (o.promo_discount > 0) {
-        const labels = [...new Set(o.items.map((i) => i.promo_label).filter(Boolean))];
-        L.push(`Offers${labels.length ? ` · ${labels.join(", ")}` : ""}: − ${money(o.promo_discount)}`);
-      }
-      if (o.coupon_discount > 0) {
-        L.push(`Coupon${o.coupon_code ? ` ${o.coupon_code}` : ""}: − ${money(o.coupon_discount)}`);
-      }
-      if (o.delivery_fee > 0) {
-        L.push(`Delivery${o.delivery_area ? ` · ${o.delivery_area}` : ""}: ${money(o.delivery_fee)}`);
-      }
-      L.push(`*Total: ${money(o.total)}*`);
+      L.push("And hey, if you have any suggestions or feedback, please don't hesitate to share them "
+           + "with us. Tell us honestly — just like you would with a friend or family member. ❤️");
+      // The review link belongs with the ask for feedback, not off on its own.
+      if (reviewsOn) L.push(`Tell us here: ${pageUrl("review.html", o.public_id)}`);
       L.push("");
-
-      if (o.payment) {
-        L.push(`💳 ${payLabel(o.payment)}${o.payment.upi_reference ? ` · UTR ${o.payment.upi_reference}` : ""}`);
-      }
-      if (o.order_type === "delivery" && o.customer && o.customer.address) {
-        L.push(`🛵 Deliver to: ${o.customer.address}`);
-      }
-      if (!cancelled) L.push(`📦 Status: ${statusLabel(o.status)}`);
-      L.push("");
-
-      if (cancelled) {
-        L.push("Sorry for the trouble — do order again, we'd love to make it right.");
-      } else {
-        L.push(`Track your order: ${pageUrl("track.html", o.public_id)}`);
-        L.push("");
-        /* The owner's own words, kept as written. Blank lines between each part
-           on purpose: WhatsApp renders one long paragraph as a wall of text on
-           a phone, and this is the half of the message the customer is meant to
-           read rather than check. */
-        L.push(`We truly hope you loved your *${itemNames(o)}* and that every bite made you happy! 😋`);
-        L.push("");
-        L.push("We'd love to see you again and again. Your love and support mean a lot to us! 🥰");
-        L.push("");
-        L.push("And hey, if you have any suggestions or feedback, please don't hesitate to share them "
-             + "with us. Tell us honestly — just like you would with a friend or family member. ❤️");
-        // The review link belongs with the ask for feedback, not off on its own.
-        if (reviewsOn) L.push(`Tell us here: ${pageUrl("review.html", o.public_id)}`);
-        L.push("");
-        L.push("Your feedback helps us make your next shawarma even better! 🌯✨");
-        L.push("");
-        L.push("Thank you for choosing us! See you again soon! ❤️");
-      }
-      L.push(`— ${SHOP}`);
+      L.push("Your feedback helps us make your next shawarma even better! 🌯✨");
       return L.join("\n");
     }
 
