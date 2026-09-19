@@ -35,8 +35,17 @@ class CartLine(BaseModel):
     quantity: int = Field(ge=1, default=1)
 
 
+class CartTopup(BaseModel):
+    """One add-on on a ticket. `quantity` is ignored for a flat-charge topup —
+    the server pins it to 1, because the price does not depend on it."""
+
+    topup_id: int
+    quantity: int = Field(ge=1, default=1)
+
+
 class QuoteRequest(BaseModel):
     cart: list[CartLine]
+    topups: list[CartTopup] = []
     order_type: str = "takeaway"   # dine_in | takeaway | delivery
     coupon_code: str = ""
     delivery_area_id: int = 0      # required (non-zero) for delivery orders
@@ -68,12 +77,15 @@ class StaffOrderRequest(CreateOrderRequest):
     """An order a staff member or the owner takes at the counter or on a call.
 
     Same cart, coupons and offers as the customer's own checkout — the extra
-    field is the one thing only someone standing at the till can know: whether
-    the money is already in hand. It is kept off `CreateOrderRequest` on purpose
-    so a customer can never mark their own order paid.
+    fields are the two things only someone standing at the till has: whether the
+    money is already in hand, and the add-ons the customer asked for across the
+    counter. Both are kept off `CreateOrderRequest` on purpose — a customer can
+    never mark their own order paid, and topups are a counter feature, so the
+    website cannot post one either.
     """
 
     payment_collected: bool = False
+    topups: list[CartTopup] = []
 
 
 class OrderEditRequest(StaffOrderRequest):
@@ -161,6 +173,18 @@ class PromoPayload(BaseModel):
     description: str = ""        # blank means "use the derived copy"
     conditions: str = ""
     active: bool = True
+
+
+class TopupPayload(BaseModel):
+    """Owner CRUD for an add-on. `per_quantity` false means one flat charge
+    however many are asked for."""
+
+    name: str
+    price: float = Field(ge=0, default=0.0)
+    per_quantity: bool = True
+    description: str = ""
+    active: bool = True
+    sort_order: int = 0
 
 
 class DeliveryAreaPayload(BaseModel):

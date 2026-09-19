@@ -47,6 +47,33 @@ class OrderItem(ndb.Model):
         }
 
 
+class OrderTopup(ndb.Model):
+    """A topup (add-on) as it was charged on this order.
+
+    Frozen like the item lines and for the same reason: the owner reprices
+    "Extra Cheese" next week and a bill already handed over still has to say
+    what it charged. `per_quantity` is stored too, so a reprinted bill explains
+    its own arithmetic instead of leaving ₹20 next to "3 ×".
+    """
+
+    topup_id = ndb.IntegerProperty()
+    name = ndb.StringProperty(required=True)
+    unit_price = ndb.FloatProperty(required=True)
+    quantity = ndb.IntegerProperty(default=1)
+    per_quantity = ndb.BooleanProperty(default=True)
+    line_total = ndb.FloatProperty(required=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "topup_id": self.topup_id,
+            "name": self.name,
+            "unit_price": self.unit_price,
+            "quantity": self.quantity,
+            "per_quantity": self.per_quantity is not False,
+            "line_total": self.line_total,
+        }
+
+
 class CustomerInfo(ndb.Model):
     name = ndb.StringProperty(default="")
     phone = ndb.StringProperty(default="")
@@ -148,6 +175,10 @@ class Order(ndb.Model):
     placed_by = ndb.StringProperty(default="")   # staff email, for counter orders
 
     items = ndb.StructuredProperty(OrderItem, repeated=True)
+    # Add-ons staff put on the ticket. Their own lines rather than something
+    # hidden inside an item line: the counter adds and removes them separately,
+    # and no offer ever discounts one — see services/pricing.py.
+    topups = ndb.StructuredProperty(OrderTopup, repeated=True)
     customer = ndb.StructuredProperty(CustomerInfo)
     payment = ndb.StructuredProperty(PaymentInfo)
 
@@ -157,6 +188,7 @@ class Order(ndb.Model):
     coupon_discount = ndb.FloatProperty(default=0.0)
     delivery_fee = ndb.FloatProperty(default=0.0)
     delivery_area = ndb.StringProperty(default="")   # chosen area name, for delivery orders
+    topups_total = ndb.FloatProperty(default=0.0)    # add-ons, charged at full price
     total = ndb.FloatProperty(default=0.0)
 
     status = ndb.StringProperty(choices=ORDER_STATUSES, default="placed")
@@ -189,6 +221,7 @@ class Order(ndb.Model):
             "channel": self.channel or "online",
             "placed_by": self.placed_by,
             "items": [i.to_dict() for i in self.items],
+            "topups": [t.to_dict() for t in self.topups],
             "payment": self.payment.to_dict() if self.payment else None,
             "subtotal": self.subtotal,
             "promo_discount": self.promo_discount,
@@ -196,6 +229,7 @@ class Order(ndb.Model):
             "coupon_discount": self.coupon_discount,
             "delivery_fee": self.delivery_fee,
             "delivery_area": self.delivery_area,
+            "topups_total": self.topups_total or 0.0,
             "total": self.total,
             "status": self.status,
             "history": [h.to_dict() for h in self.history],

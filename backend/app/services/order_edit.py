@@ -44,6 +44,7 @@ FIELDS = [
     ("upi_reference", "UPI reference", "text"),
     ("notes", "Kitchen note", "text"),
     ("subtotal", "Subtotal", "money"),
+    ("topups_total", "Add-ons", "money"),
     ("promo_discount", "Offer discount", "money"),
     ("coupon_discount", "Coupon discount", "money"),
     ("delivery_fee", "Delivery fee", "money"),
@@ -57,6 +58,12 @@ def _line_key(item) -> str:
 
 def _line_label(item) -> str:
     return f"{item.name} · {item.variant_label}" if item.variant_label else item.name
+
+
+def _topup_key(topup) -> str:
+    """Identity of an add-on line. Falls back to the name for an add-on the
+    owner has since deleted, which still has to diff against itself."""
+    return str(topup.topup_id or topup.name)
 
 
 def snapshot(order) -> dict:
@@ -74,6 +81,10 @@ def snapshot(order) -> dict:
             _line_key(i): {"label": _line_label(i), "quantity": i.quantity}
             for i in order.items
         },
+        "topups": {
+            _topup_key(t): {"label": t.name, "quantity": t.quantity}
+            for t in (order.topups or [])
+        },
         "customer_name": (c.name if c else "") or "",
         "customer_phone": (c.phone if c else "") or "",
         "customer_address": (c.address if c else "") or "",
@@ -87,6 +98,7 @@ def snapshot(order) -> dict:
         "promo_discount": round(order.promo_discount or 0.0, 2),
         "coupon_discount": round(order.coupon_discount or 0.0, 2),
         "delivery_fee": round(order.delivery_fee or 0.0, 2),
+        "topups_total": round(order.topups_total or 0.0, 2),
         "total": round(order.total or 0.0, 2),
     }
 
@@ -104,18 +116,22 @@ def _pretty(field: str, value) -> str:
     return "" if value is None else str(value)
 
 
-def _item_changes(before: dict, after: dict) -> list[dict]:
+def _line_changes(before: dict, after: dict, noun: str) -> list[dict]:
     """Added, removed and re-counted lines, one entry each.
 
     One row per line rather than a before/after dump of the whole ticket: the
     question being asked of this log months later is "what did we add to this
     order", and a diff of two long item lists does not answer it.
+
+    `noun` is what the rows call the thing — the same walk reads the food lines
+    and the add-ons, and the log has to keep them apart ("extra cheese was
+    added" is a different conversation from "a shawarma was added").
     """
     changes = []
     for key, now in after.items():
         was = before.get(key)
         if was is None:
-            changes.append({"label": "Item added", "old": "",
+            changes.append({"label": f"{noun} added", "old": "",
                             "new": f"{now['quantity']} × {now['label']}", "kind": "text"})
         elif was["quantity"] != now["quantity"]:
             changes.append({"label": f"Quantity · {now['label']}",
@@ -123,7 +139,7 @@ def _item_changes(before: dict, after: dict) -> list[dict]:
                             "kind": "text"})
     for key, was in before.items():
         if key not in after:
-            changes.append({"label": "Item removed",
+            changes.append({"label": f"{noun} removed",
                             "old": f"{was['quantity']} × {was['label']}", "new": "",
                             "kind": "text"})
     return changes
@@ -131,7 +147,10 @@ def _item_changes(before: dict, after: dict) -> list[dict]:
 
 def diff(before: dict, after: dict) -> list[dict]:
     """The changes between two snapshots, as rows a person can read."""
-    changes = _item_changes(before["items"], after["items"])
+    changes = _line_changes(before["items"], after["items"], "Item")
+    # `.get`, not `[...]`: a snapshot taken by an older build of this module has
+    # no add-ons key, and an edit must not fail on an order placed last week.
+    changes += _line_changes(before.get("topups", {}), after.get("topups", {}), "Add-on")
     for field, label, kind in FIELDS:
         old, new = before.get(field), after.get(field)
         if old == new:

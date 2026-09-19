@@ -11,7 +11,7 @@ belongs.
 from fastapi import HTTPException, status
 
 from ..models import (
-    Order, OrderItem, CustomerInfo, PaymentInfo, StatusEvent, Coupon,
+    Order, OrderItem, OrderTopup, CustomerInfo, PaymentInfo, StatusEvent, Coupon,
 )
 from ..services.order_ids import generate_order_id
 from ..services.phones import norm_phone
@@ -20,20 +20,30 @@ from ..services.scratch import close_open_awards
 
 
 def price_or_reject(cart: list[dict], order_type: str, coupon_code: str,
-                    delivery_area_id: int, phone: str) -> PricingResult:
+                    delivery_area_id: int, phone: str,
+                    topups: list[dict] | None = None) -> PricingResult:
     """Price a cart for an order that is about to be placed.
 
     Refuses rather than quietly placing a short order: a cart lives in
     localStorage (and, at the counter, on a screen someone left open), so
     anything that sold out in the meantime has to be shown before money changes
-    hands.
+    hands. An add-on the owner has switched off since is reported the same way.
     """
-    priced = price_cart(cart, order_type, coupon_code, delivery_area_id, phone)
+    priced = price_cart(cart, order_type, coupon_code, delivery_area_id, phone, topups)
     if priced.unavailable:
+        # An add-on is withdrawn, not sold out, and saying so is the difference
+        # between "we ran out" and "we do not sell that any more" — the counter
+        # is about to repeat this sentence to the customer.
+        sold_out = [u["label"] for u in priced.unavailable if u.get("kind") != "topup"]
+        withdrawn = [u["label"] for u in priced.unavailable if u.get("kind") == "topup"]
+        parts = []
+        if sold_out:
+            parts.append("Sold out since you added it: " + ", ".join(sold_out) + ".")
+        if withdrawn:
+            parts.append("No longer offered: " + ", ".join(withdrawn) + ".")
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            "Sold out since you added it: " + ", ".join(u["label"] for u in priced.unavailable)
-            + ". Please review your cart and try again.",
+            " ".join(parts) + " Please review your cart and try again.",
         )
     if not priced.lines:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Your cart is empty or items are unavailable.")
@@ -71,6 +81,14 @@ def persist_order(priced: PricingResult, *, order_type: str, customer, notes: st
             )
             for l in priced.lines
         ],
+        topups=[
+            OrderTopup(
+                topup_id=t.topup_id, name=t.name, unit_price=t.unit_price,
+                quantity=t.quantity, per_quantity=t.per_quantity,
+                line_total=round(t.line_total, 2),
+            )
+            for t in priced.topups
+        ],
         customer=CustomerInfo(
             name=customer.name, phone=customer.phone,
             address=customer.address, lat=customer.lat, lng=customer.lng,
@@ -86,6 +104,7 @@ def persist_order(priced: PricingResult, *, order_type: str, customer, notes: st
         coupon_discount=round(priced.coupon_discount, 2),
         delivery_fee=round(priced.delivery_fee, 2),
         delivery_area=priced.delivery_area_name,
+        topups_total=round(priced.topups_total, 2),
         total=round(priced.total, 2),
         status="placed",
         history=[StatusEvent(status="placed", by=by)],

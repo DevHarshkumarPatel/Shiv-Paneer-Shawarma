@@ -13,9 +13,15 @@ router = APIRouter(prefix="/api/orders", tags=["orders"])
 
 @router.post("/quote")
 def quote(body: QuoteRequest):
-    """Live price preview (subtotal, promos, coupon, delivery)."""
+    """Live price preview (subtotal, promos, add-ons, coupon, delivery).
+
+    Add-ons are priced here because the counter screen previews its ticket
+    through this endpoint. Quoting one costs nothing and creates nothing — only
+    the staff order endpoints accept topups on an order that gets written.
+    """
     result = price_cart([c.model_dump() for c in body.cart], body.order_type,
-                        body.coupon_code, body.delivery_area_id, body.phone)
+                        body.coupon_code, body.delivery_area_id, body.phone,
+                        [t.model_dump() for t in body.topups])
     return result.to_dict()
 
 

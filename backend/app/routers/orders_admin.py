@@ -7,7 +7,9 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from ..deps import get_current_user, require_owner
-from ..models import Coupon, CustomerInfo, Order, OrderItem, PaymentInfo, StatusEvent
+from ..models import (
+    Coupon, CustomerInfo, Order, OrderItem, OrderTopup, PaymentInfo, StatusEvent,
+)
 from ..models.order import STATUS_FLOW
 from ..schemas.models import (
     OrderEditRequest, StaffOrderRequest, StatusUpdateRequest, VerifyPaymentRequest,
@@ -75,6 +77,10 @@ def create_counter_order(body: StaffOrderRequest, user=Depends(get_current_user)
       rider — an area and an address are still required;
     * staff can record that the money is already in hand, which the customer's
       own checkout must never be able to say about itself.
+
+    Add-ons (extra cheese, extra paneer) ride along on this path only, for the
+    same reason: they are asked for across the counter, so the website has no
+    way to post one.
     """
     if body.order_type not in ("dine_in", "takeaway", "delivery"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid order type")
@@ -94,6 +100,7 @@ def create_counter_order(body: StaffOrderRequest, user=Depends(get_current_user)
     priced = price_or_reject(
         [c.model_dump() for c in body.cart], body.order_type, body.coupon_code,
         body.delivery_area_id, body.customer.phone,
+        [t.model_dump() for t in body.topups],
     )
     # A coupon the staff member typed that did not hold up is reported rather
     # than dropped: they are standing in front of the customer who handed it
@@ -181,7 +188,7 @@ def export_orders_csv(
     header = ["Order ID", "Date (IST)", "Order type", "Customer name", "Phone", "Address"]
     if include_items:
         header += [
-            "Items", "Subtotal (INR)",
+            "Items", "Subtotal (INR)", "Add-ons (INR)",
             "Offer applied", "Offer discount (INR)",
             "Coupon code", "Coupon discount (INR)",
             "Delivery fee (INR)", "Total paid (INR)",
@@ -208,6 +215,10 @@ def export_orders_csv(
                 + f" x{i.quantity}"
                 for i in o.items
             )
+            # Add-ons are part of what was sold, so they belong in the same
+            # cell — marked with a + so a row still reads as food first.
+            if o.topups:
+                items += "; " + "; ".join(f"+{t.name} x{t.quantity}" for t in o.topups)
             # The promo is named from the labels frozen on the lines. Orders
             # placed before those were stored still show a discount, so fall
             # back to a generic name rather than an empty cell next to an
@@ -218,7 +229,7 @@ def export_orders_csv(
             else:
                 offer = "Offer (name not recorded)" if o.promo_discount > 0 else ""
             row += [
-                _csv_cell(items), f"{o.subtotal:.2f}",
+                _csv_cell(items), f"{o.subtotal:.2f}", f"{o.topups_total or 0:.2f}",
                 _csv_cell(offer), f"{o.promo_discount:.2f}",
                 _csv_cell(o.coupon_code or ""), f"{o.coupon_discount:.2f}",
                 f"{o.delivery_fee:.2f}", f"{o.total:.2f}",
@@ -333,6 +344,7 @@ def edit_order(public_id: str, body: OrderEditRequest, user=Depends(get_current_
     priced = price_or_reject(
         [c.model_dump() for c in body.cart], body.order_type, body.coupon_code,
         body.delivery_area_id, body.customer.phone,
+        [t.model_dump() for t in body.topups],
     )
     if body.coupon_code and not priced.coupon_code:
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
@@ -370,6 +382,14 @@ def edit_order(public_id: str, body: OrderEditRequest, user=Depends(get_current_
         )
         for l in priced.lines
     ]
+    order.topups = [
+        OrderTopup(
+            topup_id=t.topup_id, name=t.name, unit_price=t.unit_price,
+            quantity=t.quantity, per_quantity=t.per_quantity,
+            line_total=round(t.line_total, 2),
+        )
+        for t in priced.topups
+    ]
     order.customer = CustomerInfo(
         name=body.customer.name, phone=body.customer.phone,
         address=body.customer.address, lat=body.customer.lat, lng=body.customer.lng,
@@ -394,6 +414,7 @@ def edit_order(public_id: str, body: OrderEditRequest, user=Depends(get_current_
     order.coupon_discount = round(priced.coupon_discount, 2)
     order.delivery_fee = round(priced.delivery_fee, 2)
     order.delivery_area = priced.delivery_area_name
+    order.topups_total = round(priced.topups_total, 2)
     order.total = round(priced.total, 2)
     order.notes = body.notes
 
