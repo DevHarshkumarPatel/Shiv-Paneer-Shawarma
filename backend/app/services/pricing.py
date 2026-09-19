@@ -6,11 +6,14 @@ so the client cannot tamper with amounts.
 
 Cart line input shape (from the client):
     {"item_id": int, "base": str, "size": str, "quantity": int}
+
+Topup (add-on) input shape, staff paths only:
+    {"topup_id": int, "quantity": int}
 """
 import re
 from dataclasses import dataclass, field
 
-from ..models import Item, Promo, Coupon, DeliveryArea
+from ..models import Item, Promo, Coupon, DeliveryArea, Topup
 
 _digits = lambda s: re.sub(r"\D", "", s or "")   # noqa: E731
 
@@ -31,6 +34,16 @@ class PricedLine:
 
 
 @dataclass
+class PricedTopup:
+    topup_id: int
+    name: str
+    unit_price: float
+    quantity: int
+    per_quantity: bool
+    line_total: float
+
+
+@dataclass
 class PricingResult:
     lines: list[PricedLine] = field(default_factory=list)
     subtotal: float = 0.0          # gross sum, before any discount
@@ -42,6 +55,13 @@ class PricingResult:
     # line. A coupon-only code takes nothing off by itself, so without this the
     # checkout summary would have nothing to say about a code that worked.
     coupon_promos: list[str] = field(default_factory=list)
+    # Add-ons (extra cheese, extra paneer). Charged at the owner's price and
+    # deliberately outside every offer: a Buy-2-Get-1 must not give a paid
+    # add-on away, and a percent coupon is a discount on the food, not on an
+    # extra the customer asked for at the counter. They are their own line on
+    # the bill for exactly that reason.
+    topups: list[PricedTopup] = field(default_factory=list)
+    topups_total: float = 0.0
     delivery_fee: float = 0.0
     delivery_area_id: int = 0
     delivery_area_name: str = ""
@@ -67,6 +87,15 @@ class PricingResult:
                 }
                 for l in self.lines
             ],
+            "topups": [
+                {
+                    "topup_id": t.topup_id, "name": t.name, "unit_price": t.unit_price,
+                    "quantity": t.quantity, "per_quantity": t.per_quantity,
+                    "line_total": t.line_total,
+                }
+                for t in self.topups
+            ],
+            "topups_total": round(self.topups_total, 2),
             "subtotal": round(self.subtotal, 2),
             "promo_discount": round(self.promo_discount, 2),
             "coupon_code": self.coupon_code,
@@ -210,7 +239,7 @@ def _price_lines(cart: list[dict], promos: dict[tuple[str, int], Promo],
             result.unavailable.append({
                 "item_id": item_id, "base": base, "size": size, "name": item.name,
                 "variant_label": variant_label, "whole_item": True,
-                "label": item.name,
+                "kind": "item", "label": item.name,
             })
             continue
         variant = _match_variant(item, base, size)
@@ -218,6 +247,7 @@ def _price_lines(cart: list[dict], promos: dict[tuple[str, int], Promo],
             result.unavailable.append({
                 "item_id": item_id, "base": base, "size": size, "name": item.name,
                 "variant_label": variant_label, "whole_item": False,
+                "kind": "item",
                 "label": f"{item.name}{f' ({variant_label})' if variant_label else ''}",
             })
             continue
@@ -249,6 +279,47 @@ def _price_lines(cart: list[dict], promos: dict[tuple[str, int], Promo],
         _apply_cart_b1g1(result, b1g1_promo, b1g1_lines)
 
     return result
+
+
+def _price_topups(raw: list[dict]) -> tuple[list[PricedTopup], float, list[dict]]:
+    """(priced add-ons, what they come to, the ones that are gone).
+
+    A topup switched off or deleted while a ticket was open is reported the same
+    way a sold-out item is, rather than dropped: staff promised the customer
+    extra cheese, and a total that quietly shrinks by ₹20 looks like a bug at
+    exactly the moment money changes hands.
+
+    Duplicates of one topup are merged, so two taps of "Extra Cheese" bill as
+    2 × rather than two identical lines nobody can tell apart.
+    """
+    wanted: dict[int, int] = {}
+    for row in raw or []:
+        tid = int(row.get("topup_id") or 0)
+        if not tid:
+            continue
+        wanted[tid] = wanted.get(tid, 0) + max(1, int(row.get("quantity", 1)))
+
+    priced: list[PricedTopup] = []
+    gone: list[dict] = []
+    total = 0.0
+    for tid, qty in wanted.items():
+        topup = Topup.get_by_id(tid)
+        if not topup or not topup.active:
+            gone.append({
+                "kind": "topup", "topup_id": tid,
+                "name": topup.name if topup else "Add-on",
+                "label": topup.name if topup else "An add-on that is no longer offered",
+            })
+            continue
+        billed_qty, amount = topup.charge_for(qty)
+        priced.append(PricedTopup(
+            topup_id=tid, name=topup.name, unit_price=float(topup.price),
+            quantity=billed_qty, per_quantity=topup.charges_per_quantity(),
+            line_total=round(amount, 2),
+        ))
+        total += amount
+    priced.sort(key=lambda t: t.name.lower())
+    return priced, total, gone
 
 
 def _resolve_coupon(code: str, cart_value: float, customer_phone: str) -> tuple[Coupon | None, str]:
@@ -286,7 +357,8 @@ def _coupon_discount(coupon: Coupon, cart_value: float) -> float:
 
 
 def price_cart(cart: list[dict], order_type: str, coupon_code: str = "",
-               delivery_area_id: int = 0, customer_phone: str = "") -> PricingResult:
+               delivery_area_id: int = 0, customer_phone: str = "",
+               topups: list[dict] | None = None) -> PricingResult:
     auto_promos, gated_promos = _load_active_promos()
     items: dict[int, Item | None] = {}
 
@@ -316,6 +388,12 @@ def price_cart(cart: list[dict], order_type: str, coupon_code: str = "",
             result.coupon_code = code
             result.coupon_discount = _coupon_discount(coupon, after_promo)
 
+    # Add-ons, priced after the coupon has been settled and never fed into it.
+    # They join the bill as their own amount: no promo discounts one, and the
+    # coupon's percentage is taken off the food, which is what the offer says.
+    result.topups, result.topups_total, gone = _price_topups(topups or [])
+    result.unavailable.extend(gone)
+
     # Delivery fee comes from the customer-selected area. A delivery order
     # without a valid, active area is flagged so callers can require one.
     if order_type == "delivery":
@@ -327,5 +405,6 @@ def price_cart(cart: list[dict], order_type: str, coupon_code: str = "",
         else:
             result.delivery_area_required = True
 
-    result.total = after_promo - result.coupon_discount + result.delivery_fee
+    result.total = (after_promo - result.coupon_discount
+                    + result.topups_total + result.delivery_fee)
     return result

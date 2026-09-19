@@ -10,7 +10,7 @@ from app.db import db_context
 from app.config import settings
 from app.models import (
     User, Category, Subcategory, Item, Variant, Promo, Coupon, Order, Counter,
-    DeliveryArea, ReviewQuestion,
+    DeliveryArea, ReviewQuestion, Topup,
 )
 from app.security import hash_password
 
@@ -75,7 +75,8 @@ MENU = [
 
 
 def reset():
-    for model in (Item, Subcategory, Category, Promo, Coupon, Order, Counter, DeliveryArea):
+    for model in (Item, Subcategory, Category, Promo, Coupon, Order, Counter, DeliveryArea,
+                  Topup):
         keys = model.query().fetch(keys_only=True)
         if keys:
             from google.cloud import ndb
@@ -132,6 +133,27 @@ def seed_delivery_areas():
     print(f"Delivery areas: {', '.join(n for n, _ in areas)}")
 
 
+def seed_topups():
+    """Add-ons the counter can put on a ticket. Prices are the owner's to change.
+
+    Two of them are charged per unit (two extra cheese cost twice as much) and
+    one is a flat charge, so the difference is visible on the first screen the
+    owner opens rather than being something they have to imagine.
+    """
+    if Topup.query().get():
+        print("Topups already present; skipping.")
+        return
+    rows = [
+        ("Extra Cheese", 30.0, True, "One extra cheese slice / portion"),
+        ("Extra Paneer", 40.0, True, "An extra portion of paneer"),
+        ("Extra Mayo Dip", 15.0, False, "One dip, whatever the order size"),
+    ]
+    for i, (name, price, per_qty, note) in enumerate(rows):
+        Topup(name=name, price=price, per_quantity=per_qty, description=note,
+              active=True, sort_order=i).put()
+    print(f"Topups: {', '.join(n for n, _, _, _ in rows)}")
+
+
 def seed_review_questions():
     """A short, tap-first form the owner can then edit.
 
@@ -170,6 +192,7 @@ def main():
         seed_menu()
         seed_coupon()
         seed_delivery_areas()
+        seed_topups()
         seed_review_questions()
     print("Seed complete.")
 

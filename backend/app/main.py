@@ -11,7 +11,7 @@ from .db import wrap_router_endpoints
 from .routers import (
     auth, menu_public, menu_admin, coupons, customers_admin, orders,
     orders_admin, payments, provision, delivery_areas, reviews, scratch,
-    settings as settings_router,
+    topups, settings as settings_router,
 )
 
 # Disable the built-in public docs endpoints; we re-serve them below behind
@@ -37,6 +37,7 @@ app.include_router(scratch.router)
 app.include_router(payments.router)
 app.include_router(provision.router)
 app.include_router(delivery_areas.router)
+app.include_router(topups.router)
 app.include_router(settings_router.router)
 app.include_router(reviews.router)
 

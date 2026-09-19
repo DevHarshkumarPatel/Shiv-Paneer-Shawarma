@@ -538,11 +538,18 @@
       `<div class="oc-item"><span><span class="q">${i.quantity}×</span> ${esc(i.name)} <span class="text-muted">${esc(i.variant_label || "")}</span>${i.free_quantity ? ` <span class="oc-free">+${i.free_quantity} free</span>` : ""}${i.promo_label ? ` <span class="oc-free">${esc(i.promo_label)}</span>` : ""}</span>
         <span>${money(i.line_total)}</span></div>`).join("");
 
+    /* Add-ons, under the items they were asked for with. Their own rows and
+       labelled as add-ons: the kitchen reads this card, and "extra cheese" has
+       to be visible as an instruction, not buried in an item's price. */
+    const addons = (o.topups || []).map((t) =>
+      `<div class="oc-item oc-addon"><span><span class="q">${t.quantity}×</span> ${esc(t.name)} <span class="text-muted">add-on</span></span>
+        <span>${money(t.line_total)}</span></div>`).join("");
+
     /* Discount lines. The card used to jump straight from the item prices to a
        smaller Total, so a counter handling a coupon order had no way to tell
        whether the gap was an offer, a coupon or a mistake. */
     const bill = [];
-    if (o.promo_discount > 0 || o.coupon_discount > 0 || o.delivery_fee > 0) {
+    if (o.promo_discount > 0 || o.coupon_discount > 0 || o.delivery_fee > 0 || o.topups_total > 0) {
       bill.push(`<div class="oc-line"><span>Subtotal</span><span>${money(o.subtotal)}</span></div>`);
     }
     if (o.promo_discount > 0) {
@@ -551,6 +558,9 @@
     }
     if (o.coupon_discount > 0) {
       bill.push(`<div class="oc-line disc"><span>Coupon ${esc(o.coupon_code || "")}</span><span>− ${money(o.coupon_discount)}</span></div>`);
+    }
+    if (o.topups_total > 0) {
+      bill.push(`<div class="oc-line"><span>Add-ons</span><span>${money(o.topups_total)}</span></div>`);
     }
     if (o.delivery_fee > 0) {
       bill.push(`<div class="oc-line"><span>${o.delivery_area ? `Delivery · ${esc(o.delivery_area)}` : "Delivery fee"}</span><span>${money(o.delivery_fee)}</span></div>`);
@@ -618,6 +628,7 @@
       </div>
       <div class="oc-body">
         ${items}
+        ${addons}
         ${bill.join("")}
         <div class="row-between" style="margin-top:8px;font-weight:800;"><span>Total</span><span>${money(o.total)}</span></div>
         ${cust}

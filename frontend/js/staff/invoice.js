@@ -392,13 +392,22 @@ const Invoice = (function () {
       ].filter(Boolean).join(" · ");
       line(detail, { size: 11, indent: S(8), gap: 3 });
     });
+    // Add-ons after the food, marked with a + so the column of amounts still
+    // adds up the way the customer reads it.
+    (o.topups || []).forEach((t) => {
+      row(`+ ${t.name}`, money(t.line_total), { size: 13, bold: true, gap: 0 });
+      const detail = t.per_quantity === false
+        ? "Add-on · flat charge"
+        : `${t.quantity} × ${money(t.unit_price)} · Add-on`;
+      line(detail, { size: 11, indent: S(8), gap: 3 });
+    });
     rule();
 
     /* ---- Bill ---- */
     line(`📦 Quantity: ${units} item${units === 1 ? "" : "s"}${free ? ` (+${free} free)` : ""}`, { size: 12, gap: 4 });
     // Same rule as the dashboard card: the subtotal is only worth a line when
     // something below moves it, otherwise it is the total printed twice.
-    if (o.promo_discount > 0 || o.coupon_discount > 0 || o.delivery_fee > 0) {
+    if (o.promo_discount > 0 || o.coupon_discount > 0 || o.delivery_fee > 0 || o.topups_total > 0) {
       row("Subtotal", money(o.subtotal));
     }
     if (o.promo_discount > 0) {
@@ -407,6 +416,9 @@ const Invoice = (function () {
     }
     if (o.coupon_discount > 0) {
       row(`Coupon${o.coupon_code ? ` ${o.coupon_code}` : ""}`, `− ${money(o.coupon_discount)}`);
+    }
+    if (o.topups_total > 0) {
+      row("Add-ons", money(o.topups_total));
     }
     if (o.delivery_fee > 0) {
       row(`Delivery${o.delivery_area ? ` · ${o.delivery_area}` : ""}`, money(o.delivery_fee));

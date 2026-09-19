@@ -20,6 +20,10 @@
   const { money, esc, el, els, toast, fmtDateTime } = UI;
 
   const CART_KEY = "sps_pos_cart_v1";
+  // Add-ons are kept in their own key, not folded into the cart: they are a
+  // different shape (no variant, no promo) and a ticket saved by an older build
+  // of this screen must still load its items.
+  const TOPUP_KEY = "sps_pos_topups_v1";
   // Set once, from the URL: the id of the order being edited, or "" for a new
   // one. Read before `state` is built because it decides whether the ticket
   // starts from the counter's saved cart or from the order.
@@ -39,6 +43,11 @@
     // this is ignored — the CSS decides, not the JS.
     view: "menu",
     lines: EDIT_ID ? [] : loadCart(),  // {item_id, name, base, size, variant_label, unit_price, quantity}
+    topups: [],            // the owner's add-on list, as the counter may use it
+    topupLines: EDIT_ID ? [] : loadTopups(),   // {topup_id, quantity}
+    // null = decide from the ticket (open when something is on it); once the
+    // staff member opens or closes the panel themselves, that wins.
+    addonsOpen: null,
     editing: null,         // the order being edited, as it was loaded
     changes: null,         // what the last save changed, straight from the API
     mode: "takeaway",
@@ -77,6 +86,9 @@
       return;
     }
     try { state.areas = (await API.get("/api/delivery-areas")).areas || []; } catch { state.areas = []; }
+    // Add-ons the owner has switched on. An empty list (or a failed call) just
+    // means the panel is not drawn — nothing else on this screen depends on it.
+    try { state.topups = (await API.get("/api/topups")).topups || []; } catch { state.topups = []; }
     // The code list is owner-only. Staff simply type the code the customer
     // read out, exactly as a customer would on the website, so a 403 here is
     // not an error — it just means no shortcut chips for this user.
@@ -117,6 +129,13 @@
       item_id: i.item_id, name: i.name, base: i.base || "", size: i.size || "",
       variant_label: i.variant_label || "", unit_price: i.unit_price, quantity: i.quantity,
     }));
+    /* Add-ons as the order carries them. Only the id and the count are taken:
+       the name and the price are re-resolved by the re-price, so an add-on the
+       owner has repriced since saves at today's price rather than silently
+       keeping the old one — and one that has been withdrawn is reported. */
+    state.topupLines = (o.topups || [])
+      .filter((t) => t.topup_id)
+      .map((t) => ({ topup_id: t.topup_id, quantity: t.quantity || 1 }));
     state.coupon = o.coupon_code || "";
     const c = o.customer || {};
     state.customer = { name: c.name || "", phone: c.phone || "", address: c.address || "" };
@@ -310,11 +329,53 @@
     try { localStorage.setItem(CART_KEY, JSON.stringify(state.lines)); } catch { /* private mode */ }
   }
 
+  function loadTopups() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(TOPUP_KEY) || "[]");
+      return Array.isArray(raw) ? raw : [];
+    } catch { return []; }
+  }
+  function saveTopups() {
+    if (editing()) return;   // same reason as saveCart(): an edit is not the till's ticket
+    try { localStorage.setItem(TOPUP_KEY, JSON.stringify(state.topupLines)); } catch { /* private mode */ }
+  }
+
   const lineKey = (l) => `${l.item_id}|${l.base}|${l.size}`;
   const cartCount = () => state.lines.reduce((s, l) => s + l.quantity, 0);
   const cartPayload = () => state.lines.map((l) => ({
     item_id: l.item_id, base: l.base, size: l.size, quantity: l.quantity,
   }));
+  const topupPayload = () => state.topupLines.map((t) => ({
+    topup_id: t.topup_id, quantity: t.quantity,
+  }));
+
+  const topupById = (id) => state.topups.find((t) => t.id === Number(id));
+  const topupLineFor = (id) => state.topupLines.find((t) => t.topup_id === Number(id));
+  /* A flat-charge add-on is on the order or it is not, so its count never
+     leaves 1 — the ticket shows it a Remove button instead of a stepper. */
+  const topupStep = (t) => (t && t.per_quantity ? 1 : 0);
+
+  function setTopupQty(id, qty) {
+    const topup = topupById(id);
+    const max = topup && !topup.per_quantity ? 1 : 99;
+    const n = Math.min(max, Math.max(0, qty));
+    const line = topupLineFor(id);
+    if (n <= 0) state.topupLines = state.topupLines.filter((t) => t.topup_id !== Number(id));
+    else if (line) line.quantity = n;
+    else state.topupLines.push({ topup_id: Number(id), quantity: n });
+    onTopupChange();
+  }
+
+  /* Only the ticket moves when an add-on changes — the menu list knows nothing
+     about them, so repainting it would throw away the scroll position for
+     nothing. Painted before and after the quote so the tap lands instantly and
+     the money follows. */
+  async function onTopupChange() {
+    saveTopups();
+    paintTicket();
+    await refreshQuote();
+    paintTicket();
+  }
 
   function addItem(itemId, variantIdx) {
     const it = itemById(itemId);
@@ -361,6 +422,9 @@
     try {
       state.quote = await API.post("/api/orders/quote", {
         cart: cartPayload(),
+        // Priced by the server like everything else on this ticket — the screen
+        // never adds an add-on's price into a total by itself.
+        topups: topupPayload(),
         order_type: state.mode,
         coupon_code: state.coupon,
         delivery_area_id: Number(state.deliveryAreaId) || 0,
@@ -410,16 +474,83 @@
     // Anything that sold out while the ticket was open. The order is refused
     // until it is dealt with, so each one gets its own row and a Remove rather
     // than a note asking staff to work out which line is the problem.
-    const gone = deadList().map((u) => `
+    const gone = deadList().map((u) => (u.kind === "topup" ? `
+      <div class="pos-line dead">
+        <div class="pl-main">
+          <div class="pl-name">${esc(u.name)} <span class="badge badge-out">Withdrawn</span></div>
+          <div class="pl-sub">This add-on is no longer offered · not charged</div>
+        </div>
+        <button class="btn btn-sm btn-outline" data-drop-topup="${u.topup_id}">Remove</button>
+      </div>` : `
       <div class="pos-line dead">
         <div class="pl-main">
           <div class="pl-name">${esc(u.name)} <span class="badge badge-out">Sold out</span></div>
           <div class="pl-sub">${esc(u.variant_label || "")} · not charged</div>
         </div>
         <button class="btn btn-sm btn-outline" data-drop="${esc(deadKey(u))}">Remove</button>
-      </div>`).join("");
+      </div>`)).join("");
 
     return priced + gone;
+  }
+
+  /* ---------------- add-ons ----------------
+
+     The panel sits under the ticket lines rather than in the menu list: an
+     add-on is something the customer asks for while the order is being read
+     back ("and extra cheese on that"), so it belongs next to the ticket and
+     the total, not forty items up the page. Folded away when nothing is on it,
+     because most orders have none and the totals must stay reachable by thumb.
+
+     Per-quantity add-ons get the same stepper as an item. A flat-charge add-on
+     gets Add / Remove instead — its price does not move, so a stepper would be
+     a control that changes nothing. */
+  function topupAmount(t, line) {
+    const priced = ((state.quote && state.quote.topups) || [])
+      .find((x) => x.topup_id === t.id);
+    if (priced) return priced.line_total;
+    return t.per_quantity ? t.price * (line ? line.quantity : 1) : t.price;
+  }
+
+  function topupRow(t) {
+    const line = topupLineFor(t.id);
+    const sub = [t.per_quantity ? `${money(t.price)} each` : `${money(t.price)} flat`, t.description]
+      .filter(Boolean).join(" · ");
+    const control = !line
+      ? `<button class="btn btn-outline btn-sm" data-topup-add="${t.id}">Add</button>`
+      : t.per_quantity
+        ? `<div class="stepper">
+             <button data-topup-dec="${t.id}" aria-label="One less">−</button>
+             <span>${line.quantity}</span>
+             <button data-topup-inc="${t.id}" aria-label="One more">+</button>
+           </div>`
+        : `<button class="btn btn-sm btn-outline" data-topup-off="${t.id}">Remove</button>`;
+    return `
+      <div class="pos-addon ${line ? "on" : ""}">
+        <div class="pa-main">
+          <div class="pa-name">${esc(t.name)}</div>
+          <div class="pa-sub">${esc(sub)}</div>
+        </div>
+        <div class="pa-buy">
+          ${line ? `<span class="pa-amt">${money(topupAmount(t, line))}</span>` : ""}
+          ${control}
+        </div>
+      </div>`;
+  }
+
+  function addonsPanel() {
+    if (!state.topups.length) return "";
+    const picked = state.topupLines.length;
+    const total = state.quote ? (state.quote.topups_total || 0)
+      : state.topupLines.reduce((sum, l) => {
+          const t = topupById(l.topup_id);
+          return sum + (t ? topupAmount(t, l) : 0);
+        }, 0);
+    const open = state.addonsOpen === null ? picked > 0 : state.addonsOpen;
+    return `
+      <details class="pos-addons" id="posAddons" ${open ? "open" : ""}>
+        <summary>🧀 Add-ons${picked ? ` · ${picked} on this order · ${money(total)}` : ""}</summary>
+        <div class="pos-addon-list">${state.topups.map(topupRow).join("")}</div>
+      </details>`;
   }
 
   function offerRowLabel(q) {
@@ -435,6 +566,12 @@
     if (q.coupon_discount > 0) rows.push(`<div class="summary-line free-note"><span>Coupon ${esc(q.coupon_code)}</span><span>− ${money(q.coupon_discount)}</span></div>`);
     else if (q.coupon_code && (q.coupon_promos || []).length) {
       rows.push(`<div class="summary-line free-note"><span>Coupon ${esc(q.coupon_code)}</span><span>${q.coupon_promos.length > 1 ? "Offers" : "Offer"} unlocked</span></div>`);
+    }
+    if (q.topups_total > 0) {
+      // Below the discounts on purpose: nothing above it applies to an add-on,
+      // and a bill that showed them inside the subtotal would look as though an
+      // offer had failed to come off them.
+      rows.push(`<div class="summary-line"><span>Add-ons</span><span>${money(q.topups_total)}</span></div>`);
     }
     if (state.mode === "delivery") {
       rows.push(q.delivery_area_required
@@ -472,6 +609,8 @@
           </div>
 
           <div class="pos-lines">${cartRows()}</div>
+
+          ${addonsPanel()}
 
           <div class="field pos-coupon">
             <div class="input-row">
@@ -723,6 +862,22 @@
       setQty(b.dataset.dec, (l ? l.quantity : 0) - 1);
     }));
     els("[data-drop]").forEach((b) => b.addEventListener("click", () => setQty(b.dataset.drop, 0)));
+    els("[data-drop-topup]").forEach((b) => b.addEventListener("click", () => setTopupQty(b.dataset.dropTopup, 0)));
+
+    els(".pos-addons [data-topup-add]").forEach((b) => b.addEventListener("click", () => setTopupQty(b.dataset.topupAdd, 1)));
+    els(".pos-addons [data-topup-off]").forEach((b) => b.addEventListener("click", () => setTopupQty(b.dataset.topupOff, 0)));
+    els(".pos-addons [data-topup-inc]").forEach((b) => b.addEventListener("click", () => {
+      const line = topupLineFor(b.dataset.topupInc);
+      setTopupQty(b.dataset.topupInc, (line ? line.quantity : 0) + 1);
+    }));
+    els(".pos-addons [data-topup-dec]").forEach((b) => b.addEventListener("click", () => {
+      const line = topupLineFor(b.dataset.topupDec);
+      setTopupQty(b.dataset.topupDec, (line ? line.quantity : 0) - 1);
+    }));
+    // Whether the panel is open is the staff member's choice from here on: the
+    // ticket is repainted on every tap, and it must not spring shut under them.
+    const addons = el("#posAddons");
+    if (addons) addons.addEventListener("toggle", () => { state.addonsOpen = addons.open; });
 
     el("#posApplyCoupon").addEventListener("click", () => applyCoupon());
     el("#posCoupon").addEventListener("keydown", (e) => { if (e.key === "Enter") applyCoupon(); });
@@ -767,9 +922,11 @@
     const clear = el("#posClear");
     if (clear) clear.addEventListener("click", () => {
       state.lines = [];
+      state.topupLines = [];
       state.coupon = "";
       state.quote = null;
       saveCart();
+      saveTopups();
       refreshMenuList();
       paintTicket();
     });
@@ -905,6 +1062,7 @@
     try {
       const body = {
         cart: cartPayload(),
+        topups: topupPayload(),
         order_type: state.mode,
         coupon_code: state.coupon,
         delivery_area_id: Number(state.deliveryAreaId) || 0,
@@ -929,6 +1087,8 @@
         // The ticket is done: everything that belongs to it is reset so the next
         // customer cannot inherit the last one's coupon, note or address.
         state.lines = [];
+        state.topupLines = [];
+        state.addonsOpen = null;
         state.coupon = "";
         state.quote = null;
         state.customer = { name: "", phone: "", address: "" };
@@ -938,6 +1098,7 @@
         state.upiReference = "";
         state.notes = "";
         saveCart();
+        saveTopups();
       }
       state.placed = order;
       state.placing = false;
