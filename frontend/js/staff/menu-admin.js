@@ -3,7 +3,7 @@
   const { money, esc, el, els, toast, modal } = UI;
 
   let data = {
-    categories: [], items: [], promos: [], coupons: [], areas: [],
+    categories: [], items: [], promos: [], coupons: [], areas: [], topups: [],
     settings: { ordering_enabled: true, scratch_enabled: false },
     scratch: { prizes: [], enabled: false, live: false },
     awards: { awards: [], stats: {} },
@@ -29,19 +29,21 @@
 
   async function load() {
     try {
-      const [cats, items, promos, coupons, areas, settings, scratch, awards] = await Promise.all([
+      const [cats, items, promos, coupons, areas, topups, settings, scratch, awards] = await Promise.all([
         API.get("/api/admin/menu/categories"),
         API.get("/api/admin/menu/items"),
         API.get("/api/admin/menu/promos"),
         API.get("/api/coupons"),
         API.get("/api/admin/delivery-areas"),
+        API.get("/api/admin/topups"),
         API.get("/api/admin/settings"),
         API.get("/api/admin/scratch/prizes"),
         API.get("/api/admin/scratch/awards"),
       ]);
       data = {
         categories: cats.categories, items: items.items, promos: promos.promos,
-        coupons: coupons.coupons, areas: areas.areas, settings, scratch, awards,
+        coupons: coupons.coupons, areas: areas.areas, topups: topups.topups,
+        settings, scratch, awards,
       };
       render();
     } catch (e) {
@@ -56,6 +58,7 @@
       <div class="section-tabs">
         ${tabBtn("items", "🌯 Items & Prices")}
         ${tabBtn("categories", "🗂️ Categories")}
+        ${tabBtn("topups", "🧀 Add-ons")}
         ${tabBtn("promos", "🎉 Promos")}
         ${tabBtn("coupons", "🏷️ Coupons")}
         ${tabBtn("scratch", "🎁 Scratch Cards")}
@@ -65,7 +68,7 @@
       </div>
       <div id="tabBody"></div>`;
     els("[data-tab]").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; render(); }));
-    ({ items: renderItems, categories: renderCategories, promos: renderPromos, coupons: renderCoupons, scratch: renderScratch, areas: renderAreas, export: renderExport, settings: renderSettings }[tab])();
+    ({ items: renderItems, categories: renderCategories, topups: renderTopups, promos: renderPromos, coupons: renderCoupons, scratch: renderScratch, areas: renderAreas, export: renderExport, settings: renderSettings }[tab])();
   }
 
   function toolbar(title, addLabel, onAdd) {
@@ -955,6 +958,80 @@
       if (kind === "coupon" && !payload.coupon_id) return toast("Pick the coupon this card gives", "err");
       if (payload.quantity < 1) return toast("Enter how many of this card the batch holds", "err");
       await save(prize ? "put" : "post", prize ? `/api/admin/scratch/prizes/${prize.id}` : "/api/admin/scratch/prizes", payload, m);
+    });
+  }
+
+  /* ---------------- Add-ons (topups) ----------------
+
+     Extra cheese, extra paneer, a dip. Only the owner touches this list; staff
+     put them on a ticket from the counter screen. The one thing worth reading
+     twice on this table is the "Charged" column: per-unit means a stepper on
+     the ticket and a price that multiplies, flat means one charge however many
+     times it is asked for. */
+  const chargeLabel = (t) => (t.per_quantity ? "Per quantity" : "Flat charge");
+
+  function renderTopups() {
+    const body = el("#tabBody");
+    body.innerHTML = "";
+    body.appendChild(toolbar("Add-ons", "Add add-on", null));
+    body.insertAdjacentHTML("beforeend", `<p class="text-muted text-sm" style="margin:0 0 var(--sp-3);">
+      Staff add these to an order at the counter. <strong>Per quantity</strong> multiplies the price by how
+      many are added; <strong>flat charge</strong> bills once however many. Add-ons are always charged in
+      full — no offer or coupon discounts one.</p>`);
+    const rows = data.topups.map((t) => `
+      <tr>
+        <td><strong>${esc(t.name)}</strong>${t.description ? `<div class="text-xs text-muted">${esc(t.description)}</div>` : ""}</td>
+        <td>${money(t.price)}</td>
+        <td>${esc(chargeLabel(t))}</td>
+        <td>${t.sort_order}</td>
+        <td>${t.active ? "✅" : "⛔"}</td>
+        <td class="row"><button class="btn btn-sm btn-outline" data-edit="${t.id}">Edit</button>
+          <button class="btn btn-sm btn-danger" data-del="${t.id}">Delete</button></td>
+      </tr>`).join("");
+    body.insertAdjacentHTML("beforeend", `<div class="table-wrap"><table class="admin-table"><thead><tr><th>Add-on</th><th>Price</th><th>Charged</th><th>Sort</th><th>Active</th><th></th></tr></thead><tbody>${rows || emptyRow(6)}</tbody></table></div>`);
+    el("#addBtn").addEventListener("click", () => topupForm());
+    els("[data-edit]", body).forEach((b) => b.addEventListener("click", () => topupForm(data.topups.find((t) => t.id == b.dataset.edit))));
+    els("[data-del]", body).forEach((b) => b.addEventListener("click", () => del(
+      `/api/admin/topups/${b.dataset.del}`,
+      "Delete this add-on? Orders that already have it keep what they were charged.")));
+  }
+
+  function topupForm(topup) {
+    const t = topup || { name: "", price: 0, per_quantity: true, description: "", sort_order: 0, active: true };
+    const m = modal({
+      title: topup ? "Edit add-on" : "Add add-on",
+      bodyHTML: `
+        <div class="field"><label>Name</label><input class="input" id="fName" value="${esc(t.name)}" placeholder="e.g. Extra Cheese" /></div>
+        <div class="input-row">
+          <div class="field grow"><label>Price (₹)</label><input class="input" id="fPrice" type="number" min="0" step="1" value="${t.price}" /></div>
+          <div class="field grow"><label>Charged</label>
+            <select class="select" id="fPerQty">
+              <option value="true" ${t.per_quantity ? "selected" : ""}>Per quantity (price × how many)</option>
+              <option value="false" ${!t.per_quantity ? "selected" : ""}>Flat charge (once per order)</option>
+            </select></div>
+        </div>
+        <div class="field"><label>Note for the counter (optional)</label>
+          <input class="input" id="fDesc" value="${esc(t.description || "")}" placeholder="e.g. One extra slice" /></div>
+        <div class="input-row">
+          <div class="field grow"><label>Sort order</label><input class="input" id="fSort" type="number" value="${t.sort_order}" /></div>
+          <div class="field grow"><label>Active</label><select class="select" id="fActive"><option value="true" ${t.active ? "selected" : ""}>Active</option><option value="false" ${!t.active ? "selected" : ""}>Hidden</option></select></div>
+        </div>
+        <p class="text-muted text-sm">Changing the price changes what the next order is charged. Bills already
+          printed keep the price they were given.</p>`,
+      footHTML: `<button class="btn btn-primary btn-block" id="saveBtn">Save add-on</button>`,
+    });
+    el("#saveBtn", m.backdrop).addEventListener("click", async () => {
+      const payload = {
+        name: el("#fName", m.backdrop).value.trim(),
+        price: parseFloat(el("#fPrice", m.backdrop).value) || 0,
+        per_quantity: el("#fPerQty", m.backdrop).value === "true",
+        description: el("#fDesc", m.backdrop).value.trim(),
+        sort_order: parseInt(el("#fSort", m.backdrop).value) || 0,
+        active: el("#fActive", m.backdrop).value === "true",
+      };
+      if (!payload.name) return toast("Give the add-on a name", "err");
+      if (payload.price < 0) return toast("Price cannot be negative", "err");
+      await save(topup ? "put" : "post", topup ? `/api/admin/topups/${topup.id}` : "/api/admin/topups", payload, m);
     });
   }
 
