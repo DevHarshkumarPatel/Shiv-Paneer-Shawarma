@@ -76,6 +76,19 @@ class StaffOrderRequest(CreateOrderRequest):
     payment_collected: bool = False
 
 
+class OrderEditRequest(StaffOrderRequest):
+    """A correction to an order that has already been placed.
+
+    Exactly the counter's own payload, because the edit screen *is* the counter
+    screen with an order loaded into it — same cart, same coupon, same offers,
+    priced by the same module. It is a separate name only so the two endpoints
+    can drift apart later without one of them quietly changing the other.
+
+    `payment_collected` reads both ways here: ticked marks the money in hand,
+    unticked on an order that was marked paid takes that back. Both are logged.
+    """
+
+
 class StatusUpdateRequest(BaseModel):
     status: str
 

@@ -1,4 +1,6 @@
 """Customer orders and their embedded structures."""
+import json
+
 from google.cloud import ndb
 
 # Canonical status vocabulary. Terminal states end a lifecycle.
@@ -86,6 +88,45 @@ class StatusEvent(ndb.Model):
         return {"status": self.status, "at": self.at.isoformat() if self.at else None, "by": self.by}
 
 
+class OrderEdit(ndb.Model):
+    """One save of the edit screen, and everything that save changed.
+
+    Kept on the order rather than in a kind of its own so the board gets an
+    order's whole edit history in the single read it already does — a second
+    query per card would be a hundred queries on a busy day.
+
+    `changes_json` is JSON rather than a repeated sub-model because ndb refuses
+    a repeated StructuredProperty whose model itself holds a repeated property,
+    and an edit is a list of changes inside a list of edits. Each entry is
+    ``{"label", "old", "new", "kind"}`` — `kind` is "money" when the two values
+    are amounts the screen should render as currency, "text" otherwise.
+
+    `at` is stored naive UTC like every other timestamp here; the staff screens
+    format it as IST.
+    """
+
+    at = ndb.DateTimeProperty(auto_now_add=True)
+    by = ndb.StringProperty(default="")        # staff / owner email
+    by_role = ndb.StringProperty(default="")   # role as it was at the time
+    changes_json = ndb.TextProperty(default="[]")
+    total_before = ndb.FloatProperty(default=0.0)
+    total_after = ndb.FloatProperty(default=0.0)
+
+    def to_dict(self) -> dict:
+        try:
+            changes = json.loads(self.changes_json or "[]")
+        except ValueError:
+            changes = []
+        return {
+            "at": self.at.isoformat() if self.at else None,
+            "by": self.by,
+            "by_role": self.by_role,
+            "changes": changes,
+            "total_before": self.total_before,
+            "total_after": self.total_after,
+        }
+
+
 class Order(ndb.Model):
     public_id = ndb.StringProperty(required=True)   # e.g. SPS-260718-0042
     order_type = ndb.StringProperty(choices=["dine_in", "takeaway", "delivery"], required=True)
@@ -120,6 +161,10 @@ class Order(ndb.Model):
 
     status = ndb.StringProperty(choices=ORDER_STATUSES, default="placed")
     history = ndb.StructuredProperty(StatusEvent, repeated=True)
+    # Every change made to this order after it was placed, oldest first.
+    # An order is money owed and food promised, so a correction has to say
+    # who made it and what it moved — never just overwrite the old figure.
+    edits = ndb.StructuredProperty(OrderEdit, repeated=True)
     notes = ndb.TextProperty(default="")
 
     created_at = ndb.DateTimeProperty(auto_now_add=True)
@@ -129,7 +174,14 @@ class Order(ndb.Model):
     def by_public_id(cls, public_id: str) -> "Order | None":
         return cls.query(cls.public_id == public_id.upper().strip()).get()
 
-    def to_dict(self, include_customer: bool = True) -> dict:
+    def to_dict(self, include_customer: bool = True, include_edits: bool = False) -> dict:
+        """Serialise the order.
+
+        `include_edits` is off by default and deliberately so: the edit log
+        carries the email and role of whoever made each change, and the order
+        itself is readable without a login — the customer's track page fetches
+        it by id. Only the staff endpoints ask for it.
+        """
         data = {
             "public_id": self.public_id,
             "order_type": self.order_type,
@@ -151,6 +203,8 @@ class Order(ndb.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+        if include_edits:
+            data["edits"] = [e.to_dict() for e in self.edits]
         if include_customer and self.customer:
             data["customer"] = self.customer.to_dict()
         return data

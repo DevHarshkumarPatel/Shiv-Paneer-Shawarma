@@ -28,6 +28,7 @@
       el("#navMenu").classList.remove("hidden");
       el("#navCustomers").classList.remove("hidden");
       el("#navReviews").classList.remove("hidden");
+      el("#navEdits").classList.remove("hidden");
     }
     el("#logoutBtn").addEventListener("click", async () => { await Auth.logout(); location.href = "login.html"; });
     els("[data-filter]").forEach((c) => c.addEventListener("click", () => {
@@ -357,87 +358,34 @@
       return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
     }
 
-    function itemLine(i) {
-      const variant = i.variant_label ? ` (${i.variant_label})` : "";
-      const free = i.free_quantity ? ` +${i.free_quantity} free` : "";
-      const promo = i.promo_label ? ` [${i.promo_label}]` : "";
-      return `• ${i.quantity}× ${i.name}${variant}${free}${promo} — ${money(i.line_total)}`;
-    }
-
     function message(o) {
-      const name = ((o.customer && o.customer.name) || "").trim();
-      const cancelled = o.status === "cancelled";
+      /* Not a bill any more, on purpose (2026-09-19): the owner sends the
+         printed bill at the counter and this message afterwards, and putting
+         the item list, the totals and the track link in front of the thank-you
+         buried the only part of it the customer was meant to read. What is left
+         is the owner's own words, and the one link that asks something of them.
+
+         Blank lines between each part are load-bearing: WhatsApp renders one
+         long paragraph as a wall of text on a phone. */
+      if (o.status === "cancelled") {
+        return [
+          `Your order *${o.public_id}* with *${SHOP}* has been cancelled.`,
+          "",
+          "Sorry for the trouble — do order again, we'd love to make it right. ❤️",
+        ].join("\n");
+      }
+
       const L = [];
-
-      L.push(name ? `Namaste ${name} 🙏` : "Namaste 🙏");
-      /* The greeting no longer splits on repeat_no. The order block below
-         already carries "your 3rd order with us", and the owner's wording
-         welcomes a returning customer and a first-timer the same way — as
-         family — which is the point of it. */
-      L.push(cancelled
-        ? `Your order with *${SHOP}* has been cancelled. Here are the details for your records.`
-        : "🌯❤️ Thank you for being a part of our Shawarma Family!❤️🌯");
+      L.push(`We truly hope you loved your *${itemNames(o)}* and that every bite made you happy! 😋`);
       L.push("");
-
-      L.push(`*Order ${o.public_id}*`);
-      if (o.created_at) L.push(`🗓 ${fmtDateTime(o.created_at)}`);
-      if (o.repeat_no > 1) L.push(`🔁 Your ${ordinal(o.repeat_no)} order with us`);
-      L.push(`${TYPE_EMOJI[o.order_type] || "🍽️"} ${TYPE_LABEL[o.order_type] || o.order_type}`);
+      L.push("We'd love to see you again and again. Your love and support mean a lot to us! 🥰");
       L.push("");
-
-      L.push("*Your bill*");
-      o.items.forEach((i) => L.push(itemLine(i)));
-
-      /* Same rule as the card: show the subtotal only when something moves it,
-         otherwise the subtotal and the total are the same number twice. */
-      if (o.promo_discount > 0 || o.coupon_discount > 0 || o.delivery_fee > 0) {
-        L.push(`Subtotal: ${money(o.subtotal)}`);
-      }
-      if (o.promo_discount > 0) {
-        const labels = [...new Set(o.items.map((i) => i.promo_label).filter(Boolean))];
-        L.push(`Offers${labels.length ? ` · ${labels.join(", ")}` : ""}: − ${money(o.promo_discount)}`);
-      }
-      if (o.coupon_discount > 0) {
-        L.push(`Coupon${o.coupon_code ? ` ${o.coupon_code}` : ""}: − ${money(o.coupon_discount)}`);
-      }
-      if (o.delivery_fee > 0) {
-        L.push(`Delivery${o.delivery_area ? ` · ${o.delivery_area}` : ""}: ${money(o.delivery_fee)}`);
-      }
-      L.push(`*Total: ${money(o.total)}*`);
+      L.push("And hey, if you have any suggestions or feedback, please don't hesitate to share them "
+           + "with us. Tell us honestly — just like you would with a friend or family member. ❤️");
+      // The review link belongs with the ask for feedback, not off on its own.
+      if (reviewsOn) L.push(`Tell us here: ${pageUrl("review.html", o.public_id)}`);
       L.push("");
-
-      if (o.payment) {
-        L.push(`💳 ${payLabel(o.payment)}${o.payment.upi_reference ? ` · UTR ${o.payment.upi_reference}` : ""}`);
-      }
-      if (o.order_type === "delivery" && o.customer && o.customer.address) {
-        L.push(`🛵 Deliver to: ${o.customer.address}`);
-      }
-      if (!cancelled) L.push(`📦 Status: ${statusLabel(o.status)}`);
-      L.push("");
-
-      if (cancelled) {
-        L.push("Sorry for the trouble — do order again, we'd love to make it right.");
-      } else {
-        L.push(`Track your order: ${pageUrl("track.html", o.public_id)}`);
-        L.push("");
-        /* The owner's own words, kept as written. Blank lines between each part
-           on purpose: WhatsApp renders one long paragraph as a wall of text on
-           a phone, and this is the half of the message the customer is meant to
-           read rather than check. */
-        L.push(`We truly hope you loved your *${itemNames(o)}* and that every bite made you happy! 😋`);
-        L.push("");
-        L.push("We'd love to see you again and again. Your love and support mean a lot to us! 🥰");
-        L.push("");
-        L.push("And hey, if you have any suggestions or feedback, please don't hesitate to share them "
-             + "with us. Tell us honestly — just like you would with a friend or family member. ❤️");
-        // The review link belongs with the ask for feedback, not off on its own.
-        if (reviewsOn) L.push(`Tell us here: ${pageUrl("review.html", o.public_id)}`);
-        L.push("");
-        L.push("Your feedback helps us make your next shawarma even better! 🌯✨");
-        L.push("");
-        L.push("Thank you for choosing us! See you again soon! ❤️");
-      }
-      L.push(`— ${SHOP}`);
+      L.push("Your feedback helps us make your next shawarma even better! 🌯✨");
       return L.join("\n");
     }
 
@@ -476,6 +424,47 @@
 
     return { init, open };
   })();
+
+  /* Who may still change this order, mirrored from the backend so the button
+     is simply absent rather than there and refused. Staff correct an order
+     while it is live; once it has been handed over or cancelled only the owner
+     can reopen it, because by then the edit restates a bill rather than fixes
+     an order. The server checks this again — this is only the UI being honest
+     about it. */
+  function canEdit(o) {
+    if (!user) return false;
+    if (user.role === "owner") return true;
+    return !["delivered", "picked_up", "served", "cancelled"].includes(o.status);
+  }
+
+  /* The order's own change log, folded away until asked for.
+
+     Collapsed by default on purpose: most orders are never edited, and the
+     board is read at a glance across a counter. Open, it answers the only
+     three questions anyone asks about a corrected bill — what moved, who moved
+     it and when (IST, like every time on these screens). */
+  function editHistory(o) {
+    const edits = o.edits || [];
+    if (!edits.length) return "";
+    const last = edits[edits.length - 1];
+    const rows = edits.slice().reverse().map((e) => {
+      const changes = (e.changes || []).map((ch) => {
+        const val = (v, kind) => (v === "" || v == null) ? "—" : (kind === "money" ? money(v) : esc(v));
+        return `<div class="oe-change"><span>${esc(ch.label)}</span>
+          <span><s>${val(ch.old, ch.kind)}</s> → <strong>${val(ch.new, ch.kind)}</strong></span></div>`;
+      }).join("");
+      return `<div class="oe-entry">
+        <div class="oe-when">${esc(fmtDateTime(e.at))} · ${esc(e.by || "unknown")}${
+          e.by_role ? ` <span class="text-muted">(${esc(e.by_role)})</span>` : ""}</div>
+        ${changes}
+      </div>`;
+    }).join("");
+    return `<details class="oc-edits">
+      <summary>✏️ Edited ${edits.length} time${edits.length > 1 ? "s" : ""} · last ${
+        esc(fmtDateTime(last.at))} by ${esc(last.by || "unknown")}</summary>
+      ${rows}
+    </details>`;
+  }
 
   /* "3rd order" reads faster than a bare count. Orders placed before the
      repeat count was recorded have none, and are left unlabelled rather than
@@ -609,6 +598,15 @@
         <button class="btn btn-sm btn-outline grow" data-invoice="${esc(o.public_id)}">🖨 Invoice</button>
       </div>`;
 
+    /* An anchor, not a button with a handler: editing opens the counter screen
+       with this order loaded, and a link is what survives a middle-click, a
+       long-press "open in new tab" and a reload. */
+    const editBtn = canEdit(o)
+      ? `<div class="row" style="margin-bottom:8px;">
+           <a class="btn btn-sm btn-outline grow" href="new-order.html?edit=${encodeURIComponent(o.public_id)}">✏️ Edit order</a>
+         </div>`
+      : "";
+
     return `<article class="order-card type-${o.order_type}">
       <div class="oc-head">
         <div><div class="oc-id">${esc(o.public_id)}</div><div class="oc-meta">${esc(created)}${
@@ -623,10 +621,12 @@
         ${bill.join("")}
         <div class="row-between" style="margin-top:8px;font-weight:800;"><span>Total</span><span>${money(o.total)}</span></div>
         ${cust}
+        ${editHistory(o)}
       </div>
       <div class="oc-foot">
         ${payRow}
         ${verifyBtns}
+        ${editBtn}
         ${waBtn}
         ${actions}
       </div>

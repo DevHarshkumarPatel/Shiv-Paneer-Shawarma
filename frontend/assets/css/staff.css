@@ -583,3 +583,61 @@ body.has-pos-bar { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px))
   .pr-actions { display: flex; justify-content: center; flex-wrap: wrap; }
   .pr-actions .btn { width: auto; }
 }
+
+/* ---- editing an order that already exists ----
+   The banner is the one thing that tells a counter screen apart from itself:
+   the POS and the edit screen are the same layout, so this has to be
+   unmissable at arm's length, and it stays under the sticky header on a phone
+   rather than scrolling away with the first item. */
+.pos-editing {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--warn-soft); color: var(--warn-ink);
+  border: 1px solid var(--line); border-left: 4px solid var(--warn);
+  border-radius: var(--r-md); font-size: var(--fs-sm); font-weight: 700;
+}
+.pos-editing strong { letter-spacing: .04em; }
+.pos-editing .btn { border-color: currentColor; color: inherit; }
+
+/* What a save changed, on the receipt. Old value struck through, new value
+   bold: the point is the movement, so both ends stay on screen. */
+.pos-changes { text-align: left; margin-top: var(--sp-4); border-top: 1px solid var(--line); padding-top: var(--sp-3); }
+.pos-changes h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-md); }
+.pc-row { display: flex; justify-content: space-between; gap: var(--sp-3); font-size: var(--fs-sm); padding: 4px 0; border-bottom: 1px dashed var(--line); }
+.pc-row:last-child { border-bottom: 0; }
+.pc-label { color: var(--ink-2); }
+.pc-move { text-align: right; }
+.pc-move s { color: var(--ink-3); }
+
+/* ---- an order's own change log, on its card ----
+   Folded away because most orders are never edited and the board is read at a
+   glance; open, it is the whole answer, so it scrolls inside the card rather
+   than pushing every other order down the page. */
+.oc-edits { margin-top: var(--sp-3); border-top: 1px dashed var(--line); padding-top: var(--sp-2); }
+.oc-edits > summary { cursor: pointer; font-size: var(--fs-xs); color: var(--ink-2); font-weight: 700; list-style: none; }
+.oc-edits > summary::-webkit-details-marker { display: none; }
+.oc-edits > summary::before { content: "▸ "; }
+.oc-edits[open] > summary::before { content: "▾ "; }
+.oc-edits[open] { max-height: 260px; overflow-y: auto; }
+.oe-entry { margin-top: var(--sp-2); padding-left: var(--sp-2); border-left: 2px solid var(--line); }
+.oe-when { font-size: var(--fs-xs); font-weight: 700; color: var(--ink-2); }
+.oe-change { display: flex; justify-content: space-between; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--ink-2); padding: 2px 0; }
+.oe-change s { color: var(--ink-3); }
+.oe-change strong { color: var(--ink); }
+
+/* ---- owner's edit log page ---- */
+.edit-log { display: grid; gap: var(--sp-3); margin-bottom: var(--sp-6); }
+.el-card .card-pad { padding: var(--sp-3) var(--sp-4); }
+.el-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-3); flex-wrap: wrap; }
+.el-id { font-weight: 800; letter-spacing: .04em; color: var(--brand-700); text-decoration: none; }
+.el-sub { font-size: var(--fs-xs); color: var(--ink-2); }
+.el-who { text-align: right; font-size: var(--fs-xs); }
+/* The bill either side of the change, and the difference — the number the
+   owner opened this page for. */
+.el-totals { margin: var(--sp-2) 0; font-size: var(--fs-sm); font-weight: 700; }
+.el-delta { margin-left: var(--sp-2); padding: 2px 8px; border-radius: var(--r-pill); font-size: var(--fs-xs); }
+.el-delta.up { background: var(--warn-soft); color: var(--warn-ink); }
+.el-delta.down { background: var(--ok-soft); color: var(--ok-ink); }

@@ -7,11 +7,23 @@
    behave identically here and on the website. This screen is only a faster way
    to drive them: the whole menu is on one page, an item is one tap, and the
    things a counter needs (walk-in with no phone number, cash on delivery,
-   money already in the drawer) are possible without lying to the system. */
+   money already in the drawer) are possible without lying to the system.
+
+   The same screen edits an order that already exists — new-order.html?edit=ID.
+   It is the same ticket with an order loaded into it rather than a second item
+   picker built to look like this one, so staff learn one screen and a change to
+   how items are chosen cannot apply to new orders only. What differs is small
+   and deliberate: the ticket is never written to the counter's saved cart, the
+   button saves instead of placing, and the save comes back with the list of
+   what it changed, which the order then carries for good. */
 (function () {
-  const { money, esc, el, els, toast } = UI;
+  const { money, esc, el, els, toast, fmtDateTime } = UI;
 
   const CART_KEY = "sps_pos_cart_v1";
+  // Set once, from the URL: the id of the order being edited, or "" for a new
+  // one. Read before `state` is built because it decides whether the ticket
+  // starts from the counter's saved cart or from the order.
+  const EDIT_ID = new URLSearchParams(location.search).get("edit") || "";
   const MODE_LABEL = { dine_in: "Dine-in", takeaway: "Takeaway", delivery: "Delivery" };
   const MODE_EMOJI = { dine_in: "🍽️", takeaway: "🥡", delivery: "🛵" };
 
@@ -26,7 +38,9 @@
     // from the fixed bar at the bottom. On a desktop both are on screen and
     // this is ignored — the CSS decides, not the JS.
     view: "menu",
-    lines: loadCart(),     // {item_id, name, base, size, variant_label, unit_price, quantity}
+    lines: EDIT_ID ? [] : loadCart(),  // {item_id, name, base, size, variant_label, unit_price, quantity}
+    editing: null,         // the order being edited, as it was loaded
+    changes: null,         // what the last save changed, straight from the API
     mode: "takeaway",
     coupon: "",
     coupons: [],           // owner's own codes, when this user may list them
@@ -42,13 +56,15 @@
     placed: null,          // the order once it exists; switches to the receipt view
   };
 
+  const editing = () => !!state.editing;
+
   document.addEventListener("DOMContentLoaded", init);
 
   async function init() {
     state.user = await Auth.requireAuth();
     el("#whoami").textContent = `${state.user.name || state.user.email} · ${state.user.role}`;
     if (state.user.role === "owner") {
-      ["#navMenu", "#navCustomers", "#navReviews"].forEach((s) => el(s).classList.remove("hidden"));
+      ["#navMenu", "#navCustomers", "#navReviews", "#navEdits"].forEach((s) => el(s).classList.remove("hidden"));
     }
     el("#logoutBtn").addEventListener("click", async () => { await Auth.logout(); location.href = "login.html"; });
 
@@ -67,8 +83,80 @@
     try { state.coupons = ((await API.get("/api/coupons")).coupons || []).filter((c) => c.active); }
     catch { state.coupons = []; }
 
+    if (EDIT_ID) {
+      try {
+        await loadForEdit(EDIT_ID);
+      } catch (e) {
+        el("#posRoot").innerHTML = `<div class="empty"><div class="emoji">⚠️</div><h3>Cannot open that order</h3>
+          <p class="text-muted">${esc(e.message)}</p>
+          <p><a class="btn btn-outline" href="orders.html">← Back to the board</a></p></div>`;
+        return;
+      }
+    }
+
     await refreshQuote();
     render();
+  }
+
+  /* ---------------- edit mode ---------------- */
+
+  /* Fill the ticket from an order that has already been placed.
+
+     Everything the edit screen can change is read back off the order, so the
+     first thing staff see is the order exactly as it stands — anything they do
+     not touch saves back unchanged, and the log stays about what they meant to
+     change rather than about what the screen forgot to load. */
+  async function loadForEdit(id) {
+    const o = await API.get(`/api/admin/orders/${encodeURIComponent(id)}`);
+    state.editing = o;
+    state.mode = o.order_type;
+    /* The charged quantity only. Free items are what an offer decides, and the
+       re-price works them out again — carrying them back onto the ticket would
+       bill the customer for a B2G1 gift. */
+    state.lines = (o.items || []).map((i) => ({
+      item_id: i.item_id, name: i.name, base: i.base || "", size: i.size || "",
+      variant_label: i.variant_label || "", unit_price: i.unit_price, quantity: i.quantity,
+    }));
+    state.coupon = o.coupon_code || "";
+    const c = o.customer || {};
+    state.customer = { name: c.name || "", phone: c.phone || "", address: c.address || "" };
+    /* An order stores the delivery area's *name*, because that is what a bill
+       has to keep saying after the area is renamed or its fee changes. The id
+       the select needs is looked back up here, and an area that no longer
+       exists simply leaves the field empty to be chosen again. */
+    const area = state.areas.find((a) => a.name === o.delivery_area);
+    state.deliveryAreaId = area ? String(area.id) : "";
+    const p = o.payment || {};
+    state.payment = p.method === "upi" ? "upi" : "cash";
+    state.paymentCollected = p.status === "paid";
+    state.upiReference = p.upi_reference || "";
+    state.notes = o.notes || "";
+  }
+
+  // Throw away what has been typed and start again from the saved order. The
+  // counter's own "Clear ticket" would be the wrong offer here — nobody edits
+  // an order in order to empty it.
+  async function revertEdit() {
+    if (!state.editing) return;
+    await loadForEdit(state.editing.public_id);
+    await refreshQuote();
+    render();
+    toast("Back to the saved order", "ok");
+  }
+
+  /* The banner that says this is not a new order. Carries the order id, when it
+     was placed and how many times it has already been changed, because an order
+     on its fourth correction is worth a second look before a fifth. */
+  function editBanner() {
+    const o = state.editing;
+    if (!o) return "";
+    const n = (o.edits || []).length;
+    return `<div class="pos-editing">
+      <span>✏️ Editing <strong>${esc(o.public_id)}</strong>
+        · placed ${esc(fmtDateTime(o.created_at))}
+        ${n ? `· changed ${n} time${n > 1 ? "s" : ""} before` : ""}</span>
+      <a class="btn btn-ghost btn-sm" href="orders.html">Cancel</a>
+    </div>`;
   }
 
   /* ---------------- menu ---------------- */
@@ -215,6 +303,10 @@
     } catch { return []; }
   }
   function saveCart() {
+    // An edit borrows this screen; it must not borrow the counter's ticket.
+    // Without this, opening an order to fix one line would overwrite the
+    // half-built order someone else left on the till.
+    if (editing()) return;
     try { localStorage.setItem(CART_KEY, JSON.stringify(state.lines)); } catch { /* private mode */ }
   }
 
@@ -432,30 +524,56 @@
 
         <button class="btn btn-primary btn-block btn-lg pos-place-wide" id="posPlace" ${blocked ? "disabled" : ""}>
           ${placeLabel()}</button>
-        ${state.lines.length ? `<button class="btn btn-outline btn-block btn-sm" id="posClear">Clear ticket</button>` : ""}
+        ${editing()
+          ? `<button class="btn btn-outline btn-block btn-sm" id="posRevert">↺ Undo my changes</button>`
+          : state.lines.length ? `<button class="btn btn-outline btn-block btn-sm" id="posClear">Clear ticket</button>` : ""}
       </aside>`;
   }
 
   /* ---------------- receipt ---------------- */
+
+  /* What the save changed, straight from the server's own log.
+
+     Shown on the receipt rather than only on the board because this is the one
+     moment the person who made the change is still looking — a re-price that
+     moved the total, or a coupon that dropped off when the items changed, has
+     to be visible now and not discovered at hand-over. */
+  function changeList() {
+    const changes = state.changes;
+    if (!changes) return "";
+    if (!changes.length) {
+      return `<p class="text-sm text-muted" style="margin:var(--sp-3) 0 0;">Nothing changed — the order is as it was.</p>`;
+    }
+    const val = (v, kind) => (v === "" || v == null) ? "—" : (kind === "money" ? money(v) : esc(v));
+    return `<div class="pos-changes">
+      <h3>Saved ${changes.length} change${changes.length > 1 ? "s" : ""}</h3>
+      ${changes.map((ch) => `<div class="pc-row">
+        <span class="pc-label">${esc(ch.label)}</span>
+        <span class="pc-move"><s>${val(ch.old, ch.kind)}</s> → <strong>${val(ch.new, ch.kind)}</strong></span>
+      </div>`).join("")}
+    </div>`;
+  }
 
   function receipt(order) {
     const pay = order.payment || {};
     const payMsg = pay.status === "paid" ? "Paid"
       : pay.status === "awaiting_verification" ? "UPI reference recorded — verify on the board"
       : "Payment pending";
+    const edited = editing();
     return `
       <div class="card pos-receipt"><div class="card-pad" style="text-align:center;">
-        <div style="font-size:2.4rem;">✅</div>
-        <h2 style="margin:var(--sp-2) 0;">Order placed</h2>
+        <div style="font-size:2.4rem;">${edited ? "✏️" : "✅"}</div>
+        <h2 style="margin:var(--sp-2) 0;">${edited ? "Order updated" : "Order placed"}</h2>
         <div class="order-id-badge">${esc(order.public_id)}</div>
         <p class="text-sm text-muted" style="margin-top:var(--sp-3);">
           ${esc(MODE_LABEL[order.order_type])} · ${money(order.total)} · ${esc(payMsg)}<br />
           ${esc((order.customer && order.customer.name) || "Walk-in")}${order.customer && order.customer.phone ? ` · ${esc(order.customer.phone)}` : ""}
           ${order.repeat_no ? ` · visit #${order.repeat_no}` : ""}
         </p>
+        ${edited ? changeList() : ""}
         <p class="text-sm text-muted" id="posPrintState" style="margin:var(--sp-2) 0 0;"></p>
         <div class="pr-actions">
-          <button class="btn btn-primary btn-lg" id="posAnother">+ New order</button>
+          <button class="btn btn-primary btn-lg" id="posAnother">${edited ? "✏️ Keep editing" : "+ New order"}</button>
           <button class="btn btn-dark" id="posPrint">🖨 Print bill</button>
           <button class="btn btn-outline" id="posInvoice">🧾 Bill / invoice</button>
           <a class="btn btn-outline" href="orders.html">Orders board →</a>
@@ -475,7 +593,11 @@
     if (state.placed) {
       el("#posRoot").innerHTML = receipt(state.placed);
       el("#posInvoice").addEventListener("click", () => Invoice.open(state.placed));
-      el("#posAnother").addEventListener("click", () => { state.placed = null; render(); });
+      el("#posAnother").addEventListener("click", () => {
+        state.placed = null;
+        state.changes = null;
+        render();
+      });
       /* The only print that may open the picker, because this one is a click.
          Everything else about it is the automatic print. */
       el("#posPrint").addEventListener("click", () => printBill(state.placed, true));
@@ -483,6 +605,7 @@
       return;
     }
     el("#posRoot").innerHTML = `
+      ${editBanner()}
       <div class="pos-grid" data-view="${state.view}">${menuPanel()}${ticketPanel()}</div>
       ${bottomBar()}`;
     // Reserves room under the fixed bar so the last card is never trapped
@@ -508,6 +631,11 @@
   const canPrint = () => typeof BTPrint !== "undefined" && BTPrint.supported();
 
   function placeLabel() {
+    if (editing()) {
+      if (!state.lines.length) return "An order needs at least one item";
+      if (deadList().length) return "Remove sold-out items to continue";
+      return `Save changes · ${money(state.quote ? state.quote.total : 0)}`;
+    }
     if (!state.lines.length) return "Add items to place an order";
     if (deadList().length) return "Remove sold-out items to continue";
     const total = money(state.quote ? state.quote.total : 0);
@@ -634,6 +762,8 @@
     el("#posNotes").addEventListener("input", (e) => state.notes = e.target.value);
 
     el("#posPlace").addEventListener("click", placeOrder);
+    const revert = el("#posRevert");
+    if (revert) revert.addEventListener("click", revertEdit);
     const clear = el("#posClear");
     if (clear) clear.addEventListener("click", () => {
       state.lines = [];
@@ -769,10 +899,11 @@
     // Both buttons say the same thing: the wide one in the ticket on a desktop
     // and the one in the fixed bar on a phone.
     state.placing = true;
-    els("#posPlace, #posBarAction").forEach((b) => { b.disabled = true; b.textContent = "Placing…"; });
+    const working = editing() ? "Saving…" : "Placing…";
+    els("#posPlace, #posBarAction").forEach((b) => { b.disabled = true; b.textContent = working; });
     await ensurePrinter();
     try {
-      const order = await API.post("/api/admin/orders", {
+      const body = {
         cart: cartPayload(),
         order_type: state.mode,
         coupon_code: state.coupon,
@@ -782,19 +913,32 @@
         payment_collected: state.paymentCollected,
         upi_reference: state.upiReference,
         notes: state.notes,
-      });
-      // The ticket is done: everything that belongs to it is reset so the next
-      // customer cannot inherit the last one's coupon, note or address.
-      state.lines = [];
-      state.coupon = "";
-      state.quote = null;
-      state.customer = { name: "", phone: "", address: "" };
-      state.deliveryAreaId = "";
-      state.payment = "cash";
-      state.paymentCollected = false;
-      state.upiReference = "";
-      state.notes = "";
-      saveCart();
+      };
+      /* A save comes back as {order, changes}; a new order comes back as the
+         order itself. The changes are what the backend actually wrote to the
+         log, not what this screen thinks it sent — a re-price can move the
+         total on its own, and the receipt should say so. */
+      let order;
+      if (editing()) {
+        const saved = await API.put(`/api/admin/orders/${encodeURIComponent(state.editing.public_id)}`, body);
+        order = saved.order;
+        state.changes = saved.changes || [];
+        state.editing = order;
+      } else {
+        order = await API.post("/api/admin/orders", body);
+        // The ticket is done: everything that belongs to it is reset so the next
+        // customer cannot inherit the last one's coupon, note or address.
+        state.lines = [];
+        state.coupon = "";
+        state.quote = null;
+        state.customer = { name: "", phone: "", address: "" };
+        state.deliveryAreaId = "";
+        state.payment = "cash";
+        state.paymentCollected = false;
+        state.upiReference = "";
+        state.notes = "";
+        saveCart();
+      }
       state.placed = order;
       state.placing = false;
       state.view = "menu";
