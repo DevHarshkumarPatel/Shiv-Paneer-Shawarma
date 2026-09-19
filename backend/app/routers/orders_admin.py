@@ -7,10 +7,14 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from ..deps import get_current_user, require_owner
-from ..models import Order, StatusEvent
+from ..models import Coupon, CustomerInfo, Order, OrderItem, PaymentInfo, StatusEvent
 from ..models.order import STATUS_FLOW
-from ..schemas.models import StaffOrderRequest, StatusUpdateRequest, VerifyPaymentRequest
+from ..schemas.models import (
+    OrderEditRequest, StaffOrderRequest, StatusUpdateRequest, VerifyPaymentRequest,
+)
+from ..services.order_edit import record_edit, snapshot
 from ..services.orders import persist_order, price_or_reject
+from ..services.phones import norm_phone
 
 router = APIRouter(prefix="/api/admin/orders", tags=["admin-orders"])
 
@@ -50,7 +54,7 @@ def list_orders(
             continue
         if active_only and o.status in TERMINAL:
             continue
-        orders.append(o.to_dict())
+        orders.append(o.to_dict(include_edits=True))
         if len(orders) >= limit:
             break
     return {"orders": orders}
@@ -118,7 +122,7 @@ def create_counter_order(body: StaffOrderRequest, user=Depends(get_current_user)
         placed_by=user.email,
         verified_by=user.email if pay_status == "paid" else "",
     )
-    return order.to_dict()
+    return order.to_dict(include_edits=True)
 
 
 @router.get("/latest")
@@ -232,12 +236,188 @@ def export_orders_csv(
     )
 
 
+@router.get("/edits/recent")
+def recent_edits(date: str | None = None, scan: int = 400, _owner=Depends(require_owner)):
+    """Owner-only feed of order edits, newest first — the audit screen.
+
+    Walks back through the most recently touched orders and flattens their edit
+    logs. Recently touched, not recently placed, because the whole point of this
+    screen is a correction made today to an order taken last week, and `date`
+    filters on when the *edit* happened rather than when the order did.
+
+    Bounded by `scan` rather than paged: every status change also bumps
+    ``updated_at``, so the orders worth reading sit near the front, and a
+    deliberate ceiling is better here than a query that grows with the year.
+    """
+    start_utc = end_utc = None
+    if date:
+        start_utc, end_utc = _ist_day_utc_window(date)
+
+    rows = []
+    for o in Order.query().order(-Order.updated_at).fetch(max(1, min(scan, 1000))):
+        for e in o.edits:
+            if start_utc and not (e.at and start_utc <= e.at < end_utc):
+                continue
+            row = e.to_dict()
+            row.update({
+                "order_public_id": o.public_id,
+                "order_type": o.order_type,
+                "order_status": o.status,
+                "customer_name": o.customer.name if o.customer else "",
+                "customer_phone": o.customer.phone if o.customer else "",
+            })
+            rows.append(row)
+    rows.sort(key=lambda r: r["at"] or "", reverse=True)
+    return {"edits": rows, "scanned": scan}
+
+
 @router.get("/{public_id}")
 def get_one(public_id: str, user=Depends(get_current_user)):
     order = Order.by_public_id(public_id)
     if not order:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found.")
-    return order.to_dict()
+    return order.to_dict(include_edits=True)
+
+
+def _may_edit(user, order) -> None:
+    """Who may still change this order, and until when.
+
+    Staff edit an order while it is live — the window in which the food has not
+    been handed over and a correction is still just a correction. Once it is
+    delivered, picked up, served or cancelled, only the owner can reopen it,
+    because at that point the edit is no longer fixing an order but restating a
+    bill that has already been paid. Either way the edit is logged; the role
+    decides what is possible, the log is what makes it answerable.
+    """
+    if user.role == "owner":
+        return
+    if order.status in TERMINAL:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            f"This order is {order.status.replace('_', ' ')} — ask the owner to change it.",
+        )
+
+
+@router.put("/{public_id}")
+def edit_order(public_id: str, body: OrderEditRequest, user=Depends(get_current_user)):
+    """Correct an order that has already been placed, and log what changed.
+
+    Re-prices from scratch through the same module the counter and the website
+    use, so an edited order is priced exactly as it would have been had it been
+    taken this way in the first place — today's offers included. Three things
+    are deliberately frozen and never move:
+
+    * `public_id`, because it is printed on a bill someone is holding;
+    * `created_at`, because the order was placed when it was placed;
+    * `repeat_no`, because "your 3rd order" was true when it was written and
+      recomputing it here would renumber a customer's history on every edit.
+
+    What the customer's own scratch draw was settled against is also left
+    alone: that card was opened and closed when the order was placed, and an
+    edit afterwards is not a second draw.
+    """
+    order = Order.by_public_id(public_id)
+    if not order:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found.")
+    _may_edit(user, order)
+
+    if body.order_type not in ("dine_in", "takeaway", "delivery"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid order type")
+    if body.payment_method not in ("cash", "upi"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Payment method must be 'cash' or 'upi'.")
+    if not body.customer.name.strip():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Customer name is needed.")
+    if not re.fullmatch(r"[0-9]{10}", body.customer.phone.strip()):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "A 10-digit phone number is needed.")
+
+    priced = price_or_reject(
+        [c.model_dump() for c in body.cart], body.order_type, body.coupon_code,
+        body.delivery_area_id, body.customer.phone,
+    )
+    if body.coupon_code and not priced.coupon_code:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            priced.coupon_error or "That coupon cannot be used on this order.")
+    if body.order_type == "delivery":
+        if priced.delivery_area_required:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Select the delivery area.")
+        if not body.customer.address.strip():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Delivery needs an address.")
+
+    # Taken before anything is touched: this is the "old" half of every line the
+    # log is about to write.
+    before = snapshot(order)
+
+    old_pay = order.payment
+    if body.payment_collected:
+        pay_status = "paid"
+    elif old_pay and old_pay.status == "failed" and old_pay.method == body.payment_method:
+        # A rejected payment stays rejected unless someone actually says the
+        # money arrived. Recomputing it would quietly turn "failed" back into
+        # "unpaid" every time the kitchen note was fixed.
+        pay_status = "failed"
+    elif body.payment_method == "upi" and body.upi_reference.strip():
+        pay_status = "awaiting_verification"
+    else:
+        pay_status = "pending"
+
+    order.order_type = body.order_type
+    order.items = [
+        OrderItem(
+            item_id=l.item_id, name=l.name, variant_label=l.variant_label,
+            base=l.base, size=l.size, unit_price=l.unit_price, quantity=l.quantity,
+            free_quantity=l.free_quantity, line_total=round(l.line_total, 2),
+            promo_label=l.promo_label,
+        )
+        for l in priced.lines
+    ]
+    order.customer = CustomerInfo(
+        name=body.customer.name, phone=body.customer.phone,
+        address=body.customer.address, lat=body.customer.lat, lng=body.customer.lng,
+    )
+    # Follows the number on the order so the customer's history keeps finding
+    # it. `repeat_no` stays where it was — see the docstring.
+    order.phone_key = norm_phone(body.customer.phone)
+
+    # Orders written before the payment block existed have none; an edit is a
+    # reasonable place to give them one rather than to fail.
+    if not order.payment:
+        order.payment = PaymentInfo()
+    order.payment.method = body.payment_method
+    order.payment.status = pay_status
+    order.payment.upi_reference = body.upi_reference.strip()
+    order.payment.amount = round(priced.total, 2)
+    if pay_status == "paid":
+        order.payment.verified_by = user.email
+
+    order.subtotal = round(priced.subtotal, 2)
+    order.promo_discount = round(priced.promo_discount, 2)
+    order.coupon_discount = round(priced.coupon_discount, 2)
+    order.delivery_fee = round(priced.delivery_fee, 2)
+    order.delivery_area = priced.delivery_area_name
+    order.total = round(priced.total, 2)
+    order.notes = body.notes
+
+    # A coupon taken off an order gives its use back, and one put on takes a
+    # use — otherwise a code with a usage limit is spent by an edit that
+    # removed it. Best-effort, like the counting at placement.
+    old_code = before["coupon_code"]
+    new_code = priced.coupon_code or ""
+    if old_code != new_code:
+        if old_code:
+            c = Coupon.by_code(old_code)
+            if c and c.used_count > 0:
+                c.used_count -= 1
+                c.put()
+        order.coupon_code = new_code
+        if new_code:
+            c = Coupon.by_code(new_code)
+            if c:
+                c.used_count += 1
+                c.put()
+
+    changes = record_edit(order, before, user)
+    order.put()
+    return {"order": order.to_dict(include_edits=True), "changes": changes}
 
 
 @router.post("/{public_id}/status")
@@ -256,7 +436,7 @@ def update_status(public_id: str, body: StatusUpdateRequest, user=Depends(get_cu
     order.status = new_status
     order.history.append(StatusEvent(status=new_status, by=user.email))
     order.put()
-    return order.to_dict()
+    return order.to_dict(include_edits=True)
 
 
 @router.post("/{public_id}/verify-payment")
@@ -271,4 +451,4 @@ def verify_payment(public_id: str, body: VerifyPaymentRequest, user=Depends(get_
     order.payment.status = body.status
     order.payment.verified_by = user.email
     order.put()
-    return order.to_dict()
+    return order.to_dict(include_edits=True)

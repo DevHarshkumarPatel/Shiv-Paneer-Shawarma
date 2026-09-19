@@ -2,7 +2,7 @@
 from .user import User
 from .menu import Category, Subcategory, Item, ItemImage, Variant, Promo
 from .coupon import Coupon
-from .order import Order, OrderItem, CustomerInfo, PaymentInfo, StatusEvent
+from .order import Order, OrderItem, CustomerInfo, PaymentInfo, StatusEvent, OrderEdit
 from .counter import Counter
 from .delivery_area import DeliveryArea
 from .setting import Setting
@@ -24,6 +24,7 @@ __all__ = [
     "CustomerInfo",
     "PaymentInfo",
     "StatusEvent",
+    "OrderEdit",
     "Counter",
     "Setting",
     "ScratchPrize",

@@ -28,6 +28,7 @@
       el("#navMenu").classList.remove("hidden");
       el("#navCustomers").classList.remove("hidden");
       el("#navReviews").classList.remove("hidden");
+      el("#navEdits").classList.remove("hidden");
     }
     el("#logoutBtn").addEventListener("click", async () => { await Auth.logout(); location.href = "login.html"; });
     els("[data-filter]").forEach((c) => c.addEventListener("click", () => {
@@ -477,6 +478,47 @@
     return { init, open };
   })();
 
+  /* Who may still change this order, mirrored from the backend so the button
+     is simply absent rather than there and refused. Staff correct an order
+     while it is live; once it has been handed over or cancelled only the owner
+     can reopen it, because by then the edit restates a bill rather than fixes
+     an order. The server checks this again — this is only the UI being honest
+     about it. */
+  function canEdit(o) {
+    if (!user) return false;
+    if (user.role === "owner") return true;
+    return !["delivered", "picked_up", "served", "cancelled"].includes(o.status);
+  }
+
+  /* The order's own change log, folded away until asked for.
+
+     Collapsed by default on purpose: most orders are never edited, and the
+     board is read at a glance across a counter. Open, it answers the only
+     three questions anyone asks about a corrected bill — what moved, who moved
+     it and when (IST, like every time on these screens). */
+  function editHistory(o) {
+    const edits = o.edits || [];
+    if (!edits.length) return "";
+    const last = edits[edits.length - 1];
+    const rows = edits.slice().reverse().map((e) => {
+      const changes = (e.changes || []).map((ch) => {
+        const val = (v, kind) => (v === "" || v == null) ? "—" : (kind === "money" ? money(v) : esc(v));
+        return `<div class="oe-change"><span>${esc(ch.label)}</span>
+          <span><s>${val(ch.old, ch.kind)}</s> → <strong>${val(ch.new, ch.kind)}</strong></span></div>`;
+      }).join("");
+      return `<div class="oe-entry">
+        <div class="oe-when">${esc(fmtDateTime(e.at))} · ${esc(e.by || "unknown")}${
+          e.by_role ? ` <span class="text-muted">(${esc(e.by_role)})</span>` : ""}</div>
+        ${changes}
+      </div>`;
+    }).join("");
+    return `<details class="oc-edits">
+      <summary>✏️ Edited ${edits.length} time${edits.length > 1 ? "s" : ""} · last ${
+        esc(fmtDateTime(last.at))} by ${esc(last.by || "unknown")}</summary>
+      ${rows}
+    </details>`;
+  }
+
   /* "3rd order" reads faster than a bare count. Orders placed before the
      repeat count was recorded have none, and are left unlabelled rather than
      shown as a first visit. */
@@ -609,6 +651,15 @@
         <button class="btn btn-sm btn-outline grow" data-invoice="${esc(o.public_id)}">🖨 Invoice</button>
       </div>`;
 
+    /* An anchor, not a button with a handler: editing opens the counter screen
+       with this order loaded, and a link is what survives a middle-click, a
+       long-press "open in new tab" and a reload. */
+    const editBtn = canEdit(o)
+      ? `<div class="row" style="margin-bottom:8px;">
+           <a class="btn btn-sm btn-outline grow" href="new-order.html?edit=${encodeURIComponent(o.public_id)}">✏️ Edit order</a>
+         </div>`
+      : "";
+
     return `<article class="order-card type-${o.order_type}">
       <div class="oc-head">
         <div><div class="oc-id">${esc(o.public_id)}</div><div class="oc-meta">${esc(created)}${
@@ -623,10 +674,12 @@
         ${bill.join("")}
         <div class="row-between" style="margin-top:8px;font-weight:800;"><span>Total</span><span>${money(o.total)}</span></div>
         ${cust}
+        ${editHistory(o)}
       </div>
       <div class="oc-foot">
         ${payRow}
         ${verifyBtns}
+        ${editBtn}
         ${waBtn}
         ${actions}
       </div>
