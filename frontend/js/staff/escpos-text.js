@@ -342,13 +342,19 @@ const ESCPOSText = (function () {
       ].filter(Boolean).join(" - ");
       d.line(detail, { indent: 2 });
     });
+    (o.topups || []).forEach((t) => {
+      d.row(`+ ${ascii(t.name) || "Add-on"}`, amount(t.line_total), { bold: true });
+      d.line(t.per_quantity === false
+        ? "Add-on - flat charge"
+        : `${t.quantity} x ${amount(t.unit_price)} - Add-on`, { indent: 2 });
+    });
     d.rule();
 
     /* ---- Bill ---- */
     d.line(`Quantity : ${units} item${units === 1 ? "" : "s"}${free ? ` (+${free} free)` : ""}`);
     // Same rule as the dashboard and the raster bill: a subtotal is only worth
     // a line when something below it moves the number.
-    if (o.promo_discount > 0 || o.coupon_discount > 0 || o.delivery_fee > 0) {
+    if (o.promo_discount > 0 || o.coupon_discount > 0 || o.delivery_fee > 0 || o.topups_total > 0) {
       d.row("Subtotal", amount(o.subtotal));
     }
     if (o.promo_discount > 0) {
@@ -357,6 +363,9 @@ const ESCPOSText = (function () {
     }
     if (o.coupon_discount > 0) {
       d.row(`Coupon${o.coupon_code ? ` ${o.coupon_code}` : ""}`, `- ${amount(o.coupon_discount)}`);
+    }
+    if (o.topups_total > 0) {
+      d.row("Add-ons", amount(o.topups_total));
     }
     if (o.delivery_fee > 0) {
       d.row(`Delivery${o.delivery_area ? ` (${o.delivery_area})` : ""}`, amount(o.delivery_fee));

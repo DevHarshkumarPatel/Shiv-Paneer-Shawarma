@@ -506,6 +506,29 @@ body.has-pos-bar { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px))
 .pos-line .pl-sub { font-size: var(--fs-xs); color: var(--ink-3); }
 .pos-line .pl-amt { font-weight: 800; font-size: var(--fs-sm); min-width: 60px; text-align: right; }
 .pos-line .stepper button { width: 36px; height: 36px; }
+/* ---- add-ons on the ticket ----
+   Folded into a <details> because most orders have none: open, it is a short
+   list of thumb-sized rows; closed, it is one line that still says what is on
+   the order and what it comes to, so the totals stay a thumb away on a phone. */
+.pos-addons { margin-top: var(--sp-3); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface-2); }
+.pos-addons > summary {
+  cursor: pointer; list-style: none; font-weight: 700; font-size: var(--fs-sm);
+  padding: 12px var(--sp-3); min-height: 44px; display: flex; align-items: center; gap: 6px;
+}
+.pos-addons > summary::-webkit-details-marker { display: none; }
+.pos-addons > summary::after { content: "▾"; margin-left: auto; color: var(--ink-3); }
+.pos-addons[open] > summary::after { content: "▴"; }
+.pos-addon-list { padding: 0 var(--sp-3) var(--sp-2); }
+.pos-addon { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px dashed var(--line); }
+.pos-addon .pa-main { flex: 1; min-width: 0; }
+.pos-addon .pa-name { font-weight: 700; font-size: var(--fs-sm); }
+.pos-addon .pa-sub { font-size: var(--fs-xs); color: var(--ink-3); }
+.pos-addon.on .pa-name { color: var(--brand-700); }
+.pos-addon .pa-buy { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.pos-addon .pa-amt { font-weight: 800; font-size: var(--fs-sm); white-space: nowrap; }
+.pos-addon .stepper button { width: 36px; height: 36px; }
+.pos-addon .btn { min-height: 38px; }
+
 .pos-coupon { margin-top: var(--sp-3); }
 /* Code and Apply stay on one line. The shared .input-row wraps under 460px,
    which is right for a pair of form fields and wrong here: it left Apply

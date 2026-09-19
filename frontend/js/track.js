@@ -73,6 +73,14 @@
     /* The bill, not just the total. Without these rows a customer who used a
        coupon saw the items add up to more than they paid, with nothing saying
        why — the discount had no evidence anywhere on the page. */
+    /* Add-ons are listed apart from the items and charged in full, which is
+       what the bill has to show — a customer who paid ₹30 for extra cheese
+       should find that ₹30 named, not absorbed into a dish's price. */
+    const addons = (order.topups || []).map((t) =>
+      `<div class="summary-item"><div><div class="si-name">${esc(t.name)} × ${t.quantity}</div>
+        <div class="si-sub">Add-on</div></div>
+        <div class="si-name">${money(t.line_total)}</div></div>`).join("");
+
     const billRows = [`<div class="summary-line"><span>Subtotal</span><span>${money(order.subtotal)}</span></div>`];
     if (order.promo_discount > 0) {
       const labels = [...new Set(order.items.map((i) => i.promo_label).filter(Boolean))];
@@ -80,6 +88,9 @@
     }
     if (order.coupon_discount > 0) {
       billRows.push(`<div class="summary-line free-note"><span>Coupon ${esc(order.coupon_code || "")}</span><span>− ${money(order.coupon_discount)}</span></div>`);
+    }
+    if (order.topups_total > 0) {
+      billRows.push(`<div class="summary-line"><span>Add-ons</span><span>${money(order.topups_total)}</span></div>`);
     }
     if (order.delivery_fee > 0) {
       const area = order.delivery_area ? `Delivery · ${esc(order.delivery_area)}` : "Delivery fee";
@@ -117,6 +128,7 @@
       <div class="card step-card"><div class="card-pad">
         <h3 style="margin-top:0;">Items</h3>
         ${items}
+        ${addons}
         <div style="margin-top:var(--sp-3);">${billRows.join("")}</div>
         <div class="summary-line grand"><span>Total</span><span>${money(order.total)}</span></div>
         ${order.customer && order.customer.address ? `<p class="text-sm text-muted" style="margin-top:var(--sp-3);">🛵 ${esc(order.customer.address)}</p>` : ""}
