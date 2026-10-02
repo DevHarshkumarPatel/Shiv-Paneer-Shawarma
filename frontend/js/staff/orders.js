@@ -619,7 +619,10 @@
 
     return `<article class="order-card type-${o.order_type}">
       <div class="oc-head">
-        <div><div class="oc-id">${esc(o.public_id)}</div><div class="oc-meta">${esc(created)}${
+        <div><div class="oc-id">${esc(o.public_id)}${
+          // Only worth saying when the owner is looking at every branch at once.
+          typeof StaffBranch !== "undefined" && StaffBranch.isAll() && StaffBranch.all().length > 1 && o.branch_name
+            ? ` <span class="branch-tag">📍 ${esc(o.branch_name)}</span>` : ""}</div><div class="oc-meta">${esc(created)}${
           o.channel === "counter" ? ` · 🧑‍🍳 counter${o.placed_by ? ` · ${esc(o.placed_by)}` : ""}` : ""}</div></div>
         <div style="text-align:right;">
           <span class="type-tag ${o.order_type}">${esc(TYPE_LABEL[o.order_type])}</span>

@@ -77,6 +77,22 @@
     }
     el("#logoutBtn").addEventListener("click", async () => { await Auth.logout(); location.href = "login.html"; });
 
+    // An order being corrected is re-priced at the branch that took it, so the
+    // menu, prices and delivery areas below are that branch's — not whichever
+    // branch the owner's picker happens to be on.
+    let editOrder = null;
+    if (EDIT_ID) {
+      try {
+        editOrder = await API.get(`/api/admin/orders/${encodeURIComponent(EDIT_ID)}`);
+        API.setParams({ branch: editOrder.branch_id || "" });
+      } catch (e) {
+        el("#posRoot").innerHTML = `<div class="empty"><div class="emoji">⚠️</div><h3>Cannot open that order</h3>
+          <p class="text-muted">${esc(e.message)}</p>
+          <p><a class="btn btn-outline" href="orders.html">← Back to the board</a></p></div>`;
+        return;
+      }
+    }
+
     try {
       const { categories } = await API.get("/api/menu");
       flatten(categories || []);
@@ -95,16 +111,7 @@
     try { state.coupons = ((await API.get("/api/coupons")).coupons || []).filter((c) => c.active); }
     catch { state.coupons = []; }
 
-    if (EDIT_ID) {
-      try {
-        await loadForEdit(EDIT_ID);
-      } catch (e) {
-        el("#posRoot").innerHTML = `<div class="empty"><div class="emoji">⚠️</div><h3>Cannot open that order</h3>
-          <p class="text-muted">${esc(e.message)}</p>
-          <p><a class="btn btn-outline" href="orders.html">← Back to the board</a></p></div>`;
-        return;
-      }
-    }
+    if (editOrder) loadForEdit(editOrder);
 
     await refreshQuote();
     render();
@@ -118,8 +125,7 @@
      first thing staff see is the order exactly as it stands — anything they do
      not touch saves back unchanged, and the log stays about what they meant to
      change rather than about what the screen forgot to load. */
-  async function loadForEdit(id) {
-    const o = await API.get(`/api/admin/orders/${encodeURIComponent(id)}`);
+  function loadForEdit(o) {
     state.editing = o;
     state.mode = o.order_type;
     /* The charged quantity only. Free items are what an offer decides, and the

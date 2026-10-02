@@ -21,6 +21,15 @@ live order tracking, UPI payments, and a staff/owner back-office.
 **Staff / Owner** (separate URL, JWT-in-cookie auth)
 - Live orders board across all channels with **status updates** and **payment verification**
 - Owner-only **Menu & Offers** admin: categories, items, per-variant prices, item/category promos, coupons
+- **Branches** (owner, Menu & Offers → Branches): each outlet has its own address, phone, UPI
+  payment QR, delivery areas, staff logins, order-id code (`SPS-ADJ-261002-0001`; Main keeps
+  `SPS-YYMMDD-####`) and open/closed switch. A branch sells Main's menu as it is ("Same menu &
+  prices as Main", on by default) or, with that off, its own prices and stock — only the
+  differences are stored, so anything not changed still follows Main.
+  Staff see only their own branch's orders; the owner picks one branch or **All branches** in the
+  header. Customers choose a branch from its link/QR (`menu.html?b=<link name>`) or a picker that
+  only appears once a second branch is open. No migration needed: existing orders, logins and
+  delivery areas belong to Main.
 
 Pricing (promos, B2G1, coupons, delivery) is **computed authoritatively on the backend** so totals
 can't be tampered with from the client.

@@ -107,6 +107,7 @@
           </div>
         </div>
         <div class="text-sm text-muted" style="margin-top:8px;text-transform:capitalize;">${esc(order.order_type.replace("_", "-"))} · ${money(order.total)}</div>
+        ${order.branch_name && (order.branch_name !== "Main" || order.branch_address) ? `<div class="text-sm text-muted">📍 ${esc(order.branch_name)}${order.branch_phone ? ` · <a href="tel:${esc(order.branch_phone)}">${esc(order.branch_phone)}</a>` : ""}</div>` : ""}
       </div></div>
 
       <!-- Filled in by askForReview() once the order is finished. Sits directly

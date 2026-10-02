@@ -3,6 +3,18 @@
 const API = (() => {
   const base = () => window.SPS_CONFIG.API_BASE || "";
 
+  /* Query params added to every request — today just `branch`, set once by
+     js/branch.js (customer pages) or js/staff/branch.js (staff pages) so no
+     page has to remember to pass it. A param the path already names wins. */
+  let defaults = {};
+  function withDefaults(path) {
+    const extra = Object.entries(defaults).filter(([k, v]) =>
+      v !== "" && v != null && !new RegExp(`[?&]${k}=`).test(path));
+    if (!extra.length) return path;
+    const qs = extra.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
+    return path + (path.includes("?") ? "&" : "?") + qs;
+  }
+
   async function request(method, path, body, headers) {
     const opts = {
       method,
@@ -15,7 +27,7 @@ const API = (() => {
     }
     let res;
     try {
-      res = await fetch(base() + path, opts);
+      res = await fetch(base() + withDefaults(path), opts);
     } catch (e) {
       throw new ApiError("Cannot reach the server. Is the backend running?", 0);
     }
@@ -37,7 +49,7 @@ const API = (() => {
   async function upload(path, formData) {
     let res;
     try {
-      res = await fetch(base() + path, { method: "POST", credentials: "include", body: formData });
+      res = await fetch(base() + withDefaults(path), { method: "POST", credentials: "include", body: formData });
     } catch (e) {
       throw new ApiError("Cannot reach the server. Is the backend running?", 0);
     }
@@ -63,6 +75,7 @@ const API = (() => {
     del: (p, h) => request("DELETE", p, undefined, h),
     upload,
     assetUrl,
+    setParams: (p) => { defaults = { ...defaults, ...p }; },
   };
 })();
 

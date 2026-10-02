@@ -22,6 +22,9 @@
   document.addEventListener("DOMContentLoaded", init);
 
   async function init() {
+    // Settle the branch first: the areas, prices, payment QR and the ordering
+    // switch below are all that branch's.
+    await SiteBranch.ready();
     // Check the ordering switch first so the customer is notified immediately,
     // even before we look at the cart.
     try {
@@ -54,7 +57,7 @@
   function renderClosed() {
     el("#checkoutRoot").innerHTML = `
       <div class="notice-banner">🔔 <strong>We're not accepting online orders right now.</strong>
-        You're welcome to explore our menu — please check back a little later to place your order.</div>
+        You're welcome to explore our menu — please check back a little later to place your order.${SiteBranch.elsewhereHTML()}</div>
       <div class="empty"><div class="emoji">🔔</div>
         <h3>Online ordering is paused</h3>
         <p class="text-muted">Your cart is saved on this device — you'll be able to place your order once ordering reopens.</p>

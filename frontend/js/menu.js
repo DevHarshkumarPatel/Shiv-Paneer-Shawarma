@@ -15,6 +15,9 @@
   document.addEventListener("DOMContentLoaded", init);
 
   async function init() {
+    // Settle the branch first: the menu, prices and ordering switch below are
+    // that branch's.
+    await SiteBranch.ready();
     bindMode();
     bindStatic();
     bindMenuClicks();
@@ -42,7 +45,7 @@
     if (!existing && layout) {
       layout.insertAdjacentHTML("beforebegin",
         `<div class="notice-banner" id="orderingClosedBanner">🔔 <strong>We're not accepting online orders right now.</strong>
-          You're welcome to explore our menu — please check back a little later to place your order.</div>`);
+          You're welcome to explore our menu — please check back a little later to place your order.${SiteBranch.elsewhereHTML()}</div>`);
     }
     // sideHTML() renders the disabled control itself, so the cards only need
     // re-drawing once the flag is known.

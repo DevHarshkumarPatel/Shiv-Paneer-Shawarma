@@ -3,7 +3,8 @@
   const { money, esc, el, els, toast, modal } = UI;
 
   let data = {
-    categories: [], items: [], promos: [], coupons: [], areas: [], topups: [],
+    categories: [], items: [], promos: [], coupons: [], areas: [], topups: [], branches: [],
+    areasBranch: null,
     settings: { ordering_enabled: true, scratch_enabled: false },
     scratch: { prizes: [], enabled: false, live: false },
     awards: { awards: [], stats: {} },
@@ -29,7 +30,7 @@
 
   async function load() {
     try {
-      const [cats, items, promos, coupons, areas, topups, settings, scratch, awards] = await Promise.all([
+      const [cats, items, promos, coupons, areas, topups, settings, scratch, awards, branches] = await Promise.all([
         API.get("/api/admin/menu/categories"),
         API.get("/api/admin/menu/items"),
         API.get("/api/admin/menu/promos"),
@@ -39,11 +40,12 @@
         API.get("/api/admin/settings"),
         API.get("/api/admin/scratch/prizes"),
         API.get("/api/admin/scratch/awards"),
+        API.get("/api/admin/branches"),
       ]);
       data = {
         categories: cats.categories, items: items.items, promos: promos.promos,
         coupons: coupons.coupons, areas: areas.areas, topups: topups.topups,
-        settings, scratch, awards,
+        settings, scratch, awards, branches: branches.branches, areasBranch: areas.branch,
       };
       render();
     } catch (e) {
@@ -62,13 +64,14 @@
         ${tabBtn("promos", "🎉 Promos")}
         ${tabBtn("coupons", "🏷️ Coupons")}
         ${tabBtn("scratch", "🎁 Scratch Cards")}
+        ${tabBtn("branches", "🏬 Branches")}
         ${tabBtn("areas", "🛵 Delivery Areas")}
         ${tabBtn("export", "📄 Export")}
         ${tabBtn("settings", "⚙️ Settings")}
       </div>
       <div id="tabBody"></div>`;
     els("[data-tab]").forEach((b) => b.addEventListener("click", () => { tab = b.dataset.tab; render(); }));
-    ({ items: renderItems, categories: renderCategories, topups: renderTopups, promos: renderPromos, coupons: renderCoupons, scratch: renderScratch, areas: renderAreas, export: renderExport, settings: renderSettings }[tab])();
+    ({ items: renderItems, categories: renderCategories, topups: renderTopups, promos: renderPromos, coupons: renderCoupons, scratch: renderScratch, branches: renderBranches, areas: renderAreas, export: renderExport, settings: renderSettings }[tab])();
   }
 
   function toolbar(title, addLabel, onAdd) {
@@ -1039,7 +1042,14 @@
   function renderAreas() {
     const body = el("#tabBody");
     body.innerHTML = "";
-    body.appendChild(toolbar("Delivery Areas", "Add area", null));
+    // Areas belong to a branch: the one picked at the top of the screen, or
+    // Main while "All branches" is picked.
+    const where = data.areasBranch ? data.areasBranch.name : "Main";
+    body.appendChild(toolbar(data.branches.length > 1 ? `Delivery Areas · ${where}` : "Delivery Areas", "Add area", null));
+    if (data.branches.length > 1) {
+      body.insertAdjacentHTML("beforeend", `<p class="text-muted text-sm" style="margin:0 0 var(--sp-3);">
+        These are the areas <strong>${esc(where)}</strong> delivers to. Pick another branch at the top of the screen to set its areas and fees.</p>`);
+    }
     const rows = data.areas.map((a) => `
       <tr>
         <td><strong>${esc(a.name)}</strong></td>
@@ -1079,6 +1089,304 @@
       if (payload.fee < 0) return toast("Fee cannot be negative", "err");
       await save(area ? "put" : "post", area ? `/api/admin/delivery-areas/${area.id}` : "/api/admin/delivery-areas", payload, m);
     });
+  }
+
+  /* ---------------- Branches ----------------
+     One card per outlet: where it is, the QR money goes to, whether it is
+     taking orders, whether it sells Main's menu as it is or its own prices,
+     and who can log in there. Everything a branch has is set from this tab.
+     Branches are never deleted — orders point at them — only switched off. */
+  const branchById = (id) => data.branches.find((b) => b.id === id);
+  const customerLink = (b) => `${location.origin}/menu.html?b=${encodeURIComponent(b.slug)}`;
+
+  function renderBranches() {
+    const body = el("#tabBody");
+    body.innerHTML = "";
+    body.appendChild(toolbar("Branches", "Add branch", null));
+    body.insertAdjacentHTML("beforeend", `<p class="text-muted text-sm" style="margin:0 0 var(--sp-3);max-width:62ch;">
+      Each branch has its own address, payment QR, staff logins and order numbers. Staff only ever
+      see their own branch's orders; you can pick one branch or all of them at the top of any screen.</p>`);
+
+    const cards = data.branches.map((b) => {
+      const upi = b.upi_vpa
+        ? `💳 Payments go to <strong>${esc(b.upi_vpa)}</strong>${b.upi_payee_name ? ` (${esc(b.upi_payee_name)})` : ""}`
+        : `💳 Payments go to Main's UPI account — add this branch's own in <em>Edit</em>.`;
+      const sw = (key, on, title, blurb, disabled) => `
+        <div class="row-between" style="gap:var(--sp-3);margin-top:var(--sp-3);">
+          <div><div style="font-weight:600;">${title}</div>
+            <div class="text-muted text-sm" style="max-width:48ch;">${blurb}</div></div>
+          <label class="switch"><input type="checkbox" data-bswitch="${key}" data-bid="${b.id}" ${on ? "checked" : ""} ${disabled ? "disabled" : ""} />
+            <span class="switch-track"><span class="switch-thumb"></span></span></label>
+        </div>`;
+      return `
+        <div class="card" style="margin-bottom:var(--sp-4);${b.active ? "" : "opacity:.65;"}"><div class="card-pad">
+          <div class="row-between" style="gap:var(--sp-3);flex-wrap:wrap;align-items:flex-start;">
+            <div>
+              <h3 style="margin:0;">${esc(b.name)} ${b.is_main ? `<span class="branch-tag">Main</span>` : ""}
+                ${b.active ? "" : `<span class="pill-out">Switched off</span>`}</h3>
+              <div class="text-sm text-muted">Order ids: SPS-${b.code ? esc(b.code) + "-" : ""}YYMMDD-#### · ${b.staff_count} staff login${b.staff_count === 1 ? "" : "s"}</div>
+              ${b.address ? `<div class="text-sm" style="margin-top:4px;">📍 ${esc(b.address)}</div>` : ""}
+              ${b.phone || b.timings ? `<div class="text-sm">${b.phone ? `📞 ${esc(b.phone)}` : ""}${b.phone && b.timings ? " · " : ""}${b.timings ? `🕒 ${esc(b.timings)}` : ""}</div>` : ""}
+              <div class="text-sm" style="margin-top:4px;">${upi}</div>
+            </div>
+            <div class="row" style="flex-wrap:wrap;">
+              <button class="btn btn-sm btn-outline" data-bedit="${b.id}">Edit</button>
+              <button class="btn btn-sm btn-outline" data-bstaff="${b.id}">👥 Logins</button>
+              ${b.is_main ? "" : `<button class="btn btn-sm btn-outline" data-bmenu="${b.id}">🌯 Prices &amp; stock</button>`}
+            </div>
+          </div>
+          <div class="text-sm" style="margin-top:var(--sp-3);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <span class="text-muted">Customer link (print it as the table QR):</span>
+            <code style="word-break:break-all;">${esc(customerLink(b))}</code>
+            <button class="btn btn-sm btn-ghost" data-bcopy="${b.id}">Copy</button>
+          </div>
+          ${sw("ordering_enabled", b.ordering_enabled, "Taking online orders",
+               b.ordering_enabled ? "🟢 Customers can order from this branch." : "🔴 Closed — the menu stays visible, ordering is paused.", !b.active)}
+          ${b.is_main ? "" : sw("menu_same_as_main", b.menu_same_as_main, "Same menu &amp; prices as Main",
+               b.menu_same_as_main
+                 ? "On — this branch copies Main's menu, prices and stock, and follows every change. Turn off to set its own."
+                 : "Off — this branch uses its own prices and stock from <em>Prices &amp; stock</em>. Anything not changed there still follows Main.",
+               !b.active)}
+        </div></div>`;
+    }).join("");
+    body.insertAdjacentHTML("beforeend", cards);
+
+    el("#addBtn").addEventListener("click", () => branchForm());
+    els("[data-bedit]", body).forEach((x) => x.addEventListener("click", () => branchForm(branchById(+x.dataset.bedit))));
+    els("[data-bstaff]", body).forEach((x) => x.addEventListener("click", () => branchStaff(branchById(+x.dataset.bstaff))));
+    els("[data-bmenu]", body).forEach((x) => x.addEventListener("click", () => branchMenu(branchById(+x.dataset.bmenu))));
+    els("[data-bcopy]", body).forEach((x) => x.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(customerLink(branchById(+x.dataset.bcopy))); toast("Link copied", "ok"); }
+      catch { toast("Copy failed — select the link and copy it", "err"); }
+    }));
+    els("[data-bswitch]", body).forEach((x) => x.addEventListener("change", async () => {
+      const b = branchById(+x.dataset.bid);
+      x.disabled = true;
+      try {
+        const saved = await API.put(`/api/admin/branches/${b.id}`, { ...b, [x.dataset.bswitch]: x.checked });
+        Object.assign(b, saved);
+        toast(`${b.name} saved`, "ok");
+      } catch (e) { toast(e.message, "err"); }
+      renderBranches();
+    }));
+  }
+
+  function branchForm(branch) {
+    const b = branch || { name: "", slug: "", code: "", address: "", phone: "", timings: "", map_url: "",
+      upi_vpa: "", upi_payee_name: "", upi_pn: "", upi_merchant_code: "", upi_merchant_aid: "",
+      ordering_enabled: true, menu_same_as_main: true, active: true, sort_order: data.branches.length };
+    const f = (id, label, value, extra = "") =>
+      `<div class="field grow"><label for="${id}">${label}</label><input class="input" id="${id}" value="${esc(value || "")}" ${extra} /></div>`;
+    const m = modal({
+      title: branch ? `Edit ${branch.name}` : "Add branch",
+      bodyHTML: `
+        <div class="input-row">${f("bName", "Branch name", b.name, `placeholder="e.g. Adajan"`)}
+          ${b.is_main ? "" : f("bCode", "Order-id code", b.code, `placeholder="e.g. ADJ" maxlength="6" style="text-transform:uppercase;"`)}</div>
+        ${f("bSlug", "Link name (for the QR / link)", b.slug, `placeholder="blank = from the name"`)}
+        <div class="field"><label for="bAddr">Address</label><textarea class="input" id="bAddr" rows="2">${esc(b.address)}</textarea></div>
+        <div class="input-row">${f("bPhone", "Phone", b.phone, `inputmode="tel"`)}${f("bTime", "Timings", b.timings, `placeholder="11 am – 11 pm"`)}</div>
+        ${f("bMap", "Google Maps link", b.map_url, `placeholder="optional"`)}
+        <h4 style="margin:var(--sp-4) 0 var(--sp-1);">💳 Payment QR (UPI)</h4>
+        <p class="text-muted text-sm" style="margin:0 0 var(--sp-2);">Copy these from this branch's GPay / PhonePe for Business QR.
+          Leave the UPI ID blank and payments go to Main's account.</p>
+        <div class="input-row">${f("bVpa", "UPI ID (pa)", b.upi_vpa, `placeholder="name@okaxis"`)}${f("bPayee", "Name customers see", b.upi_payee_name)}</div>
+        <div class="input-row">${f("bPn", "Registered name (pn)", b.upi_pn)}${f("bMc", "Merchant code (mc)", b.upi_merchant_code, `placeholder="5812"`)}${f("bAid", "Merchant aid", b.upi_merchant_aid)}</div>
+        <div class="input-row">
+          ${f("bSort", "Sort order", b.sort_order, `type="number"`)}
+          ${b.is_main ? "" : `<div class="field grow"><label for="bActive">Status</label><select class="select" id="bActive">
+            <option value="true" ${b.active ? "selected" : ""}>Open</option><option value="false" ${!b.active ? "selected" : ""}>Switched off</option></select></div>`}
+        </div>`,
+      footHTML: `<button class="btn btn-primary btn-block" id="saveBtn">Save branch</button>`,
+    });
+    const v = (id) => { const x = el(`#${id}`, m.backdrop); return x ? x.value.trim() : ""; };
+    el("#saveBtn", m.backdrop).addEventListener("click", async () => {
+      const payload = {
+        ...b,
+        name: v("bName"), slug: v("bSlug"), code: b.is_main ? b.code : v("bCode").toUpperCase(),
+        address: v("bAddr"), phone: v("bPhone"), timings: v("bTime"), map_url: v("bMap"),
+        upi_vpa: v("bVpa"), upi_payee_name: v("bPayee"), upi_pn: v("bPn"),
+        upi_merchant_code: v("bMc"), upi_merchant_aid: v("bAid"),
+        sort_order: parseInt(v("bSort")) || 0,
+        active: b.is_main ? true : v("bActive") !== "false",
+      };
+      if (!payload.name) return toast("Branch name is required", "err");
+      if (!b.is_main && !payload.code) return toast("Give the branch a short code, e.g. ADJ", "err");
+      try {
+        const saved = branch ? await API.put(`/api/admin/branches/${branch.id}`, payload)
+                             : await API.post("/api/admin/branches", payload);
+        toast(saved.warning || "Saved", saved.warning ? "" : "ok");
+        m.close();
+        await load();
+      } catch (e) { toast(e.message, "err"); }
+    });
+  }
+
+  /* Staff logins for one branch. A login made here is a staff login that works
+     at this branch only; owner logins stay on the setup-key page. */
+  async function branchStaff(b) {
+    const m = modal({ title: `Logins · ${b.name}`, bodyHTML: `<div class="center-load"><div class="spinner"></div></div>` });
+    async function paint() {
+      let staff = [];
+      try { staff = (await API.get(`/api/admin/branches/${b.id}/staff`)).staff; }
+      catch (e) { m.body.innerHTML = `<p class="text-muted">${esc(e.message)}</p>`; return; }
+      const others = data.branches.filter((x) => x.active);
+      m.body.innerHTML = `
+        ${staff.length ? staff.map((u) => `
+          <div class="card" style="margin-bottom:var(--sp-2);"><div class="card-pad">
+            <div class="row-between" style="gap:var(--sp-2);flex-wrap:wrap;">
+              <div><strong>${esc(u.name || u.email)}</strong>${u.active ? "" : ` <span class="pill-out">Off</span>`}
+                <div class="text-sm text-muted">${esc(u.email)}</div></div>
+              <div class="row" style="flex-wrap:wrap;">
+                <select class="select" data-move="${u.id}" aria-label="Branch" style="width:auto;">
+                  ${others.map((x) => `<option value="${x.id}" ${x.id === u.branch_id ? "selected" : ""}>${esc(x.name)}</option>`).join("")}
+                </select>
+                <button class="btn btn-sm btn-outline" data-toggle="${u.id}">${u.active ? "Switch off" : "Switch on"}</button>
+                <button class="btn btn-sm btn-outline" data-pw="${u.id}">Reset password</button>
+              </div>
+            </div>
+          </div></div>`).join("") : `<p class="text-muted">No staff logins for ${esc(b.name)} yet.</p>`}
+        <h4 style="margin:var(--sp-4) 0 var(--sp-2);">＋ New staff login for ${esc(b.name)}</h4>
+        <div class="field"><label for="sName">Name</label><input class="input" id="sName" /></div>
+        <div class="field"><label for="sEmail">Email (used to log in)</label><input class="input" id="sEmail" type="email" autocomplete="off" /></div>
+        <div class="field"><label for="sPw">Password (6+ characters)</label><input class="input" id="sPw" type="text" autocomplete="new-password" /></div>
+        <button class="btn btn-primary btn-block" id="sAdd">Create login</button>`;
+
+      const update = async (u, patch, msg) => {
+        try {
+          await API.put(`/api/admin/staff/${u.id}`, { name: u.name, active: u.active, branch_id: u.branch_id, ...patch });
+          toast(msg, "ok");
+          await load();
+          await paint();
+        } catch (e) { toast(e.message, "err"); await paint(); }
+      };
+      els("[data-move]", m.body).forEach((s) => s.addEventListener("change", () => {
+        const u = staff.find((x) => x.id == s.dataset.move);
+        update(u, { branch_id: +s.value }, `${u.name || u.email} moved to ${branchById(+s.value).name}`);
+      }));
+      els("[data-toggle]", m.body).forEach((x) => x.addEventListener("click", () => {
+        const u = staff.find((y) => y.id == x.dataset.toggle);
+        update(u, { active: !u.active }, u.active ? "Login switched off" : "Login switched on");
+      }));
+      els("[data-pw]", m.body).forEach((x) => x.addEventListener("click", async () => {
+        const u = staff.find((y) => y.id == x.dataset.pw);
+        const pw = prompt(`New password for ${u.email} (6+ characters)`);
+        if (!pw) return;
+        try { await API.post(`/api/admin/staff/${u.id}/password`, { password: pw }); toast("Password updated", "ok"); }
+        catch (e) { toast(e.message, "err"); }
+      }));
+      el("#sAdd", m.body).addEventListener("click", async () => {
+        const payload = { name: el("#sName", m.body).value.trim(), email: el("#sEmail", m.body).value.trim(),
+                          password: el("#sPw", m.body).value };
+        if (!payload.email) return toast("Email is required", "err");
+        if (payload.password.length < 6) return toast("Password needs 6+ characters", "err");
+        try {
+          await API.post(`/api/admin/branches/${b.id}/staff`, payload);
+          toast("Login created", "ok");
+          await load();
+          await paint();
+        } catch (e) { toast(e.message, "err"); }
+      });
+    }
+    await paint();
+  }
+
+  /* One branch's prices and stock against the master menu. Only differences
+     are stored: a price left blank (or equal to Main's) is Main's, and follows
+     Main when Main changes. Each item saves on its own as soon as it is edited,
+     like the sold-out toggles — there is no big form to lose. */
+  async function branchMenu(b) {
+    const m = modal({ title: `Prices & stock · ${b.name}`, bodyHTML: `<div class="center-load"><div class="spinner"></div></div>` });
+    let rows = {};
+    try { rows = (await API.get(`/api/admin/branches/${b.id}/menu`)).items || {}; }
+    catch (e) { m.body.innerHTML = `<p class="text-muted">${esc(e.message)}</p>`; return; }
+
+    function itemBlock(it) {
+      const row = rows[it.id] || { hidden: false, overrides: [] };
+      const ov = (v) => row.overrides.find((o) => o.base === v.base && o.size === v.size);
+      const changed = row.hidden || row.overrides.length;
+      return `
+        <div class="card" style="margin-bottom:var(--sp-2);" data-bitem="${it.id}"><div class="card-pad">
+          <div class="row-between" style="gap:var(--sp-2);flex-wrap:wrap;">
+            <strong>${esc(it.name)}</strong>
+            <div class="row" style="align-items:center;gap:10px;">
+              <label class="text-sm" style="display:flex;gap:6px;align-items:center;"><input type="checkbox" data-sold ${row.hidden ? "" : "checked"} /> Sold here</label>
+              ${changed ? `<button class="btn btn-sm btn-ghost" data-reset>Use Main's</button>` : `<span class="text-xs text-muted">same as Main</span>`}
+            </div>
+          </div>
+          <div style="${row.hidden ? "opacity:.45;pointer-events:none;" : ""}">
+            ${it.variants.map((v, i) => {
+              const o = ov(v);
+              return `<div class="row" style="align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;">
+                <span class="text-sm" style="min-width:150px;flex:1;">${esc(v.label)}</span>
+                <span class="text-xs text-muted" title="Main's price">Main ${money(v.price)}</span>
+                <input class="input" style="width:96px;" type="number" min="0" step="1" inputmode="decimal"
+                  data-price="${i}" value="${o && o.price != null ? o.price : ""}" placeholder="${v.price}" aria-label="Price at ${esc(b.name)}" />
+                <label class="text-sm" style="display:flex;gap:6px;align-items:center;"><input type="checkbox" data-stock="${i}" ${o && o.available === false ? "" : "checked"} /> In stock</label>
+              </div>`;
+            }).join("")}
+          </div>
+        </div></div>`;
+    }
+
+    function paint() {
+      const groups = data.categories.map((c) => ({ c, items: data.items.filter((i) => i.category_id === c.id && i.active) }))
+        .filter((g) => g.items.length);
+      m.body.innerHTML = `
+        ${b.menu_same_as_main ? `<div class="notice-banner" style="background:var(--warn-soft);color:var(--warn-ink);border-color:var(--line);">
+          “Same menu &amp; prices as Main” is <strong>on</strong> for ${esc(b.name)}, so customers see Main's prices.
+          Changes made here are kept and take effect when you turn it off on the Branches tab.</div>` : ""}
+        <div class="row-between" style="margin-bottom:var(--sp-3);gap:var(--sp-2);flex-wrap:wrap;">
+          <span class="text-sm text-muted">Blank price = Main's price. A sold-out tick here only affects ${esc(b.name)}.</span>
+          <button class="btn btn-sm btn-outline" id="bmResetAll">↺ Copy Main again (clear all)</button>
+        </div>
+        ${groups.map((g) => `<h4 style="margin:var(--sp-3) 0 var(--sp-2);">${esc(g.c.name)}</h4>${g.items.map(itemBlock).join("")}`).join("")}`;
+
+      el("#bmResetAll", m.body).addEventListener("click", async () => {
+        if (!confirm(`Clear every price and stock change for ${b.name}? It will sell exactly Main's menu.`)) return;
+        try { await API.post(`/api/admin/branches/${b.id}/menu/reset`); rows = {}; toast("Copied from Main", "ok"); paint(); }
+        catch (e) { toast(e.message, "err"); }
+      });
+      els("[data-bitem]", m.body).forEach(bindCard);
+    }
+
+    // Shape of an item's row, to tell whether its card needs redrawing after a
+    // save. Redrawn only when that changes, so tabbing from one price box to
+    // the next is not interrupted by the box being rebuilt under the cursor.
+    const shape = (id) => { const r = rows[id]; return r ? `${r.hidden}|${r.overrides.length > 0}` : "same"; };
+
+    function bindCard(card) {
+      const it = data.items.find((i) => i.id == card.dataset.bitem);
+      const redraw = () => {
+        const fresh = document.createRange().createContextualFragment(itemBlock(it)).firstElementChild;
+        card.replaceWith(fresh);
+        bindCard(fresh);
+      };
+      const saveItem = async () => {
+        const payload = {
+          hidden: !el("[data-sold]", card).checked,
+          variants: it.variants.map((v, i) => {
+            const raw = el(`[data-price="${i}"]`, card).value.trim();
+            return { base: v.base, size: v.size, price: raw === "" ? null : parseFloat(raw),
+                     available: el(`[data-stock="${i}"]`, card).checked };
+          }),
+        };
+        if (payload.variants.some((v) => v.price != null && (isNaN(v.price) || v.price < 0))) return toast("Prices must be 0 or more", "err");
+        const before = shape(it.id);
+        try {
+          const saved = await API.put(`/api/admin/branches/${b.id}/menu/${it.id}`, payload);
+          if (saved.hidden || saved.overrides.length) rows[it.id] = saved; else delete rows[it.id];
+          toast(`${it.name} saved for ${b.name}`, "ok");
+        } catch (e) { toast(e.message, "err"); return redraw(); }
+        if (shape(it.id) !== before) redraw();
+      };
+      els("input", card).forEach((x) => x.addEventListener("change", saveItem));
+      const reset = el("[data-reset]", card);
+      if (reset) reset.addEventListener("click", async () => {
+        try { await API.del(`/api/admin/branches/${b.id}/menu/${it.id}`); delete rows[it.id]; toast(`${it.name} follows Main again`, "ok"); redraw(); }
+        catch (e) { toast(e.message, "err"); }
+      });
+    }
+    paint();
   }
 
   /* ---------------- Export ---------------- */
@@ -1158,16 +1466,6 @@
     const st = data.settings || {};
     const rows = [
       {
-        key: "ordering_enabled", id: "orderingToggle", on: st.ordering_enabled !== false,
-        title: "Accept customer orders",
-        blurb: "When this is on, customers can place orders from the customer site. " +
-               "Turn it off to temporarily stop taking new orders (the menu stays visible).",
-        state: (on) => on
-          ? "🟢 Ordering is <strong>open</strong> — customers can place orders."
-          : "🔴 Ordering is <strong>closed</strong> — customers cannot place orders.",
-        msg: (on) => (on ? "Ordering turned on" : "Ordering turned off"),
-      },
-      {
         key: "promo_banners_enabled", id: "bannersToggle", on: st.promo_banners_enabled !== false,
         title: "Show offer banners on the site",
         blurb: "The offer cards on the home page, the strip on the menu and the running-offer " +
@@ -1192,6 +1490,12 @@
 
     el("#tabBody").innerHTML = `
       <h2 style="margin:0 0 var(--sp-3);">Settings</h2>
+      <div class="card" style="margin-bottom:var(--sp-4);"><div class="card-pad">
+        <div style="font-weight:600;">Accept customer orders</div>
+        <p class="text-muted text-sm" style="margin:4px 0 0;max-width:52ch;">Ordering is opened and closed per branch now —
+          one kitchen closing early does not close the others.</p>
+        <button class="btn btn-sm btn-outline" style="margin-top:var(--sp-3);" id="toBranches">🏬 Open the Branches tab</button>
+      </div></div>
       ${rows.map((r) => `
         <div class="card" style="margin-bottom:var(--sp-4);"><div class="card-pad">
           <div class="row-between" style="gap:var(--sp-4);flex-wrap:wrap;">
@@ -1207,6 +1511,7 @@
           <div class="text-sm ${r.on ? "" : "text-muted"}" style="margin-top:var(--sp-3);">${r.state(r.on)}</div>
         </div></div>`).join("")}`;
 
+    el("#toBranches").addEventListener("click", () => { tab = "branches"; render(); });
     rows.forEach((r) => el(`#${r.id}`).addEventListener("change", (e) =>
       saveSwitch({ [r.key]: e.target.checked }, r.msg(e.target.checked), e.target, renderSettings)));
   }

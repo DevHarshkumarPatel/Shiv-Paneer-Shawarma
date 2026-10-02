@@ -664,3 +664,10 @@ body.has-pos-bar { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px))
 .el-delta { margin-left: var(--sp-2); padding: 2px 8px; border-radius: var(--r-pill); font-size: var(--fs-xs); }
 .el-delta.up { background: var(--warn-soft); color: var(--warn-ink); }
 .el-delta.down { background: var(--ok-soft); color: var(--ok-ink); }
+
+/* Branch in the staff header: a fixed chip for staff, a picker for the owner
+   (js/staff/branch.js). Sits on the dark header, so it borrows the logout
+   button's translucent border rather than the light form styling. */
+.staff-header .branch-chip { font-weight: 700; white-space: nowrap; padding: 4px 10px; border-radius: var(--r-pill); border: 1px solid rgba(255,255,255,.4); }
+.staff-header .branch-picker { width: auto; max-width: 44vw; min-height: 36px; padding: 4px 28px 4px 10px; font-size: var(--fs-sm); font-weight: 700; }
+.branch-tag { display: inline-block; font-size: var(--fs-xs); font-weight: 700; padding: 1px 8px; border-radius: var(--r-pill); background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line); white-space: nowrap; }
