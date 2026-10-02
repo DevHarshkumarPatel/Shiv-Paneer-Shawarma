@@ -671,3 +671,7 @@ body.has-pos-bar { padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px))
 .staff-header .branch-chip { font-weight: 700; white-space: nowrap; padding: 4px 10px; border-radius: var(--r-pill); border: 1px solid rgba(255,255,255,.4); }
 .staff-header .branch-picker { width: auto; max-width: 44vw; min-height: 36px; padding: 4px 28px 4px 10px; font-size: var(--fs-sm); font-weight: 700; }
 .branch-tag { display: inline-block; font-size: var(--fs-xs); font-weight: 700; padding: 1px 8px; border-radius: var(--r-pill); background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--line); white-space: nowrap; }
+/* "Which branch am I looking at" — under the header on every staff page. */
+.branch-banner { background: var(--brand-soft); border-bottom: 1px solid var(--line); color: var(--ink); font-size: var(--fs-sm); }
+.branch-banner .container { display: flex; align-items: center; gap: 4px 12px; flex-wrap: wrap; min-height: 40px; padding-top: 6px; padding-bottom: 6px; }
+.branch-banner span { color: var(--ink-2); }

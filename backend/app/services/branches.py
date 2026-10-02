@@ -92,6 +92,44 @@ def ensure_visible(user, order: Order | None) -> Order:
     return order
 
 
+def read_branch(user, ref: str | None) -> Branch:
+    """One branch for a staff screen that needs exactly one (the counter's
+    add-on list). Staff get their own; the owner gets the one picked, or Main
+    while "All branches" is picked."""
+    if user.role != "owner":
+        return user_branch(user)
+    b = _lookup(ref)
+    return b if b and b.active else Branch.main()
+
+
+def clean_branch_ids(raw) -> list[int]:
+    """Branch ids that exist, de-duplicated. Empty means every branch."""
+    known = {b.key.id() for b in Branch.query()}
+    return [b for b in dict.fromkeys(int(x) for x in raw or []) if b in known]
+
+
+# Per-branch shop switches (see models/branch.py). Unset on Main reads the old
+# global Setting, so an existing shop keeps what it had; unset elsewhere reads
+# the Setting's default.
+BRANCH_FLAGS = ("promo_banners_enabled", "scratch_enabled", "scratch_repeat_batch", "scratch_batch_no")
+
+
+def flag(branch: Branch, name: str):
+    value = getattr(branch, name)
+    if value is not None:
+        return value
+    from ..models import Setting
+    if branch.is_main:
+        return getattr(Setting.singleton(), name)
+    return Setting._properties[name]._default
+
+
+def flags(branch: Branch) -> dict:
+    d = {n: flag(branch, n) for n in BRANCH_FLAGS}
+    d["scratch_batch_no"] = d["scratch_batch_no"] or 1
+    return d
+
+
 # ---- Menu --------------------------------------------------------------
 #
 # Two separate things come out of a branch's BranchMenu row:

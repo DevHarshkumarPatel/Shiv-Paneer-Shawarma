@@ -173,6 +173,7 @@ class PromoPayload(BaseModel):
     description: str = ""        # blank means "use the derived copy"
     conditions: str = ""
     active: bool = True
+    branch_ids: list[int] = []    # empty = every branch
 
 
 class TopupPayload(BaseModel):
@@ -275,6 +276,7 @@ class CouponPayload(BaseModel):
     # Promos this code switches on. They stop applying by themselves the moment
     # a coupon claims them, and come back if every coupon lets go.
     promo_ids: list[int] = []
+    branch_ids: list[int] = []    # empty = every branch
 
 
 # ---- Branches ----

@@ -26,6 +26,9 @@ class Topup(ndb.Model):
     description = ndb.StringProperty(default="")     # optional note for the counter
     active = ndb.BooleanProperty(default=True)
     sort_order = ndb.IntegerProperty(default=0)
+    # The branch whose counter offers it. Each branch keeps its own list (and
+    # its own prices); None means Main, for rows from before branches.
+    branch_id = ndb.IntegerProperty()
     created_at = ndb.DateTimeProperty(auto_now_add=True)
     updated_at = ndb.DateTimeProperty(auto_now=True)
 
@@ -39,10 +42,13 @@ class Topup(ndb.Model):
             return 1, float(self.price)
         return qty, float(self.price) * qty
 
+    def belongs_to(self, branch_id: int, main_id: int) -> bool:
+        return (self.branch_id or main_id) == branch_id
+
     @classmethod
-    def active_ordered(cls) -> list["Topup"]:
-        """Active topups in the order the counter should see them."""
-        rows = [t for t in cls.query() if t.active]
+    def active_ordered(cls, branch_id: int, main_id: int) -> list["Topup"]:
+        """One branch's active topups in the order the counter should see them."""
+        rows = [t for t in cls.query() if t.active and t.belongs_to(branch_id, main_id)]
         return sorted(rows, key=lambda t: (t.sort_order, t.name.lower()))
 
     def to_dict(self) -> dict:
@@ -54,4 +60,5 @@ class Topup(ndb.Model):
             "description": self.description,
             "active": self.active,
             "sort_order": self.sort_order,
+            "branch_id": self.branch_id,
         }

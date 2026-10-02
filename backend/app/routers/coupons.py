@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from ..deps import require_owner
 from ..models import Coupon, Promo
 from ..schemas.models import CouponPayload
+from ..services.branches import clean_branch_ids as _branch_ids, public_branch
 
 router = APIRouter(prefix="/api/coupons", tags=["coupons"])
 
@@ -88,26 +89,31 @@ def _unlocked_promos(coupon: Coupon) -> list[dict]:
 
 
 @router.get("/validate/{code}")
-def validate(code: str):
+def validate(code: str, branch: str = ""):
     coupon = Coupon.by_code(code)
     if not coupon:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Coupon not found.")
     ok, reason = coupon.is_valid_now()
     if not ok:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, reason)
+    outlet = public_branch(branch)
+    if not coupon.valid_at(outlet.key.id()):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"This code is not valid at {outlet.name}.")
     return {**coupon.to_dict(), "promos": _unlocked_promos(coupon)}
 
 
 # ---- Owner management ----
 @router.get("")
-def list_coupons(_owner=Depends(require_owner)):
+def list_coupons(_owner=Depends(require_owner), branch: str = ""):
     """The owner's own coupons.
 
     Codes minted by the scratch card are excluded: there is one per winner, so
     within a busy month they would bury the handful of codes the owner actually
     manages. They are reported on the scratch card screen instead.
     """
-    return {"coupons": [c.to_dict() for c in Coupon.query() if c.source != "scratch"]}
+    bid = public_branch(branch).key.id()
+    return {"coupons": [c.to_dict() for c in Coupon.query()
+                        if c.source != "scratch" and c.valid_at(bid)]}
 
 
 @router.post("")
@@ -120,7 +126,7 @@ def create_coupon(body: CouponPayload, _owner=Depends(require_owner)):
         value=0.0 if body.ctype == "promo" else body.value,
         min_order=body.min_order,
         max_discount=body.max_discount, active=body.active, usage_limit=body.usage_limit,
-        promo_ids=promo_ids,
+        promo_ids=promo_ids, branch_ids=_branch_ids(body.branch_ids),
     )
     coupon.put()
     _sync_promo_gates(set(promo_ids), set())
@@ -142,6 +148,7 @@ def update_coupon(coupon_id: int, body: CouponPayload, _owner=Depends(require_ow
     coupon.active = body.active
     coupon.usage_limit = body.usage_limit
     coupon.promo_ids = promo_ids
+    coupon.branch_ids = _branch_ids(body.branch_ids)
     coupon.put()
     now = set(promo_ids)
     _sync_promo_gates(now - was, was - now, ignore_key=coupon.key)

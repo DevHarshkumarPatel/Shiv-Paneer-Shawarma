@@ -173,7 +173,8 @@ def _stock_only(row: BranchMenu) -> None:
 def set_branch_item(branch_id: int, item_id: int, body: BranchMenuPayload,
                     _owner=Depends(require_owner)):
     """Set how this branch sells one item: prices, not-sold-here, and stock
-    per variant. Only real differences are stored. The item-level sold-out
+    per variant — what the item form saves while a branch other than Main is
+    picked. Only real differences are stored. The item-level sold-out
     switch is left as it is — that is the Items tab's quick toggle."""
     b = _get(branch_id)
     if b.is_main:
@@ -196,7 +197,15 @@ def set_branch_item(branch_id: int, item_id: int, body: BranchMenuPayload,
     row = _row(b, item_id)
     row.hidden = body.hidden
     row.overrides = overrides
-    return _save_row(row)
+    out = _save_row(row)
+    # Giving a branch a price of its own means it no longer sells Main's
+    # prices, so the "same as Main" switch turns itself off. Every item that
+    # was not changed still follows Main.
+    if b.menu_same_as_main is not False and (body.hidden or any(o.price is not None for o in overrides)):
+        b.menu_same_as_main = False
+        b.put()
+        out["switched_to_own_prices"] = True
+    return out
 
 
 @router.patch("/api/admin/branches/{branch_id}/stock/{item_id}")

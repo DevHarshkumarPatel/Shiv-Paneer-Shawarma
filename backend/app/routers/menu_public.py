@@ -3,13 +3,13 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
-from ..models import Category, Subcategory, Item, ItemImage, Promo, Coupon, Setting
-from ..services.branches import localise_item, menu_overrides, public_branch
+from ..models import Category, Subcategory, Item, ItemImage, Promo, Coupon
+from ..services.branches import flag, localise_item, menu_overrides, public_branch
 
 router = APIRouter(prefix="/api", tags=["menu"])
 
 
-def _claimable_gated(promos: list[Promo]) -> set[int]:
+def _claimable_gated(promos: list[Promo], branch_id: int) -> set[int]:
     """Ids of the coupon-gated promos that some live code can still unlock.
 
     The codes themselves never leave the server for a public page. A gated offer
@@ -27,7 +27,7 @@ def _claimable_gated(promos: list[Promo]) -> set[int]:
         return set()
     claimable: set[int] = set()
     for c in Coupon.query():
-        if c.source == "scratch" or not c.active:
+        if c.source == "scratch" or not c.active or not c.valid_at(branch_id):
             continue
         ok, _ = c.is_valid_now()
         if not ok:
@@ -44,7 +44,7 @@ def _join_names(names: list[str]) -> str:
 
 
 @router.get("/promos")
-def list_public_promos():
+def list_public_promos(branch: str = ""):
     """Every active promo, with its targets resolved to names and its customer
     copy filled in.
 
@@ -58,17 +58,19 @@ def list_public_promos():
     promos keep discounting the cart — this hides the advertising, not the
     offer.
     """
-    if not Setting.singleton().promo_banners_enabled:
+    outlet = public_branch(branch)
+    bid = outlet.key.id()
+    if not flag(outlet, "promo_banners_enabled"):
         return {"promos": []}
 
     cats = {c.key.id(): c for c in Category.query() if c.active}
     items = {i.key.id(): i for i in Item.query() if i.active}
 
     promos = sorted(
-        [p for p in Promo.query() if p.active],
+        [p for p in Promo.query() if p.active and p.runs_at(bid)],
         key=lambda p: (p.created_at or datetime.min, p.key.id()),
     )
-    claimable = _claimable_gated(promos)
+    claimable = _claimable_gated(promos, bid)
     # A gated promo whose codes have all expired or been switched off unlocks
     # nothing, so it is not an offer anyone can claim — leave it off the site.
     promos = [p for p in promos if not p.coupon_only or p.key.id() in claimable]
@@ -157,8 +159,8 @@ def get_menu(branch: str = ""):
     # Index active promos so the client can render badges + effective offers.
     promos_by_item: dict[int, dict] = {}
     promos_by_cat: dict[int, dict] = {}
-    active_promos = [p for p in Promo.query() if p.active]
-    claimable = _claimable_gated(active_promos)
+    active_promos = [p for p in Promo.query() if p.active and p.runs_at(outlet.key.id())]
+    claimable = _claimable_gated(active_promos, outlet.key.id())
     for p in active_promos:
         # A gated promo with no live code behind it cannot be claimed, so it
         # must not put an offer badge on the menu.

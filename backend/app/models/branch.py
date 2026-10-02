@@ -56,6 +56,15 @@ class Branch(ndb.Model):
     ordering_enabled = ndb.BooleanProperty(default=True)
     menu_same_as_main = ndb.BooleanProperty(default=True)
 
+    # Shop switches that used to live on the global Setting and are now per
+    # branch. None means "never set here": for Main that reads the old global
+    # value (so an existing shop keeps its settings), for any other branch the
+    # Setting default. Read them through `services.branches.flag`.
+    promo_banners_enabled = ndb.BooleanProperty()
+    scratch_enabled = ndb.BooleanProperty()
+    scratch_repeat_batch = ndb.BooleanProperty()
+    scratch_batch_no = ndb.IntegerProperty()
+
     active = ndb.BooleanProperty(default=True)
     sort_order = ndb.IntegerProperty(default=0)
     created_at = ndb.DateTimeProperty(auto_now_add=True)

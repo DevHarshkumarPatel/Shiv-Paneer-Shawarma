@@ -11,7 +11,9 @@
    data-branch-none and gets no picker. The choice is kept on this device and sent as ?branch=
    with every request through API.setParams, so no page passes it by hand.
 
-   With a single branch there is nothing to choose and nothing is shown. */
+   Every page also gets a bar under the header naming the branch in view, so
+   nobody edits Adajan's prices thinking they are Main's. With a single branch
+   there is nothing to choose; the bar still names it. */
 const StaffBranch = (() => {
   const KEY = "sps_staff_branch_v1";
   let current = null;      // the branch object in view, or null for all
@@ -26,6 +28,7 @@ const StaffBranch = (() => {
       current = user.branch || null;
       if (current) API.setParams({ branch: current.id });
       if (who && current && !current.is_main) chip(who, current.name);
+      if (current) banner(`📍 ${current.name}`, "Your branch — you see its orders only");
       return current;
     }
     try { list = (await API.get("/api/admin/branches")).branches.filter((b) => b.active); }
@@ -37,8 +40,19 @@ const StaffBranch = (() => {
     API.setParams({ branch: current ? current.id : "" });
     // Reviews are not per branch yet, so that screen gets no picker that
     // would look like it filters something.
-    if (who && list.length > 1 && !document.body.hasAttribute("data-branch-none")) picker(who, required);
+    const none = document.body.hasAttribute("data-branch-none");
+    if (who && list.length > 1 && !none) picker(who, required);
+    if (none) banner("🏬 All branches", "This screen is shared by every branch");
+    else if (current) banner(`📍 ${current.name}`, list.length > 1 ? "Branch in view — change it at the top" : "");
+    else banner("🏬 All branches", "Showing every branch — pick one at the top to see just that one");
     return current;
+  }
+
+  function banner(title, note) {
+    const header = document.querySelector(".staff-header");
+    if (!header || document.getElementById("branchBanner")) return;
+    header.insertAdjacentHTML("afterend", `<div class="branch-banner" id="branchBanner"><div class="container">
+      <strong>${UI.esc(title)}</strong>${note ? `<span>${UI.esc(note)}</span>` : ""}</div></div>`);
   }
 
   function chip(who, name) {

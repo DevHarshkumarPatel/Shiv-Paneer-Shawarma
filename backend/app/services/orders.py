@@ -126,6 +126,6 @@ def persist_order(priced: PricingResult, *, branch: Branch, order_type: str, cus
 
     # Settle this phone's open scratch draw. The card is one per order, so
     # placing the order is exactly what re-arms it for the next one.
-    close_open_awards(customer.phone, order.public_id, priced.coupon_code)
+    close_open_awards(customer.phone, order.public_id, priced.coupon_code, branch.key.id())
 
     return order

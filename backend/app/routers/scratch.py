@@ -10,34 +10,36 @@ passing it around achieves nothing.
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..deps import require_owner
-from ..models import Coupon, ScratchAward, ScratchPrize, Setting
+from ..models import Branch, Coupon, ScratchAward, ScratchPrize
 from ..schemas.models import ScratchDrawRequest, ScratchPrizePayload
+from ..services.branches import flag, public_branch
 from ..services.scratch import (
-    close_open_awards, coupon_terms, default_label, draw_for_phone, norm_phone,
-    reprint_batch,
+    branch_prizes, close_open_awards, coupon_terms, default_label, draw_for_phone,
+    norm_phone, reprint_batch,
 )
 
 router = APIRouter(tags=["scratch"])
 
 
-def _pool_is_live() -> bool:
+def _pool_is_live(outlet: Branch) -> bool:
     """A card is only offered when it can actually pay out.
 
     A pool holding nothing but the "better luck next time" slot is treated as
     empty: a card that cannot win is worse than no card, because the customer
     scratches a guaranteed loss on the way to paying.
     """
-    if not Setting.singleton().scratch_enabled:
+    if not flag(outlet, "scratch_enabled"):
         return False
-    return any(p.kind == "coupon" and p.is_drawable() for p in ScratchPrize.query())
+    return any(p.kind == "coupon" and p.is_drawable() for p in branch_prizes(outlet))
 
 
 # ---------------- Customer ----------------
 @router.get("/api/scratch/card")
-def get_card(phone: str = ""):
+def get_card(phone: str = "", branch: str = ""):
     """What to show at checkout for this phone: nothing, a fresh card, or the
     card they already scratched and have not yet spent."""
-    if not _pool_is_live():
+    outlet = public_branch(branch)
+    if not _pool_is_live(outlet):
         return {"enabled": False, "state": "off", "award": None}
 
     key = norm_phone(phone)
@@ -46,18 +48,19 @@ def get_card(phone: str = ""):
         # locked card and asks for the phone number.
         return {"enabled": True, "state": "locked", "award": None}
 
-    award = ScratchAward.open_for_phone(key)
+    award = ScratchAward.open_for_phone(key, outlet.key.id(), Branch.main().key.id())
     if not award:
         return {"enabled": True, "state": "available", "award": None}
     return {"enabled": True, "state": "revealed", "award": award.to_dict()}
 
 
 @router.post("/api/scratch/draw")
-def draw(body: ScratchDrawRequest):
+def draw(body: ScratchDrawRequest, branch: str = ""):
     """Scratch the card. Repeat calls return the same result, never a reroll."""
-    if not Setting.singleton().scratch_enabled:
+    outlet = public_branch(branch)
+    if not flag(outlet, "scratch_enabled"):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Scratch cards are not running right now.")
-    award, error = draw_for_phone(body.phone)
+    award, error = draw_for_phone(body.phone, outlet)
     if error:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, error)
     return {"award": award.to_dict()}
@@ -65,7 +68,7 @@ def draw(body: ScratchDrawRequest):
 
 # ---------------- Owner: the prize pool ----------------
 @router.get("/api/admin/scratch/prizes")
-def list_prizes(_owner=Depends(require_owner)):
+def list_prizes(_owner=Depends(require_owner), branch: str = ""):
     """The batch: what is in it, what has gone out, and what the next card is
     likely to be.
 
@@ -74,8 +77,8 @@ def list_prizes(_owner=Depends(require_owner)):
     100 is 40%, and it does not move. `chance` is "what is the next customer
     likely to get", which shifts every draw as cards come off the deck.
     """
-    prizes = sorted(ScratchPrize.query(), key=lambda p: (p.sort_order, p.key.id()))
-    setting = Setting.singleton()
+    outlet = public_branch(branch)
+    prizes = sorted(branch_prizes(outlet), key=lambda p: (p.sort_order, p.key.id()))
     batch_size = sum(p.quantity or 0 for p in prizes if p.active)
     given = sum(p.awarded_count or 0 for p in prizes)
     left = sum(p.remaining() for p in prizes if p.active)
@@ -93,9 +96,10 @@ def list_prizes(_owner=Depends(require_owner)):
 
     return {
         "prizes": rows,
-        "enabled": setting.scratch_enabled,
-        "repeat_batch": setting.scratch_repeat_batch,
-        "batch_no": setting.scratch_batch_no or 1,
+        "enabled": flag(outlet, "scratch_enabled"),
+        "repeat_batch": flag(outlet, "scratch_repeat_batch"),
+        "batch_no": flag(outlet, "scratch_batch_no") or 1,
+        "branch": outlet.to_public(),
         "batch_size": batch_size,
         "given": given,
         "left": left,
@@ -117,9 +121,10 @@ def _validate(body: ScratchPrizePayload) -> Coupon | None:
 
 
 @router.post("/api/admin/scratch/prizes")
-def create_prize(body: ScratchPrizePayload, _owner=Depends(require_owner)):
+def create_prize(body: ScratchPrizePayload, _owner=Depends(require_owner), branch: str = ""):
     coupon = _validate(body)
     prize = ScratchPrize(
+        branch_id=public_branch(branch).key.id(),
         kind=body.kind,
         coupon_id=coupon.key.id() if coupon else None,
         label=body.label.strip() or (default_label(coupon) if coupon else "Better luck next time!"),
@@ -160,20 +165,24 @@ def delete_prize(prize_id: int, _owner=Depends(require_owner)):
 
 
 @router.post("/api/admin/scratch/reprint")
-def reprint(_owner=Depends(require_owner)):
+def reprint(_owner=Depends(require_owner), branch: str = ""):
     """Put every card back on the deck and start the next batch.
 
     Deliberately explicit: the counts are the owner's give-away budget, and
     clearing them is them deciding to spend it again.
     """
-    reprint_batch()
-    return list_prizes(_owner=_owner)
+    reprint_batch(public_branch(branch))
+    return list_prizes(_owner=_owner, branch=branch)
 
 
 @router.get("/api/admin/scratch/awards")
-def list_awards(_owner=Depends(require_owner), limit: int = 100, wins_only: bool = True):
-    """Who won what, newest first, plus the totals underneath it."""
-    awards = list(ScratchAward.query().order(-ScratchAward.created_at))
+def list_awards(_owner=Depends(require_owner), limit: int = 100, wins_only: bool = True,
+                branch: str = ""):
+    """Who won what at the picked branch, newest first, plus the totals."""
+    outlet = public_branch(branch)
+    main_id = Branch.main().key.id()
+    awards = [a for a in ScratchAward.query().order(-ScratchAward.created_at)
+              if a.belongs_to(outlet.key.id(), main_id)]
     stats = {
         "draws": len(awards),
         "wins": sum(1 for a in awards if a.status != "missed"),
@@ -196,5 +205,6 @@ def close_award(award_id: int, _owner=Depends(require_owner)):
     award = ScratchAward.get_by_id(award_id)
     if not award:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Award not found.")
-    close_open_awards(award.phone, order_public_id="", used_code="")
+    close_open_awards(award.phone, order_public_id="", used_code="",
+                      branch_id=award.branch_id or Branch.main().key.id())
     return {"ok": True}

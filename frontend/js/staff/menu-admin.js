@@ -142,8 +142,23 @@
      screen — with Main or "All branches" picked they are Main's. */
   const stockBranch = () => {
     const b = typeof StaffBranch !== "undefined" ? StaffBranch.current() : null;
-    return b && !b.is_main ? b : null;
+    // The fresh row from this page's load, so a switch flipped a moment ago
+    // (own prices turning on by themselves) is what the screen goes by.
+    return b && !b.is_main ? (data.branches.find((x) => x.id === b.id) || b) : null;
   };
+  /* The item's variants as the picked branch sells them: its own price when it
+     runs its own prices, and always its own stock. Main is the master as is. */
+  function branchVariants(i) {
+    const sb = stockBranch();
+    if (!sb) return i.variants.map((v) => ({ ...v }));
+    const row = data.branchRows[i.id] || { overrides: [] };
+    const own = sb.menu_same_as_main === false;
+    return i.variants.map((v) => {
+      const ov = row.overrides.find((o) => o.base === v.base && o.size === v.size);
+      return { ...v, price: own && ov && ov.price != null ? ov.price : v.price,
+               available: !(ov && ov.available === false), own_price: !!(own && ov && ov.price != null) };
+    });
+  }
   function stockOf(i) {
     if (!stockBranch()) {
       return { soldOut: i.available === false, off: i.variants.filter((v) => v.available === false).length };
@@ -155,7 +170,7 @@
   }
 
   function itemRow(i) {
-    const prices = i.variants.map((v) => v.price);
+    const prices = branchVariants(i).map((v) => v.price);
     const range = prices.length ? (Math.min(...prices) === Math.max(...prices) ? money(prices[0]) : `${money(Math.min(...prices))}–${money(Math.max(...prices))}`) : "—";
     // How many variants are actually sellable — the number the kitchen cares
     // about mid-service, not just whether the item exists.
@@ -190,8 +205,8 @@
     if (data.branches.length > 1) {
       const where = stockBranch() ? stockBranch().name : "Main";
       body.insertAdjacentHTML("beforeend", `<div class="notice-banner" style="background:var(--surface-2);color:var(--ink-2);border-color:var(--line);">
-        📦 Stock shown is <strong>${esc(where)}</strong>'s. <em>Sold out</em> here only affects ${esc(where)} —
-        pick another branch at the top of the screen to set its stock.</div>`);
+        Prices and stock shown are <strong>${esc(where)}</strong>'s. Changing a price or marking something sold out here
+        only affects ${esc(where)}. Names, photos and categories are shared by every branch.</div>`);
     }
 
     // One draggable table per category (ordering is within a category).
@@ -299,6 +314,12 @@
     `<option value="${NEW_CAT}">＋ New category…</option>`;
 
   function itemForm(item) {
+    // With a branch other than Main picked, prices and stock in this form are
+    // that branch's; everything else (name, photo, category, variants) is the
+    // shared item. A brand-new item is created for every branch.
+    const sb = item ? stockBranch() : null;
+    const row0 = sb ? (data.branchRows[item.id] || { hidden: false, sold_out: false, overrides: [] }) : null;
+    const shown = item ? branchVariants(item) : null;
     const it = item || { name: "", category_id: data.categories[0] && data.categories[0].id, subcategory_id: 0, description: "", tags: [], veg: true, active: true, available: true, sort_order: 0, variants: [{ base: "", size: "", price: 0 }] };
     const m = modal({
       title: item ? "Edit item" : "Add item",
@@ -307,8 +328,13 @@
         <div class="input-row">
           <div class="field grow"><label>Category</label><select class="select" id="fCat">${catOptionsHTML(it.category_id)}</select></div>
           <div class="field grow"><label>Active</label><select class="select" id="fActive"><option value="true" ${it.active ? "selected" : ""}>Active</option><option value="false" ${!it.active ? "selected" : ""}>Hidden</option></select></div>
-          <div class="field grow"><label>${data.branches.length > 1 ? "Stock at Main" : "Stock"}</label><select class="select" id="fAvail"><option value="true" ${it.available !== false ? "selected" : ""}>In stock</option><option value="false" ${it.available === false ? "selected" : ""}>Sold out</option></select></div>
+          <div class="field grow"><label>${data.branches.length > 1 ? `Stock at ${esc(sb ? sb.name : "Main")}` : "Stock"}</label><select class="select" id="fAvail"><option value="true" ${(sb ? !row0.sold_out : it.available !== false) ? "selected" : ""}>In stock</option><option value="false" ${(sb ? row0.sold_out : it.available === false) ? "selected" : ""}>Sold out</option></select></div>
+          ${sb ? `<div class="field grow"><label>Sold at ${esc(sb.name)}</label><select class="select" id="fHere"><option value="true" ${row0.hidden ? "" : "selected"}>Yes</option><option value="false" ${row0.hidden ? "selected" : ""}>Not sold here</option></select></div>` : ""}
         </div>
+        ${data.branches.length > 1 ? `<p class="text-muted text-sm" style="margin:0 0 var(--sp-2);">${sb
+          ? `📍 Prices and stock below are <strong>${esc(sb.name)}</strong>'s. A price you change here makes ${esc(sb.name)} use its own prices; everything you leave alone follows Main.`
+          : item ? `📍 Prices and stock below are <strong>Main</strong>'s. Branches selling Main's prices follow them.`
+                 : `New items are added to every branch, at these prices.`}</p>` : ""}
         <div class="field" id="newCatWrap" style="display:none;">
           <label>New category name</label>
           <div class="input-row">
@@ -376,9 +402,10 @@
     });
 
     const rowsWrap = el("#variantRows", m.backdrop);
-    const addRow = (v = { base: "", size: "", price: "", available: true }) => {
+    const addRow = (v = { base: "", size: "", price: "", available: true }, idx = -1) => {
       const row = document.createElement("div");
       row.className = "input-row"; row.style.marginBottom = "8px";
+      row.dataset.idx = idx;     // which master variant this row is, -1 = new
       // The stock toggle is per variant, not just per item: millets can run out
       // while wheat is still on, and that is the common case mid-service.
       const off = v.available === false;
@@ -400,7 +427,8 @@
       row.querySelector(".v-del").addEventListener("click", () => row.remove());
       rowsWrap.appendChild(row);
     };
-    (it.variants.length ? it.variants : [{ base: "", size: "", price: "" }]).forEach(addRow);
+    const startRows = shown || it.variants;
+    (startRows.length ? startRows : [{ base: "", size: "", price: "" }]).forEach((v, i) => addRow(v, item ? i : -1));
     el("#addVar", m.backdrop).addEventListener("click", () => addRow());
 
     /* Photo. Uploaded immediately against the saved item rather than held until
@@ -461,12 +489,20 @@
     });
 
     el("#saveBtn", m.backdrop).addEventListener("click", async () => {
-      const variants = els(".input-row", rowsWrap).map((r) => ({
+      const rowsIn = els(".input-row", rowsWrap).map((r) => ({
+        idx: +r.dataset.idx,
         base: r.querySelector(".v-base").value.trim(),
         size: r.querySelector(".v-size").value.trim(),
         price: parseFloat(r.querySelector(".v-price").value),
         available: !r.querySelector(".v-stock").dataset.off,
       })).filter((v) => !Number.isNaN(v.price));
+      // At a branch, the master keeps Main's own price and stock for every
+      // variant it already had; the numbers typed go to the branch below.
+      const variants = rowsIn.map((v) => {
+        const mv = sb && v.idx >= 0 ? item.variants[v.idx] : null;
+        return mv ? { base: v.base, size: v.size, price: mv.price, available: mv.available !== false }
+                  : { base: v.base, size: v.size, price: v.price, available: sb ? true : v.available };
+      });
       if (!variants.length) return toast("Add at least one variant with a price", "err");
       if (el("#fCat", m.backdrop).value === NEW_CAT) return toast("Create the new category first, or pick an existing one", "err");
       const payload = {
@@ -477,14 +513,31 @@
         tags: el("#fTags", m.backdrop).value.split(",").map((s) => s.trim()).filter(Boolean),
         veg: true,
         active: el("#fActive", m.backdrop).value === "true",
-        available: el("#fAvail", m.backdrop).value === "true",
+        available: sb ? it.available !== false : el("#fAvail", m.backdrop).value === "true",
         image_url: it.image_url || "",
         // New items append to the end of their category; edits keep their place. Reorder via drag.
         sort_order: item ? it.sort_order : data.items.filter((i) => i.category_id === +el("#fCat", m.backdrop).value).length,
         variants,
       };
       if (!payload.name) return toast("Name is required", "err");
-      await save(item ? "put" : "post", item ? `/api/admin/menu/items/${item.id}` : "/api/admin/menu/items", payload, m);
+      if (!sb) {
+        await save(item ? "put" : "post", item ? `/api/admin/menu/items/${item.id}` : "/api/admin/menu/items", payload, m);
+        return;
+      }
+      try {
+        await API.put(`/api/admin/menu/items/${item.id}`, payload);
+        const here = await API.put(`/api/admin/branches/${sb.id}/menu/${item.id}`, {
+          hidden: el("#fHere", m.backdrop).value === "false",
+          variants: rowsIn.map((v) => ({ base: v.base, size: v.size, price: v.price, available: v.available })),
+        });
+        await API.patch(`/api/admin/branches/${sb.id}/stock/${item.id}`,
+                        { available: el("#fAvail", m.backdrop).value === "true" });
+        toast(here.switched_to_own_prices
+          ? `Saved — ${sb.name} now uses its own prices (only the ones you changed differ)`
+          : `Saved for ${sb.name}`, "ok");
+        m.close();
+        await load();
+      } catch (e) { toast(e.message, "err"); }
     });
   }
 
@@ -512,6 +565,33 @@
   const promoCodes = (promoId) =>
     data.coupons.filter((c) => (c.promo_ids || []).includes(promoId)).map((c) => c.code);
 
+  /* Which branches a promo or coupon runs at. "All branches" is stored as an
+     empty list, so a promo made before branches existed reads as all of them.
+     A new one starts on the branch picked at the top of the screen. */
+  const pickedBranchId = () => (typeof StaffBranch !== "undefined" && StaffBranch.current() ? StaffBranch.current().id : null);
+  const branchNames = (ids) => (!ids || !ids.length || data.branches.length < 2) ? "All branches"
+    : ids.map((id) => (branchById(id) || {}).name).filter(Boolean).join(", ");
+  function branchesFieldHTML(ids) {
+    if (data.branches.length < 2) return "";
+    const all = !ids.length;
+    return `<div class="field"><label>Runs at</label>
+      <div class="row" style="flex-wrap:wrap;gap:6px 14px;" data-branches-field>
+        <label class="text-sm" style="display:flex;gap:6px;align-items:center;"><input type="checkbox" data-ball ${all ? "checked" : ""}/> <strong>All branches</strong></label>
+        ${data.branches.filter((b) => b.active).map((b) => `<label class="text-sm" style="display:flex;gap:6px;align-items:center;">
+          <input type="checkbox" data-bid="${b.id}" ${all || ids.includes(b.id) ? "checked" : ""} ${all ? "disabled" : ""}/> ${esc(b.name)}</label>`).join("")}
+      </div></div>`;
+  }
+  function bindBranchesField(root) {
+    const all = el("[data-ball]", root);
+    if (!all) return;
+    all.addEventListener("change", () => els("[data-bid]", root).forEach((cb) => { cb.disabled = all.checked; if (all.checked) cb.checked = true; }));
+  }
+  function readBranchesField(root) {
+    const all = el("[data-ball]", root);
+    if (!all || all.checked) return [];
+    return els("[data-bid]", root).filter((cb) => cb.checked).map((cb) => +cb.dataset.bid);
+  }
+
   function renderPromos() {
     const body = el("#tabBody");
     body.innerHTML = "";
@@ -522,18 +602,20 @@
         <td>${esc(p.scope)}: ${esc(((p.target_ids && p.target_ids.length ? p.target_ids : [p.target_id]).map((id) => p.scope === "item" ? itemName(id) : catName(id)).join(", ")))}</td>
         <td>${esc(p.ptype)}${p.ptype === "percent" || p.ptype === "flat" ? ` (${p.value}${p.ptype === "percent" ? "%" : "₹"})` : ""}</td>
         <td>${p.coupon_only ? `🔒 ${esc(promoCodes(p.id).join(", ")) || "coupon only"}` : "Everyone"}</td>
+        <td>${esc(branchNames(p.branch_ids))}</td>
         <td>${p.active ? "✅" : "⛔"}</td>
         <td class="row"><button class="btn btn-sm btn-outline" data-edit="${p.id}">Edit</button>
           <button class="btn btn-sm btn-danger" data-del="${p.id}">Delete</button></td>
       </tr>`).join("");
-    body.insertAdjacentHTML("beforeend", `<div class="table-wrap"><table class="admin-table"><thead><tr><th>Label</th><th>Applies to</th><th>Type</th><th>Who gets it</th><th>Active</th><th></th></tr></thead><tbody>${rows || emptyRow(6)}</tbody></table></div>`);
+    body.insertAdjacentHTML("beforeend", `<div class="table-wrap"><table class="admin-table"><thead><tr><th>Label</th><th>Applies to</th><th>Type</th><th>Who gets it</th><th>Branches</th><th>Active</th><th></th></tr></thead><tbody>${rows || emptyRow(7)}</tbody></table></div>`);
     el("#addBtn").addEventListener("click", () => promoForm());
     els("[data-edit]", body).forEach((b) => b.addEventListener("click", () => promoForm(data.promos.find((p) => p.id == b.dataset.edit))));
     els("[data-del]", body).forEach((b) => b.addEventListener("click", () => del(`/api/admin/menu/promos/${b.dataset.del}`, "Delete this promo?")));
   }
 
   function promoForm(promo) {
-    const p = promo || { scope: "category", target_ids: [data.categories[0] && data.categories[0].id].filter((x) => x != null), ptype: "b2g1", value: 0, label: "", active: true };
+    const p = promo || { scope: "category", target_ids: [data.categories[0] && data.categories[0].id].filter((x) => x != null), ptype: "b2g1", value: 0, label: "", active: true,
+      branch_ids: [pickedBranchId()].filter((x) => x != null) };
     const selectedTargets = new Set((p.target_ids && p.target_ids.length ? p.target_ids : [p.target_id]).filter((x) => x != null));
     const m = modal({
       title: promo ? "Edit promo" : "Add promo",
@@ -569,9 +651,11 @@
           <textarea class="input" id="fDescription" rows="2" placeholder="Left blank: written automatically from the promo type.">${esc(p.description || "")}</textarea></div>
         <div class="field"><label>Conditions / fine print (optional)</label>
           <textarea class="input" id="fConditions" rows="2" placeholder="Left blank: the standard 'applies automatically at checkout' terms.">${esc(p.conditions || "")}</textarea></div>
+        ${branchesFieldHTML(p.branch_ids || [])}
         <div class="field"><label>Active</label><select class="select" id="fActive"><option value="true" ${p.active ? "selected" : ""}>Active</option><option value="false" ${!p.active ? "selected" : ""}>Off</option></select></div>`,
       footHTML: `<button class="btn btn-primary btn-block" id="saveBtn">Save promo</button>`,
     });
+    bindBranchesField(m.backdrop);
     const scopeSel = el("#fScope", m.backdrop);
     const typeSel = el("#fType", m.backdrop);
 
@@ -626,7 +710,9 @@
         description: el("#fDescription", m.backdrop).value.trim(),
         conditions: el("#fConditions", m.backdrop).value.trim(),
         active: el("#fActive", m.backdrop).value === "true",
+        branch_ids: readBranchesField(m.backdrop),
       };
+      if (data.branches.length > 1 && !payload.branch_ids.length && !el("[data-ball]", m.backdrop).checked) return toast("Pick at least one branch", "err");
       await save(promo ? "put" : "post", promo ? `/api/admin/menu/promos/${promo.id}` : "/api/admin/menu/promos", payload, m);
     });
   }
@@ -656,18 +742,20 @@
         <td>${esc(unlockedNames(c).join(", ")) || "—"}</td>
         <td>${c.min_order ? `≥ ${money(c.min_order)}` : "—"}</td>
         <td>${c.used_count}${c.usage_limit ? ` / ${c.usage_limit}` : ""}</td>
+        <td>${esc(branchNames(c.branch_ids))}</td>
         <td>${c.active ? "✅" : "⛔"}</td>
         <td class="row"><button class="btn btn-sm btn-outline" data-edit="${c.id}">Edit</button>
           <button class="btn btn-sm btn-danger" data-del="${c.id}">Delete</button></td>
       </tr>`).join("");
-    body.insertAdjacentHTML("beforeend", `<div class="table-wrap"><table class="admin-table"><thead><tr><th>Code</th><th>Discount</th><th>Unlocks</th><th>Min order</th><th>Used</th><th>Active</th><th></th></tr></thead><tbody>${rows || emptyRow(7)}</tbody></table></div>`);
+    body.insertAdjacentHTML("beforeend", `<div class="table-wrap"><table class="admin-table"><thead><tr><th>Code</th><th>Discount</th><th>Unlocks</th><th>Min order</th><th>Used</th><th>Branches</th><th>Active</th><th></th></tr></thead><tbody>${rows || emptyRow(8)}</tbody></table></div>`);
     el("#addBtn").addEventListener("click", () => couponForm());
     els("[data-edit]", body).forEach((b) => b.addEventListener("click", () => couponForm(data.coupons.find((c) => c.id == b.dataset.edit))));
     els("[data-del]", body).forEach((b) => b.addEventListener("click", () => del(`/api/coupons/${b.dataset.del}`, "Delete this coupon?")));
   }
 
   function couponForm(coupon) {
-    const c = coupon || { code: "", ctype: "percent", value: 10, min_order: 0, max_discount: 0, usage_limit: 0, active: true, promo_ids: [] };
+    const c = coupon || { code: "", ctype: "percent", value: 10, min_order: 0, max_discount: 0, usage_limit: 0, active: true, promo_ids: [],
+      branch_ids: [pickedBranchId()].filter((x) => x != null) };
     const picked = new Set(c.promo_ids || []);
     /* Several promos of the same type read identically ("Buy 1 Get 1 Free" once
        per category), so each row names what it covers. */
@@ -711,9 +799,11 @@
         <div class="input-row">
           <div class="field grow"><label>Usage limit (0=∞)</label><input class="input" id="fLimit" type="number" value="${c.usage_limit}" /></div>
           <div class="field grow"><label>Active</label><select class="select" id="fActive"><option value="true" ${c.active ? "selected" : ""}>Active</option><option value="false" ${!c.active ? "selected" : ""}>Off</option></select></div>
-        </div>`,
+        </div>
+        ${branchesFieldHTML(c.branch_ids || [])}`,
       footHTML: `<button class="btn btn-primary btn-block" id="saveBtn">Save coupon</button>`,
     });
+    bindBranchesField(m.backdrop);
 
     const updatePromoSummary = () => {
       const names = [...picked].map((id) => {
@@ -760,7 +850,9 @@
         usage_limit: parseInt(el("#fLimit", m.backdrop).value) || 0,
         active: el("#fActive", m.backdrop).value === "true",
         promo_ids: [...picked],
+        branch_ids: readBranchesField(m.backdrop),
       };
+      if (data.branches.length > 1 && !payload.branch_ids.length && !el("[data-ball]", m.backdrop).checked) return toast("Pick at least one branch", "err");
       if (!payload.code) return toast("Code is required", "err");
       if (ctype === "promo" && !payload.promo_ids.length) return toast("Pick the offer this code unlocks", "err");
       await save(coupon ? "put" : "post", coupon ? `/api/coupons/${coupon.id}` : "/api/coupons", payload, m);
@@ -1015,6 +1107,21 @@
       Staff add these to an order at the counter. <strong>Per quantity</strong> multiplies the price by how
       many are added; <strong>flat charge</strong> bills once however many. Add-ons are always charged in
       full — no offer or coupon discounts one.</p>`);
+    // Each branch keeps its own list. A new branch starts empty; one tap copies
+    // Main's, which the owner then reprices.
+    const sb = stockBranch();
+    if (sb) {
+      body.insertAdjacentHTML("beforeend", `<div class="row" style="margin:0 0 var(--sp-3);gap:8px;align-items:center;flex-wrap:wrap;">
+        <span class="text-sm text-muted">These are <strong>${esc(sb.name)}</strong>'s add-ons.</span>
+        <button class="btn btn-sm btn-outline" id="copyTopups">⧉ Copy Main's add-ons</button></div>`);
+      el("#copyTopups").addEventListener("click", async () => {
+        try {
+          const r = await API.post("/api/admin/topups/copy-from-main");
+          toast(r.added ? `${r.added} add-on${r.added === 1 ? "" : "s"} copied from Main` : "Nothing new to copy", "ok");
+          await load();
+        } catch (e) { toast(e.message, "err"); }
+      });
+    }
     const rows = data.topups.map((t) => `
       <tr>
         <td><strong>${esc(t.name)}</strong>${t.description ? `<div class="text-xs text-muted">${esc(t.description)}</div>` : ""}</td>
@@ -1138,8 +1245,9 @@
     body.innerHTML = "";
     body.appendChild(toolbar("Branches", "Add branch", null));
     body.insertAdjacentHTML("beforeend", `<p class="text-muted text-sm" style="margin:0 0 var(--sp-3);max-width:62ch;">
-      Each branch has its own address, payment QR, staff logins and order numbers. Staff only ever
-      see their own branch's orders; you can pick one branch or all of them at the top of any screen.</p>`);
+      Each branch has its own address, payment QR, staff logins and order numbers. Everything else on this
+      screen — prices, stock, add-ons, promos, coupons, scratch cards, delivery areas and settings — is for the
+      branch picked at the top. Staff only ever see their own branch's orders.</p>`);
 
     const cards = data.branches.map((b) => {
       const upi = b.upi_vpa
@@ -1166,7 +1274,7 @@
             <div class="row" style="flex-wrap:wrap;">
               <button class="btn btn-sm btn-outline" data-bedit="${b.id}">Edit</button>
               <button class="btn btn-sm btn-outline" data-bstaff="${b.id}">👥 Logins</button>
-              ${b.is_main ? "" : `<button class="btn btn-sm btn-outline" data-bmenu="${b.id}">🌯 Prices &amp; stock</button>`}
+              ${b.is_main || b.menu_same_as_main ? "" : `<button class="btn btn-sm btn-outline" data-bcopymain="${b.id}" title="Drop this branch's own prices and sell Main's again">↺ Copy Main's prices</button>`}
             </div>
           </div>
           <div class="text-sm" style="margin-top:var(--sp-3);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -1178,8 +1286,8 @@
                b.ordering_enabled ? "🟢 Customers can order from this branch." : "🔴 Closed — the menu stays visible, ordering is paused.", !b.active)}
           ${b.is_main ? "" : sw("menu_same_as_main", b.menu_same_as_main, "Same menu &amp; prices as Main",
                b.menu_same_as_main
-                 ? "On — this branch copies Main's menu and prices, and follows every change. Turn off to set its own. Stock is always this branch's own."
-                 : "Off — this branch uses its own prices from <em>Prices &amp; stock</em>. Anything not changed there still follows Main.",
+                 ? "On — this branch sells Main's prices and follows every change. To give it its own, pick it at the top of the screen and edit prices on Items & Prices (this turns off by itself). Stock is always its own."
+                 : "Off — this branch has its own prices, set on Items & Prices with it picked at the top. Items you never changed still follow Main.",
                !b.active)}
         </div></div>`;
     }).join("");
@@ -1188,7 +1296,17 @@
     el("#addBtn").addEventListener("click", () => branchForm());
     els("[data-bedit]", body).forEach((x) => x.addEventListener("click", () => branchForm(branchById(+x.dataset.bedit))));
     els("[data-bstaff]", body).forEach((x) => x.addEventListener("click", () => branchStaff(branchById(+x.dataset.bstaff))));
-    els("[data-bmenu]", body).forEach((x) => x.addEventListener("click", () => branchMenu(branchById(+x.dataset.bmenu))));
+    els("[data-bcopymain]", body).forEach((x) => x.addEventListener("click", async () => {
+      const b = branchById(+x.dataset.bcopymain);
+      if (!confirm(`Drop every price ${b.name} set for itself and sell Main's prices again? What is sold out there stays sold out.`)) return;
+      try {
+        await API.post(`/api/admin/branches/${b.id}/menu/reset`);
+        const saved = await API.put(`/api/admin/branches/${b.id}`, { ...b, menu_same_as_main: true });
+        Object.assign(b, saved);
+        toast(`${b.name} sells Main's prices again`, "ok");
+      } catch (e) { toast(e.message, "err"); }
+      renderBranches();
+    }));
     els("[data-bcopy]", body).forEach((x) => x.addEventListener("click", async () => {
       try { await navigator.clipboard.writeText(customerLink(branchById(+x.dataset.bcopy))); toast("Link copied", "ok"); }
       catch { toast("Copy failed — select the link and copy it", "err"); }
@@ -1324,115 +1442,6 @@
     await paint();
   }
 
-  /* One branch's prices and stock against the master menu. Only differences
-     are stored: a price left blank (or equal to Main's) is Main's, and follows
-     Main when Main changes. Each item saves on its own as soon as it is edited,
-     like the sold-out toggles — there is no big form to lose. */
-  async function branchMenu(b) {
-    const m = modal({ title: `Prices & stock · ${b.name}`, bodyHTML: `<div class="center-load"><div class="spinner"></div></div>` });
-    let rows = {};
-    try { rows = (await API.get(`/api/admin/branches/${b.id}/menu`)).items || {}; }
-    catch (e) { m.body.innerHTML = `<p class="text-muted">${esc(e.message)}</p>`; return; }
-
-    function itemBlock(it) {
-      const row = rows[it.id] || { hidden: false, overrides: [] };
-      const ov = (v) => row.overrides.find((o) => o.base === v.base && o.size === v.size);
-      // "Use Main's" resets prices and not-sold-here, never stock.
-      const changed = row.hidden || row.overrides.some((o) => o.price != null);
-      return `
-        <div class="card" style="margin-bottom:var(--sp-2);" data-bitem="${it.id}"><div class="card-pad">
-          <div class="row-between" style="gap:var(--sp-2);flex-wrap:wrap;">
-            <strong>${esc(it.name)}</strong>
-            <div class="row" style="align-items:center;gap:10px;">
-              <label class="text-sm" style="display:flex;gap:6px;align-items:center;"><input type="checkbox" data-sold ${row.hidden ? "" : "checked"} /> Sold here</label>
-              ${changed ? `<button class="btn btn-sm btn-ghost" data-reset>Use Main's</button>` : `<span class="text-xs text-muted">same as Main</span>`}
-            </div>
-          </div>
-          <div style="${row.hidden ? "opacity:.45;pointer-events:none;" : ""}">
-            ${it.variants.map((v, i) => {
-              const o = ov(v);
-              return `<div class="row" style="align-items:center;gap:10px;margin-top:6px;flex-wrap:wrap;">
-                <span class="text-sm" style="min-width:150px;flex:1;">${esc(v.label)}</span>
-                <span class="text-xs text-muted" title="Main's price">Main ${money(v.price)}</span>
-                <input class="input" style="width:96px;" type="number" min="0" step="1" inputmode="decimal"
-                  data-price="${i}" value="${o && o.price != null ? o.price : ""}" placeholder="${v.price}" aria-label="Price at ${esc(b.name)}" />
-                <label class="text-sm" style="display:flex;gap:6px;align-items:center;"><input type="checkbox" data-stock="${i}" ${o && o.available === false ? "" : "checked"} /> In stock</label>
-              </div>`;
-            }).join("")}
-          </div>
-        </div></div>`;
-    }
-
-    function paint() {
-      const groups = data.categories.map((c) => ({ c, items: data.items.filter((i) => i.category_id === c.id && i.active) }))
-        .filter((g) => g.items.length);
-      m.body.innerHTML = `
-        ${b.menu_same_as_main ? `<div class="notice-banner" style="background:var(--warn-soft);color:var(--warn-ink);border-color:var(--line);">
-          “Same menu &amp; prices as Main” is <strong>on</strong> for ${esc(b.name)}, so customers see Main's prices
-          and every item. Prices and “Sold here” set here are kept and take effect when you turn it off on the
-          Branches tab. <strong>In stock</strong> ticks always apply — stock is ${esc(b.name)}'s own.</div>` : ""}
-        <div class="row-between" style="margin-bottom:var(--sp-3);gap:var(--sp-2);flex-wrap:wrap;">
-          <span class="text-sm text-muted">Blank price = Main's price. Stock here only affects ${esc(b.name)}.</span>
-          <button class="btn btn-sm btn-outline" id="bmResetAll">↺ Copy Main again (clear all)</button>
-        </div>
-        ${groups.map((g) => `<h4 style="margin:var(--sp-3) 0 var(--sp-2);">${esc(g.c.name)}</h4>${g.items.map(itemBlock).join("")}`).join("")}`;
-
-      el("#bmResetAll", m.body).addEventListener("click", async () => {
-        if (!confirm(`Clear every price change for ${b.name}? It will sell exactly Main's menu. What is sold out there stays sold out.`)) return;
-        try {
-          await API.post(`/api/admin/branches/${b.id}/menu/reset`);
-          rows = (await API.get(`/api/admin/branches/${b.id}/menu`)).items || {};
-          toast("Copied from Main", "ok"); paint();
-        }
-        catch (e) { toast(e.message, "err"); }
-      });
-      els("[data-bitem]", m.body).forEach(bindCard);
-    }
-
-    // Shape of an item's row, to tell whether its card needs redrawing after a
-    // save. Redrawn only when that changes, so tabbing from one price box to
-    // the next is not interrupted by the box being rebuilt under the cursor.
-    const shape = (id) => { const r = rows[id]; return r ? `${r.hidden}|${r.overrides.length > 0}` : "same"; };
-
-    function bindCard(card) {
-      const it = data.items.find((i) => i.id == card.dataset.bitem);
-      const redraw = () => {
-        const fresh = document.createRange().createContextualFragment(itemBlock(it)).firstElementChild;
-        card.replaceWith(fresh);
-        bindCard(fresh);
-      };
-      const saveItem = async () => {
-        const payload = {
-          hidden: !el("[data-sold]", card).checked,
-          variants: it.variants.map((v, i) => {
-            const raw = el(`[data-price="${i}"]`, card).value.trim();
-            return { base: v.base, size: v.size, price: raw === "" ? null : parseFloat(raw),
-                     available: el(`[data-stock="${i}"]`, card).checked };
-          }),
-        };
-        if (payload.variants.some((v) => v.price != null && (isNaN(v.price) || v.price < 0))) return toast("Prices must be 0 or more", "err");
-        const before = shape(it.id);
-        try {
-          const saved = await API.put(`/api/admin/branches/${b.id}/menu/${it.id}`, payload);
-          if (saved.hidden || saved.sold_out || saved.overrides.length) rows[it.id] = saved; else delete rows[it.id];
-          toast(`${it.name} saved for ${b.name}`, "ok");
-        } catch (e) { toast(e.message, "err"); return redraw(); }
-        if (shape(it.id) !== before) redraw();
-      };
-      els("input", card).forEach((x) => x.addEventListener("change", saveItem));
-      const reset = el("[data-reset]", card);
-      if (reset) reset.addEventListener("click", async () => {
-        try {
-          const saved = await API.del(`/api/admin/branches/${b.id}/menu/${it.id}`);
-          if (saved.sold_out || saved.overrides.length) rows[it.id] = saved; else delete rows[it.id];
-          toast(`${it.name} follows Main's prices again`, "ok"); redraw();
-        }
-        catch (e) { toast(e.message, "err"); }
-      });
-    }
-    paint();
-  }
-
   /* ---------------- Export ---------------- */
   /* Downloads through fetch rather than a plain <a href>: the export is behind
      the owner session cookie, and a link opened by the phone's downloader would
@@ -1456,6 +1465,10 @@
           <div class="field grow"><label>From</label><input class="input" id="expFrom" type="date" value="${ymd(monthStart)}" /></div>
           <div class="field grow"><label>To</label><input class="input" id="expTo" type="date" value="${ymd(today)}" /></div>
         </div>
+        ${data.branches.length > 1 ? `<div class="field"><label for="expBranch">Branch</label><select class="select" id="expBranch">
+          <option value="">🏬 All branches</option>
+          ${data.branches.map((b) => `<option value="${b.id}" ${b.id === pickedBranchId() ? "selected" : ""}>📍 ${esc(b.name)}</option>`).join("")}
+        </select></div>` : ""}
         <label class="row" style="align-items:center;gap:10px;margin:var(--sp-2) 0 var(--sp-3);">
           <input type="checkbox" id="expItems" />
           <span>Also include the items, the offer/coupon applied and the amounts</span>
@@ -1478,8 +1491,11 @@
       btn.textContent = "Preparing…";
       try {
         const withItems = el("#expItems").checked;
+        // Named explicitly, so "All branches" here wins over the branch picked
+        // at the top of the screen.
+        const branch = el("#expBranch") ? el("#expBranch").value : "";
         const csv = await API.get(
-          `/api/admin/orders/export.csv?start=${encodeURIComponent(from)}&end=${encodeURIComponent(to)}&include_items=${withItems}`);
+          `/api/admin/orders/export.csv?start=${encodeURIComponent(from)}&end=${encodeURIComponent(to)}&include_items=${withItems}&branch=${branch}`);
         const rows = String(csv).trim().split("\n").length - 1;   // minus the header
         if (rows < 1) { toast("No orders in that date range", "err"); return; }
         const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
@@ -1533,7 +1549,8 @@
     ];
 
     el("#tabBody").innerHTML = `
-      <h2 style="margin:0 0 var(--sp-3);">Settings</h2>
+      <h2 style="margin:0 0 var(--sp-3);">Settings${data.branches.length > 1 && pickedBranchId() ? ` · ${esc((branchById(pickedBranchId()) || {}).name || "")}` : ""}</h2>
+      ${data.branches.length > 1 ? `<p class="text-muted text-sm" style="margin:0 0 var(--sp-3);">These switches are for the branch picked at the top of the screen only.</p>` : ""}
       <div class="card" style="margin-bottom:var(--sp-4);"><div class="card-pad">
         <div style="font-weight:600;">Accept customer orders</div>
         <p class="text-muted text-sm" style="margin:4px 0 0;max-width:52ch;">Ordering is opened and closed per branch now —
