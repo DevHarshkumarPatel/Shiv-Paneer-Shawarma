@@ -13,7 +13,7 @@ from google.cloud import ndb
 from ..deps import require_owner
 from ..models import Branch, BranchMenu, Item, User, VariantOverride
 from ..schemas.models import (
-    BranchMenuPayload, BranchPayload, BranchStaffCreate, BranchStaffUpdate, PasswordUpdate,
+    AvailabilityPayload, BranchMenuPayload, BranchPayload, BranchStaffCreate, BranchStaffUpdate, PasswordUpdate,
 )
 from ..security import hash_password
 
@@ -145,15 +145,36 @@ def branch_menu(branch_id: int, _owner=Depends(require_owner)):
     }
 
 
+def _save_row(row: BranchMenu) -> dict:
+    """Store the row, or delete it once nothing in it differs any more — so a
+    master price change still reaches every branch that never changed it."""
+    if row.is_empty():
+        row.key.delete()
+    else:
+        row.put()
+    return row.to_dict()
+
+
+def _row(b: Branch, item_id: int) -> BranchMenu:
+    key = BranchMenu.key_for(b.key.id(), item_id)
+    return key.get() or BranchMenu(key=key, branch_id=b.key.id(), item_id=item_id)
+
+
+def _stock_only(row: BranchMenu) -> None:
+    """Drop the menu half of a row (prices, not-sold-here), keep its stock.
+    Going back to Main's prices is a menu decision; it must not quietly put
+    back on sale what this kitchen ran out of an hour ago."""
+    row.hidden = False
+    row.overrides = [VariantOverride(base=o.base, size=o.size, price=None, available=False)
+                     for o in row.overrides if o.available is False]
+
+
 @router.put("/api/admin/branches/{branch_id}/menu/{item_id}")
 def set_branch_item(branch_id: int, item_id: int, body: BranchMenuPayload,
                     _owner=Depends(require_owner)):
-    """Set how this branch sells one item.
-
-    Only real differences are stored: a variant priced as the master and in
-    stock is dropped, and a row left with nothing different is deleted. So a
-    master price change still reaches every branch that never changed it.
-    """
+    """Set how this branch sells one item: prices, not-sold-here, and stock
+    per variant. Only real differences are stored. The item-level sold-out
+    switch is left as it is — that is the Items tab's quick toggle."""
     b = _get(branch_id)
     if b.is_main:
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
@@ -172,31 +193,64 @@ def set_branch_item(branch_id: int, item_id: int, body: BranchMenuPayload,
             continue
         overrides.append(VariantOverride(base=v.base, size=v.size, price=price,
                                          available=v.available))
-    key = BranchMenu.key_for(b.key.id(), item_id)
-    if not overrides and not body.hidden:
-        key.delete()
-        return {"item_id": item_id, "hidden": False, "overrides": []}
-    row = BranchMenu(key=key, branch_id=b.key.id(), item_id=item_id,
-                     hidden=body.hidden, overrides=overrides)
-    row.put()
-    return row.to_dict()
+    row = _row(b, item_id)
+    row.hidden = body.hidden
+    row.overrides = overrides
+    return _save_row(row)
+
+
+@router.patch("/api/admin/branches/{branch_id}/stock/{item_id}")
+def set_branch_stock(branch_id: int, item_id: int, body: AvailabilityPayload,
+                     _owner=Depends(require_owner)):
+    """Sold out / back in stock at this branch only — the Items tab's quick
+    toggle while a branch other than Main is picked. Prices are not touched."""
+    b = _get(branch_id)
+    if b.is_main:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Main's stock is the item's own switch.")
+    item = Item.get_by_id(item_id)
+    if not item:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found.")
+    row = _row(b, item_id)
+    row.sold_out = not body.available
+    if body.variants is not None:
+        if len(body.variants) != len(item.variants):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                                "Variant availability list must match the item's variants.")
+        kept = []
+        for v, flag in zip(item.variants, body.variants):
+            ov = row.override_for(v.base, v.size)
+            price = ov.price if ov else None
+            if price is not None or not flag:
+                kept.append(VariantOverride(base=v.base, size=v.size, price=price, available=flag))
+        row.overrides = kept
+    return _save_row(row)
 
 
 @router.delete("/api/admin/branches/{branch_id}/menu/{item_id}")
 def reset_branch_item(branch_id: int, item_id: int, _owner=Depends(require_owner)):
-    """Back to Main's price and stock for this item."""
-    BranchMenu.key_for(_get(branch_id).key.id(), item_id).delete()
-    return {"ok": True}
+    """Back to Main's prices for this item. Its stock here stays as it is."""
+    row = BranchMenu.key_for(_get(branch_id).key.id(), item_id).get()
+    if not row:
+        return {"item_id": item_id, "hidden": False, "sold_out": False, "overrides": []}
+    _stock_only(row)
+    return _save_row(row)
 
 
 @router.post("/api/admin/branches/{branch_id}/menu/reset")
 def reset_branch_menu(branch_id: int, _owner=Depends(require_owner)):
-    """Copy Main's menu again: every difference this branch has is dropped."""
+    """Copy Main's menu again: every price and not-sold-here difference is
+    dropped. What is sold out at this branch stays sold out."""
     b = _get(branch_id)
-    keys = BranchMenu.query(BranchMenu.branch_id == b.key.id()).fetch(keys_only=True)
-    if keys:
-        ndb.delete_multi(keys)
-    return {"ok": True, "cleared": len(keys)}
+    rows = list(BranchMenu.query(BranchMenu.branch_id == b.key.id()))
+    for row in rows:
+        _stock_only(row)
+    gone = [r.key for r in rows if r.is_empty()]
+    if gone:
+        ndb.delete_multi(gone)
+    keep = [r for r in rows if not r.is_empty()]
+    if keep:
+        ndb.put_multi(keep)
+    return {"ok": True, "cleared": len(rows)}
 
 
 # ---- Owner: staff logins per branch ----

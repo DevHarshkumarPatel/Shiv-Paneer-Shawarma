@@ -5,6 +5,7 @@
   let data = {
     categories: [], items: [], promos: [], coupons: [], areas: [], topups: [], branches: [],
     areasBranch: null,
+    branchRows: {},       // the picked branch's own stock/price rows (not Main)
     settings: { ordering_enabled: true, scratch_enabled: false },
     scratch: { prizes: [], enabled: false, live: false },
     awards: { awards: [], stats: {} },
@@ -46,7 +47,10 @@
         categories: cats.categories, items: items.items, promos: promos.promos,
         coupons: coupons.coupons, areas: areas.areas, topups: topups.topups,
         settings, scratch, awards, branches: branches.branches, areasBranch: areas.branch,
+        branchRows: {},
       };
+      const sb = stockBranch();
+      if (sb) data.branchRows = (await API.get(`/api/admin/branches/${sb.id}/menu`)).items || {};
       render();
     } catch (e) {
       if (e.status === 401) { location.href = "login.html"; return; }
@@ -132,13 +136,30 @@
   }
 
   /* ---------------- Items ---------------- */
+  /* Stock is per branch: the master item's flags are Main's shelf, and every
+     other branch keeps its own (see backend models/branch.py). So the stock
+     column and the Sold out button follow the branch picked at the top of the
+     screen — with Main or "All branches" picked they are Main's. */
+  const stockBranch = () => {
+    const b = typeof StaffBranch !== "undefined" ? StaffBranch.current() : null;
+    return b && !b.is_main ? b : null;
+  };
+  function stockOf(i) {
+    if (!stockBranch()) {
+      return { soldOut: i.available === false, off: i.variants.filter((v) => v.available === false).length };
+    }
+    const row = data.branchRows[i.id] || { sold_out: false, overrides: [] };
+    const off = i.variants.filter((v) => row.overrides.some((o) =>
+      o.base === v.base && o.size === v.size && o.available === false)).length;
+    return { soldOut: !!row.sold_out || off === i.variants.length, off };
+  }
+
   function itemRow(i) {
     const prices = i.variants.map((v) => v.price);
     const range = prices.length ? (Math.min(...prices) === Math.max(...prices) ? money(prices[0]) : `${money(Math.min(...prices))}–${money(Math.max(...prices))}`) : "—";
     // How many variants are actually sellable — the number the kitchen cares
     // about mid-service, not just whether the item exists.
-    const offCount = i.variants.filter((v) => v.available === false).length;
-    const soldOut = i.available === false;
+    const { soldOut, off: offCount } = stockOf(i);
     const stock = soldOut
       ? `<span class="pill-out">Sold out</span>`
       : offCount
@@ -166,6 +187,12 @@
     body.innerHTML = "";
     body.appendChild(toolbar("Items & Prices", "Add item", null));
     body.insertAdjacentHTML("beforeend", `<p class="text-muted text-sm" style="margin:0 0 var(--sp-3);">Drag ⠿ to reorder items within a category — the order is saved automatically and used on the customer menu.</p>`);
+    if (data.branches.length > 1) {
+      const where = stockBranch() ? stockBranch().name : "Main";
+      body.insertAdjacentHTML("beforeend", `<div class="notice-banner" style="background:var(--surface-2);color:var(--ink-2);border-color:var(--line);">
+        📦 Stock shown is <strong>${esc(where)}</strong>'s. <em>Sold out</em> here only affects ${esc(where)} —
+        pick another branch at the top of the screen to set its stock.</div>`);
+    }
 
     // One draggable table per category (ordering is within a category).
     const groups = data.categories.map((c) => ({ cat: c, items: data.items.filter((i) => i.category_id === c.id) }));
@@ -194,11 +221,18 @@
       const it = data.items.find((x) => x.id == b.dataset.stock);
       if (!it) return;
       b.disabled = true;
+      const sb = stockBranch();
+      const backOn = stockOf(it).soldOut;
       try {
-        const updated = await API.patch(`/api/admin/menu/items/${it.id}/availability`,
-                                        { available: it.available === false });
-        Object.assign(it, updated);
-        toast(`${it.name} is ${it.available === false ? "sold out" : "back in stock"}`, "ok");
+        if (sb) {
+          // Back in stock clears the per-variant sold-outs too, so the item
+          // comes back whole rather than still showing 0/4.
+          data.branchRows[it.id] = await API.patch(`/api/admin/branches/${sb.id}/stock/${it.id}`,
+            backOn ? { available: true, variants: it.variants.map(() => true) } : { available: false });
+        } else {
+          Object.assign(it, await API.patch(`/api/admin/menu/items/${it.id}/availability`, { available: backOn }));
+        }
+        toast(`${it.name} is ${backOn ? "back in stock" : "sold out"}${sb ? ` at ${sb.name}` : data.branches.length > 1 ? " at Main" : ""}`, "ok");
         renderItems();
       } catch (e) { toast(e.message, "err"); b.disabled = false; }
     }));
@@ -273,7 +307,7 @@
         <div class="input-row">
           <div class="field grow"><label>Category</label><select class="select" id="fCat">${catOptionsHTML(it.category_id)}</select></div>
           <div class="field grow"><label>Active</label><select class="select" id="fActive"><option value="true" ${it.active ? "selected" : ""}>Active</option><option value="false" ${!it.active ? "selected" : ""}>Hidden</option></select></div>
-          <div class="field grow"><label>Stock</label><select class="select" id="fAvail"><option value="true" ${it.available !== false ? "selected" : ""}>In stock</option><option value="false" ${it.available === false ? "selected" : ""}>Sold out</option></select></div>
+          <div class="field grow"><label>${data.branches.length > 1 ? "Stock at Main" : "Stock"}</label><select class="select" id="fAvail"><option value="true" ${it.available !== false ? "selected" : ""}>In stock</option><option value="false" ${it.available === false ? "selected" : ""}>Sold out</option></select></div>
         </div>
         <div class="field" id="newCatWrap" style="display:none;">
           <label>New category name</label>
@@ -1144,8 +1178,8 @@
                b.ordering_enabled ? "🟢 Customers can order from this branch." : "🔴 Closed — the menu stays visible, ordering is paused.", !b.active)}
           ${b.is_main ? "" : sw("menu_same_as_main", b.menu_same_as_main, "Same menu &amp; prices as Main",
                b.menu_same_as_main
-                 ? "On — this branch copies Main's menu, prices and stock, and follows every change. Turn off to set its own."
-                 : "Off — this branch uses its own prices and stock from <em>Prices &amp; stock</em>. Anything not changed there still follows Main.",
+                 ? "On — this branch copies Main's menu and prices, and follows every change. Turn off to set its own. Stock is always this branch's own."
+                 : "Off — this branch uses its own prices from <em>Prices &amp; stock</em>. Anything not changed there still follows Main.",
                !b.active)}
         </div></div>`;
     }).join("");
@@ -1303,7 +1337,8 @@
     function itemBlock(it) {
       const row = rows[it.id] || { hidden: false, overrides: [] };
       const ov = (v) => row.overrides.find((o) => o.base === v.base && o.size === v.size);
-      const changed = row.hidden || row.overrides.length;
+      // "Use Main's" resets prices and not-sold-here, never stock.
+      const changed = row.hidden || row.overrides.some((o) => o.price != null);
       return `
         <div class="card" style="margin-bottom:var(--sp-2);" data-bitem="${it.id}"><div class="card-pad">
           <div class="row-between" style="gap:var(--sp-2);flex-wrap:wrap;">
@@ -1333,17 +1368,22 @@
         .filter((g) => g.items.length);
       m.body.innerHTML = `
         ${b.menu_same_as_main ? `<div class="notice-banner" style="background:var(--warn-soft);color:var(--warn-ink);border-color:var(--line);">
-          “Same menu &amp; prices as Main” is <strong>on</strong> for ${esc(b.name)}, so customers see Main's prices.
-          Changes made here are kept and take effect when you turn it off on the Branches tab.</div>` : ""}
+          “Same menu &amp; prices as Main” is <strong>on</strong> for ${esc(b.name)}, so customers see Main's prices
+          and every item. Prices and “Sold here” set here are kept and take effect when you turn it off on the
+          Branches tab. <strong>In stock</strong> ticks always apply — stock is ${esc(b.name)}'s own.</div>` : ""}
         <div class="row-between" style="margin-bottom:var(--sp-3);gap:var(--sp-2);flex-wrap:wrap;">
-          <span class="text-sm text-muted">Blank price = Main's price. A sold-out tick here only affects ${esc(b.name)}.</span>
+          <span class="text-sm text-muted">Blank price = Main's price. Stock here only affects ${esc(b.name)}.</span>
           <button class="btn btn-sm btn-outline" id="bmResetAll">↺ Copy Main again (clear all)</button>
         </div>
         ${groups.map((g) => `<h4 style="margin:var(--sp-3) 0 var(--sp-2);">${esc(g.c.name)}</h4>${g.items.map(itemBlock).join("")}`).join("")}`;
 
       el("#bmResetAll", m.body).addEventListener("click", async () => {
-        if (!confirm(`Clear every price and stock change for ${b.name}? It will sell exactly Main's menu.`)) return;
-        try { await API.post(`/api/admin/branches/${b.id}/menu/reset`); rows = {}; toast("Copied from Main", "ok"); paint(); }
+        if (!confirm(`Clear every price change for ${b.name}? It will sell exactly Main's menu. What is sold out there stays sold out.`)) return;
+        try {
+          await API.post(`/api/admin/branches/${b.id}/menu/reset`);
+          rows = (await API.get(`/api/admin/branches/${b.id}/menu`)).items || {};
+          toast("Copied from Main", "ok"); paint();
+        }
         catch (e) { toast(e.message, "err"); }
       });
       els("[data-bitem]", m.body).forEach(bindCard);
@@ -1374,7 +1414,7 @@
         const before = shape(it.id);
         try {
           const saved = await API.put(`/api/admin/branches/${b.id}/menu/${it.id}`, payload);
-          if (saved.hidden || saved.overrides.length) rows[it.id] = saved; else delete rows[it.id];
+          if (saved.hidden || saved.sold_out || saved.overrides.length) rows[it.id] = saved; else delete rows[it.id];
           toast(`${it.name} saved for ${b.name}`, "ok");
         } catch (e) { toast(e.message, "err"); return redraw(); }
         if (shape(it.id) !== before) redraw();
@@ -1382,7 +1422,11 @@
       els("input", card).forEach((x) => x.addEventListener("change", saveItem));
       const reset = el("[data-reset]", card);
       if (reset) reset.addEventListener("click", async () => {
-        try { await API.del(`/api/admin/branches/${b.id}/menu/${it.id}`); delete rows[it.id]; toast(`${it.name} follows Main again`, "ok"); redraw(); }
+        try {
+          const saved = await API.del(`/api/admin/branches/${b.id}/menu/${it.id}`);
+          if (saved.sold_out || saved.overrides.length) rows[it.id] = saved; else delete rows[it.id];
+          toast(`${it.name} follows Main's prices again`, "ok"); redraw();
+        }
         catch (e) { toast(e.message, "err"); }
       });
     }

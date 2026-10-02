@@ -173,7 +173,7 @@ def get_menu(branch: str = ""):
             index[tid] = pd
 
     def item_json(it: Item) -> dict | None:
-        d = localise_item(it.to_dict(), overrides.get(it.key.id()))
+        d = localise_item(it.to_dict(), overrides.get(it.key.id()), outlet)
         if d is not None:
             d["promo"] = promos_by_item.get(it.key.id()) or promos_by_cat.get(it.category_id)
         return d

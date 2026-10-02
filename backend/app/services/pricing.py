@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass, field
 
 from ..models import Branch, BranchMenu, Item, Promo, Coupon, DeliveryArea, Topup
-from .branches import branch_price, menu_overrides
+from .branches import branch_price, item_on_sale, menu_overrides
 
 _digits = lambda s: re.sub(r"\D", "", s or "")   # noqa: E731
 
@@ -140,19 +140,17 @@ def _load_active_promos() -> tuple[dict[tuple[str, int], Promo], dict[int, Promo
 
 
 def _match_variant(item: Item, base: str, size: str):
-    """Resolve a cart line to a sellable variant, or None.
+    """Resolve a cart line to one of the item's variants, or None.
 
-    Availability is enforced here rather than at the call site because this is
-    the one place both /quote and order creation resolve a variant — an
-    unavailable combination must be unsellable on both paths, not just hidden in
-    the menu UI.
+    Stock is not decided here: it depends on the branch (see
+    services/branches.py `branch_price`), which this function does not know.
     """
     for v in item.variants:
         if v.base == base and v.size == size:
-            return v if v.is_available() else None
+            return v
     # Fall back to the first variant if the client sent nothing / a stale combo
     # but only when the item genuinely has a single variant.
-    if len(item.variants) == 1 and item.variants[0].is_available():
+    if len(item.variants) == 1:
         return item.variants[0]
     return None
 
@@ -210,7 +208,7 @@ def _apply_cart_b1g1(result: PricingResult, promo: Promo, line_indices: list[int
 
 def _price_lines(cart: list[dict], promos: dict[tuple[str, int], Promo],
                  items: dict[int, Item | None],
-                 overrides: dict[int, BranchMenu]) -> PricingResult:
+                 overrides: dict[int, BranchMenu], branch: Branch) -> PricingResult:
     """Price every cart line against one promo map.
 
     Split out of `price_cart` because the cart may have to be priced twice: once
@@ -218,9 +216,11 @@ def _price_lines(cart: list[dict], promos: dict[tuple[str, int], Promo],
     once that code has been accepted. `items` is a cache shared by both passes
     so the second one costs no extra datastore reads.
 
-    `overrides` is the branch's differences from the master menu (empty for a
-    branch selling it as it is): a different price, a variant this kitchen
-    does not make, or an item it does not sell at all.
+    `overrides` is the branch's own rows (empty for Main): its stock, and —
+    when it runs its own menu — its prices and the items it does not sell.
+    Availability is enforced here because this is the one place both /quote
+    and order creation resolve a line, so an item sold out at this branch is
+    unsellable on both paths, not just greyed out in the menu.
     """
     result = PricingResult()
 
@@ -242,7 +242,7 @@ def _price_lines(cart: list[dict], promos: dict[tuple[str, int], Promo],
         base, size = raw.get("base", ""), raw.get("size", "")
         variant_label = " · ".join(p for p in (base, size) if p)
         bm = overrides.get(item_id)
-        if not item.is_available() or (bm and bm.hidden):
+        if not item_on_sale(item, bm, branch):
             result.unavailable.append({
                 "item_id": item_id, "base": base, "size": size, "name": item.name,
                 "variant_label": variant_label, "whole_item": True,
@@ -250,7 +250,7 @@ def _price_lines(cart: list[dict], promos: dict[tuple[str, int], Promo],
             })
             continue
         variant = _match_variant(item, base, size)
-        unit_price, sellable_here = branch_price(item, variant, bm) if variant else (0.0, False)
+        unit_price, sellable_here = branch_price(item, variant, bm, branch) if variant else (0.0, False)
         if not sellable_here:
             result.unavailable.append({
                 "item_id": item_id, "base": base, "size": size, "name": item.name,
@@ -374,7 +374,7 @@ def price_cart(cart: list[dict], order_type: str, coupon_code: str = "",
     overrides = menu_overrides(branch, [raw.get("item_id") for raw in cart])
 
     # First pass: the cart as anyone gets it, with no coupon in hand.
-    result = _price_lines(cart, auto_promos, items, overrides)
+    result = _price_lines(cart, auto_promos, items, overrides, branch)
     after_promo = result.subtotal - result.promo_discount
 
     coupon = None
@@ -393,7 +393,7 @@ def price_cart(cart: list[dict], order_type: str, coupon_code: str = "",
             if unlocked:
                 merged = dict(auto_promos)
                 merged.update(_index_promos(unlocked))
-                result = _price_lines(cart, merged, items, overrides)
+                result = _price_lines(cart, merged, items, overrides, branch)
                 after_promo = result.subtotal - result.promo_discount
                 result.coupon_promos = list(dict.fromkeys(p.display_label() for p in unlocked))
             result.coupon_code = code

@@ -2,9 +2,16 @@
 
 One master menu, owned by the owner and edited once. A branch either sells that
 menu exactly as it is (`menu_same_as_main`, the default) or keeps a short list of
-differences in `BranchMenu` — a dearer price here, a variant this kitchen does
-not make, an item it does not sell at all. Anything without a difference falls
-through to the master, so a branch that has never been touched prices like Main.
+differences in `BranchMenu` — a dearer price here, an item it does not sell at
+all. Anything without a difference falls through to the master, so a branch
+that has never been touched prices like Main.
+
+Stock is the exception, and is always per branch whatever that toggle says: it
+is what one kitchen has on its shelf right now. Main running out of millet must
+not sell out millet at Adajan. So the stock flags on the master Item and Variant
+are Main's stock only; every other branch keeps its own in `BranchMenu`
+(`sold_out` for the whole item, `VariantOverride.available` per variant), and is
+in stock by default.
 
 Why differences and not a full copy of the menu per branch: the owner adds a new
 item once and every branch has it. A copied menu drifts the first time one copy
@@ -140,13 +147,18 @@ class BranchMenu(ndb.Model):
 
     branch_id = ndb.IntegerProperty(required=True)
     item_id = ndb.IntegerProperty(required=True)
-    hidden = ndb.BooleanProperty(default=False)       # not sold at this branch
+    hidden = ndb.BooleanProperty(default=False)       # not sold at this branch (own menu only)
+    sold_out = ndb.BooleanProperty(default=False)     # whole item out at this branch, today
     overrides = ndb.LocalStructuredProperty(VariantOverride, repeated=True)
     updated_at = ndb.DateTimeProperty(auto_now=True)
 
     @staticmethod
     def key_for(branch_id: int, item_id: int) -> ndb.Key:
         return ndb.Key(BranchMenu, f"{branch_id}:{item_id}")
+
+    def is_empty(self) -> bool:
+        """Nothing here differs from Main's menu with everything in stock."""
+        return not self.hidden and not self.sold_out and not self.overrides
 
     def override_for(self, base: str, size: str) -> VariantOverride | None:
         for o in self.overrides:
@@ -158,5 +170,6 @@ class BranchMenu(ndb.Model):
         return {
             "item_id": self.item_id,
             "hidden": bool(self.hidden),
+            "sold_out": bool(self.sold_out),
             "overrides": [o.to_dict() for o in self.overrides],
         }

@@ -93,51 +93,70 @@ def ensure_visible(user, order: Order | None) -> Order:
 
 
 # ---- Menu --------------------------------------------------------------
+#
+# Two separate things come out of a branch's BranchMenu row:
+#   * menu  — its own prices and the items it does not sell. Used only when the
+#             branch has "same menu & prices as Main" turned off.
+#   * stock — what is sold out there right now. Always its own: the master
+#             Item/Variant stock flags are Main's shelf, not every branch's.
 
 def menu_overrides(branch: Branch, item_ids) -> dict[int, BranchMenu]:
-    """This branch's differences for the given items, in one batch read.
-    Empty for Main and for any branch selling the master menu as it is."""
+    """This branch's rows for the given items, in one batch read. Empty for
+    Main, whose prices and stock are the master's own."""
     ids = list(dict.fromkeys(int(i) for i in item_ids))
-    if not ids or not branch.uses_own_menu():
+    if not ids or branch.is_main:
         return {}
     bid = branch.key.id()
     rows = ndb.get_multi([BranchMenu.key_for(bid, i) for i in ids])
     return {r.item_id: r for r in rows if r}
 
 
-def localise_item(item_dict: dict, bm: BranchMenu | None) -> dict | None:
+def _variant_stock(bm: BranchMenu | None, base: str, size: str) -> bool:
+    ov = bm.override_for(base, size) if bm else None
+    return not ov or ov.available is not False
+
+
+def localise_item(item_dict: dict, bm: BranchMenu | None, branch: Branch) -> dict | None:
     """An item as this branch sells it, from its master `to_dict()`.
 
-    None when the branch does not sell it. A variant switched off here is
+    None when the branch does not sell it. A variant out of stock here is
     marked sold out, not removed: the customer sees the grid they know, with
-    one square unavailable today. The item is sold out only when the master
-    says so or every variant is.
+    one square unavailable today.
     """
-    if bm is None:
+    if branch.is_main:
         return item_dict
-    if bm.hidden:
+    own = branch.uses_own_menu()
+    if own and bm and bm.hidden:
         return None
     variants = []
     for v in item_dict["variants"]:
-        ov = bm.override_for(v["base"], v["size"])
-        if ov:
-            v = {**v,
-                 "price": ov.price if ov.price is not None else v["price"],
-                 "available": v["available"] and ov.available is not False}
-        variants.append(v)
+        ov = bm.override_for(v["base"], v["size"]) if bm else None
+        price = ov.price if own and ov and ov.price is not None else v["price"]
+        variants.append({**v, "price": price, "available": _variant_stock(bm, v["base"], v["size"])})
     prices = [v["price"] for v in variants]
     return {
         **item_dict,
         "variants": variants,
         "base_price": min(prices) if prices else 0.0,
-        "available": item_dict["available"] and any(v["available"] for v in variants),
+        "available": not (bm and bm.sold_out) and any(v["available"] for v in variants),
     }
 
 
-def branch_price(item: Item, variant, bm: BranchMenu | None) -> tuple[float, bool]:
-    """(price, sellable) of one master variant at a branch."""
+def item_on_sale(item: Item, bm: BranchMenu | None, branch: Branch) -> bool:
+    """Whether the item as a whole can be ordered at this branch right now."""
+    if branch.is_main:
+        return item.is_available()
+    if bm and (bm.sold_out or (bm.hidden and branch.uses_own_menu())):
+        return False
+    return any(_variant_stock(bm, v.base, v.size) for v in item.variants)
+
+
+def branch_price(item: Item, variant, bm: BranchMenu | None, branch: Branch) -> tuple[float, bool]:
+    """(price, in stock) of one master variant at a branch."""
+    if branch.is_main:
+        return float(variant.price), variant.is_available()
     ov = bm.override_for(variant.base, variant.size) if bm else None
-    if not ov:
-        return float(variant.price), True
-    price = float(ov.price) if ov.price is not None else float(variant.price)
-    return price, ov.available is not False
+    price = float(variant.price)
+    if ov and ov.price is not None and branch.uses_own_menu():
+        price = float(ov.price)
+    return price, _variant_stock(bm, variant.base, variant.size)
