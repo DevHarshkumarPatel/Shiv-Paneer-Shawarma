@@ -4,6 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from ..models import Category, Subcategory, Item, ItemImage, Promo, Coupon, Setting
+from ..services.branches import localise_item, menu_overrides, public_branch
 
 router = APIRouter(prefix="/api", tags=["menu"])
 
@@ -141,13 +142,17 @@ def get_item_image(item_id: int, request: Request):
 
 
 @router.get("/menu")
-def get_menu():
+def get_menu(branch: str = ""):
+    """The menu as one branch sells it: the master menu with that branch's
+    prices, stock and left-out items applied (see services/branches.py)."""
+    outlet = public_branch(branch)
     categories = sorted(
         [c for c in Category.query() if c.active],
         key=lambda c: (c.sort_order, c.name),
     )
     subcategories = [s for s in Subcategory.query() if s.active]
     items = [i for i in Item.query() if i.active]
+    overrides = menu_overrides(outlet, [i.key.id() for i in items])
 
     # Index active promos so the client can render badges + effective offers.
     promos_by_item: dict[int, dict] = {}
@@ -167,9 +172,10 @@ def get_menu():
         for tid in p.target_id_list():
             index[tid] = pd
 
-    def item_json(it: Item) -> dict:
-        d = it.to_dict()
-        d["promo"] = promos_by_item.get(it.key.id()) or promos_by_cat.get(it.category_id)
+    def item_json(it: Item) -> dict | None:
+        d = localise_item(it.to_dict(), overrides.get(it.key.id()))
+        if d is not None:
+            d["promo"] = promos_by_item.get(it.key.id()) or promos_by_cat.get(it.category_id)
         return d
 
     subs_by_cat: dict[int, list] = {}
@@ -186,15 +192,17 @@ def get_menu():
 
         subgroups = []
         for sub in subs_by_cat.get(cat.key.id(), []):
-            sub_items = [item_json(i) for i in cat_items if i.subcategory_id == sub.key.id()]
+            sub_items = [d for i in cat_items if i.subcategory_id == sub.key.id()
+                         if (d := item_json(i)) is not None]
             if sub_items:
                 subgroups.append({**sub.to_dict(), "items": sub_items})
 
-        direct_items = [item_json(i) for i in cat_items if not i.subcategory_id]
+        direct_items = [d for i in cat_items if not i.subcategory_id
+                        if (d := item_json(i)) is not None]
 
         cat_json["subcategories"] = subgroups
         cat_json["items"] = direct_items
         if subgroups or direct_items:
             tree.append(cat_json)
 
-    return {"categories": tree}
+    return {"categories": tree, "branch": outlet.to_public()}

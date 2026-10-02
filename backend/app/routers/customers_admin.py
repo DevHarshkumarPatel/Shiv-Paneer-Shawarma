@@ -19,7 +19,8 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..deps import require_owner
-from ..models import Order
+from ..models import Branch, Order
+from ..services.branches import in_scope, scope
 from ..services.phones import norm_phone as _norm_phone
 
 router = APIRouter(prefix="/api/admin/customers", tags=["admin-customers"])
@@ -158,8 +159,8 @@ class _Agg:
         }
 
 
-def _scan(days: int | None) -> tuple[dict[str, _Agg], int, bool]:
-    """Aggregate orders in the window by phone.
+def _scan(days: int | None, scope_id: int | None = None) -> tuple[dict[str, _Agg], int, bool]:
+    """Aggregate orders in the window by phone, for one branch or all of them.
 
     Returns (by_phone, orders_seen, truncated).
     """
@@ -171,11 +172,14 @@ def _scan(days: int | None) -> tuple[dict[str, _Agg], int, bool]:
     by_phone: dict[str, _Agg] = {}
     seen = 0
     truncated = False
+    main_id = Branch.main().key.id()
     for o in q:
         if seen >= SCAN_CAP:
             truncated = True
             break
         seen += 1
+        if not in_scope(o, scope_id, main_id):
+            continue
         phone = _norm_phone(o.customer.phone if o.customer else "")
         if not phone:
             # No phone, no identity. A walk-in dine-in order with nothing typed
@@ -193,6 +197,7 @@ def list_customers(
     sort: str = "recent",
     q: str | None = None,
     limit: int = 200,
+    branch: str = "",
 ):
     """Customers in the window, with the store-wide summary alongside.
 
@@ -203,7 +208,7 @@ def list_customers(
     if sort not in SORTS:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"sort must be one of {sorted(SORTS)}.")
 
-    by_phone, seen, truncated = _scan(days if days > 0 else None)
+    by_phone, seen, truncated = _scan(days if days > 0 else None, scope(_owner, branch))
     now = datetime.utcnow()
     rows = [a.to_dict(now) for a in by_phone.values()]
 
@@ -250,7 +255,7 @@ def list_customers(
 
 
 @router.get("/{phone}")
-def customer_detail(phone: str, _owner=Depends(require_owner), days: int = 0):
+def customer_detail(phone: str, _owner=Depends(require_owner), days: int = 0, branch: str = ""):
     """One customer's full history. Defaults to their entire history, not the
     list's window — once the owner has opened a specific person, the question
     is "everything about them", not "them this year"."""
@@ -268,10 +273,14 @@ def customer_detail(phone: str, _owner=Depends(require_owner), days: int = 0):
     agg = _Agg(key)
     orders: list[dict] = []
     seen = 0
+    scope_id = scope(_owner, branch)
+    main_id = Branch.main().key.id()
     for o in q:
         if seen >= SCAN_CAP:
             break
         seen += 1
+        if not in_scope(o, scope_id, main_id):
+            continue
         if _norm_phone(o.customer.phone if o.customer else "") != key:
             continue
         agg.add(o)

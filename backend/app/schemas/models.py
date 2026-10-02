@@ -275,3 +275,51 @@ class CouponPayload(BaseModel):
     # Promos this code switches on. They stop applying by themselves the moment
     # a coupon claims them, and come back if every coupon lets go.
     promo_ids: list[int] = []
+
+
+# ---- Branches ----
+class BranchPayload(BaseModel):
+    name: str
+    slug: str = ""                 # blank = derived from the name
+    code: str = ""                 # order-id prefix; required for every branch but Main
+    address: str = ""
+    phone: str = ""
+    timings: str = ""
+    map_url: str = ""
+    upi_vpa: str = ""
+    upi_payee_name: str = ""
+    upi_pn: str = ""
+    upi_merchant_code: str = ""
+    upi_merchant_aid: str = ""
+    ordering_enabled: bool = True
+    menu_same_as_main: bool = True
+    active: bool = True
+    sort_order: int = 0
+
+
+class BranchVariantPayload(BaseModel):
+    base: str = ""
+    size: str = ""
+    price: float | None = Field(default=None, ge=0)   # None = the master price
+    available: bool = True
+
+
+class BranchMenuPayload(BaseModel):
+    """One item's differences at one branch. Variants matching the master in
+    both price and stock are dropped on save, so the row only ever holds what
+    is actually different."""
+
+    hidden: bool = False
+    variants: list[BranchVariantPayload] = []
+
+
+class BranchStaffCreate(BaseModel):
+    name: str = ""
+    email: EmailStr
+    password: str = Field(min_length=6)
+
+
+class BranchStaffUpdate(BaseModel):
+    name: str = ""
+    active: bool = True
+    branch_id: int

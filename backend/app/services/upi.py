@@ -8,7 +8,28 @@ import qrcode
 from ..config import settings
 
 
-def build_upi_uri(amount: float, note: str, txn_ref: str = "") -> str:
+def merchant(branch=None) -> dict:
+    """The UPI merchant identity money for this branch goes to.
+
+    Each field comes from the branch when the owner filled it in and from the
+    shop-wide config otherwise, so Main keeps paying into the account it always
+    has, and a new branch can be opened before its own GPay QR has arrived.
+    The VPA and the merchant ids travel together on purpose: a branch's own VPA
+    with Main's merchant code and aid would build a QR that no app accepts.
+    """
+    own = bool(branch and (branch.upi_vpa or "").strip())
+    pick = lambda field, fallback: (getattr(branch, field, "") or "").strip() if own else fallback  # noqa: E731
+    return {
+        "vpa": pick("upi_vpa", settings.upi_vpa),
+        "payee": ((getattr(branch, "upi_payee_name", "") or "").strip() if branch else "")
+                 or settings.upi_payee_name,
+        "pn": pick("upi_pn", settings.upi_payee_vpa_name),
+        "mc": pick("upi_merchant_code", settings.upi_merchant_code),
+        "aid": pick("upi_merchant_aid", settings.upi_merchant_aid),
+    }
+
+
+def build_upi_uri(amount: float, note: str, txn_ref: str = "", branch=None) -> str:
     """Construct a UPI *merchant* (P2M) intent link — upi://pay?...
 
     Scanned by GPay / PhonePe / Paytm; the amount is pre-filled. This mirrors the
@@ -19,11 +40,12 @@ def build_upi_uri(amount: float, note: str, txn_ref: str = "") -> str:
     """
     # `tr` must be plain alphanumeric; strip separators from ids like SPS-260718-0042.
     tr = "".join(ch for ch in (txn_ref or settings.upi_txn_ref) if ch.isalnum())
+    m = merchant(branch)
     params = [
-        ("pa", settings.upi_vpa),
-        ("pn", settings.upi_payee_vpa_name),
-        ("mc", settings.upi_merchant_code),
-        ("aid", settings.upi_merchant_aid),
+        ("pa", m["vpa"]),
+        ("pn", m["pn"]),
+        ("mc", m["mc"]),
+        ("aid", m["aid"]),
         ("ver", settings.upi_qr_ver),
         ("mode", settings.upi_qr_mode),
         ("tr", tr),
