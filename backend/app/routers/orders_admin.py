@@ -8,12 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from ..deps import get_current_user, require_owner
 from ..models import (
-    Coupon, CustomerInfo, Order, OrderItem, OrderTopup, PaymentInfo, StatusEvent,
+    Branch, Coupon, CustomerInfo, Order, OrderItem, OrderTopup, PaymentInfo, Setting, StatusEvent,
 )
 from ..models.order import STATUS_FLOW
 from ..schemas.models import (
     OrderEditRequest, StaffOrderRequest, StatusUpdateRequest, VerifyPaymentRequest,
 )
+from ..services.branches import ensure_visible, in_scope, order_branch_id, scope, write_branch
 from ..services.order_edit import record_edit, snapshot
 from ..services.orders import persist_order, price_or_reject
 from ..services.phones import norm_phone
@@ -45,7 +46,12 @@ def list_orders(
     active_only: bool = False,
     date: str | None = None,
     limit: int = 100,
+    branch: str = "",
 ):
+    """The board. Staff see their own branch only; the owner sees the branch
+    picked in the header, or every branch when none is."""
+    scope_id = scope(user, branch)
+    main_id = Branch.main().key.id()
     q = Order.query().order(-Order.created_at)
     if date:
         start_utc, end_utc = _ist_day_utc_window(date)
@@ -56,14 +62,35 @@ def list_orders(
             continue
         if active_only and o.status in TERMINAL:
             continue
+        if not in_scope(o, scope_id, main_id):
+            continue
         orders.append(o.to_dict(include_edits=True))
         if len(orders) >= limit:
             break
     return {"orders": orders}
 
 
+def _check_customer(customer, order_type: str) -> None:
+    """Name and number, as far as the owner's switches ask for them.
+
+    Both are on by default: they are how an order is found again afterwards —
+    the customer's history, a reward code, a call back about a wrong bill. The
+    owner can relax either for walk-ins; a delivery always needs both, and a
+    number that is typed must still be a whole one.
+    """
+    shop = Setting.singleton()
+    delivery = order_type == "delivery"
+    name, phone = customer.name.strip(), customer.phone.strip()
+    if not name and (delivery or shop.require_customer_name is not False):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Customer name is needed.")
+    if phone or delivery or shop.require_customer_phone is not False:
+        if not re.fullmatch(r"[0-9]{10}", phone):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "A 10-digit phone number is needed.")
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
-def create_counter_order(body: StaffOrderRequest, user=Depends(get_current_user)):
+def create_counter_order(body: StaffOrderRequest, user=Depends(get_current_user),
+                         branch: str = ""):
     """Place an order on a customer's behalf — counter, phone call or walk-in.
 
     Prices through the same module as the customer's own checkout, so every
@@ -81,26 +108,25 @@ def create_counter_order(body: StaffOrderRequest, user=Depends(get_current_user)
     Add-ons (extra cheese, extra paneer) ride along on this path only, for the
     same reason: they are asked for across the counter, so the website has no
     way to post one.
+
+    The branch is the staff member's own, from their login. The owner names one
+    from the header; with "All branches" picked there is no till to put the
+    order in, so it is refused rather than guessed.
     """
     if body.order_type not in ("dine_in", "takeaway", "delivery"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid order type")
     if body.payment_method not in ("cash", "upi"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Payment method must be 'cash' or 'upi'.")
+    outlet = write_branch(user, branch)
 
-    # Name and number are required on every counter order, walk-ins included.
-    # They are how an order is found again afterwards — the customer's history,
-    # a reward code, a call back about a wrong bill — and an order with neither
-    # belongs to nobody. Checked here as well as on the counter screen because
-    # this endpoint is what actually writes the order.
-    if not body.customer.name.strip():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Customer name is needed.")
-    if not re.fullmatch(r"[0-9]{10}", body.customer.phone.strip()):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "A 10-digit phone number is needed.")
+    # Checked here as well as on the counter screen because this endpoint is
+    # what actually writes the order.
+    _check_customer(body.customer, body.order_type)
 
     priced = price_or_reject(
         [c.model_dump() for c in body.cart], body.order_type, body.coupon_code,
         body.delivery_area_id, body.customer.phone,
-        [t.model_dump() for t in body.topups],
+        [t.model_dump() for t in body.topups], outlet,
     )
     # A coupon the staff member typed that did not hold up is reported rather
     # than dropped: they are standing in front of the customer who handed it
@@ -123,7 +149,7 @@ def create_counter_order(body: StaffOrderRequest, user=Depends(get_current_user)
         pay_status = "pending"
 
     order = persist_order(
-        priced, order_type=body.order_type, customer=body.customer, notes=body.notes,
+        priced, branch=outlet, order_type=body.order_type, customer=body.customer, notes=body.notes,
         payment_method=body.payment_method, payment_status=pay_status,
         upi_reference=body.upi_reference, by=user.email, channel="counter",
         placed_by=user.email,
@@ -133,14 +159,22 @@ def create_counter_order(body: StaffOrderRequest, user=Depends(get_current_user)
 
 
 @router.get("/latest")
-def latest_order(user=Depends(get_current_user)):
+def latest_order(user=Depends(get_current_user), branch: str = ""):
     """Cheap probe for new-order alerts: just the newest order's id + timestamp.
 
     Deliberately tiny (no full serialization, single get) so the owner dashboard
     can poll it frequently without the Cloud Run cost of listing every order.
     Declared before ``/{public_id}`` so 'latest' isn't captured as a public_id.
+
+    Scoped like the board, so one branch's alert never rings for another's
+    order. Walks a bounded window of the newest orders rather than querying by
+    branch: that would need a composite index, and orders from before branches
+    have no branch id to match.
     """
-    o = Order.query().order(-Order.created_at).get()
+    scope_id = scope(user, branch)
+    main_id = Branch.main().key.id()
+    o = next((x for x in Order.query().order(-Order.created_at).fetch(200)
+              if in_scope(x, scope_id, main_id)), None)
     if not o:
         return {"latest_id": None, "latest_created_at": None}
     return {
@@ -167,6 +201,7 @@ def export_orders_csv(
     end: str,
     include_items: bool = False,
     _owner=Depends(require_owner),
+    branch: str = "",
 ):
     """Owner-only CSV of the orders placed between two IST dates, inclusive.
 
@@ -180,12 +215,16 @@ def export_orders_csv(
     if end_utc <= start_utc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "End date must not be before the start date.")
 
-    orders = list(
-        Order.query(Order.created_at >= start_utc, Order.created_at < end_utc)
+    scope_id = scope(_owner, branch)
+    main_id = Branch.main().key.id()
+    branches = {b.key.id(): b.name for b in Branch.query()}
+    orders = [
+        o for o in Order.query(Order.created_at >= start_utc, Order.created_at < end_utc)
         .order(Order.created_at)
-    )
+        if in_scope(o, scope_id, main_id)
+    ]
 
-    header = ["Order ID", "Date (IST)", "Order type", "Customer name", "Phone", "Address"]
+    header = ["Order ID", "Date (IST)", "Branch", "Order type", "Customer name", "Phone", "Address"]
     if include_items:
         header += [
             "Items", "Subtotal (INR)", "Add-ons (INR)",
@@ -203,6 +242,7 @@ def export_orders_csv(
         row = [
             o.public_id,
             placed_ist,
+            _csv_cell(o.branch_name or branches.get(order_branch_id(o, main_id), "")),
             o.order_type.replace("_", "-"),
             _csv_cell(c.name if c else ""),
             _csv_cell(c.phone if c else ""),
@@ -248,7 +288,8 @@ def export_orders_csv(
 
 
 @router.get("/edits/recent")
-def recent_edits(date: str | None = None, scan: int = 400, _owner=Depends(require_owner)):
+def recent_edits(date: str | None = None, scan: int = 400, _owner=Depends(require_owner),
+                 branch: str = ""):
     """Owner-only feed of order edits, newest first — the audit screen.
 
     Walks back through the most recently touched orders and flattens their edit
@@ -263,9 +304,13 @@ def recent_edits(date: str | None = None, scan: int = 400, _owner=Depends(requir
     start_utc = end_utc = None
     if date:
         start_utc, end_utc = _ist_day_utc_window(date)
+    scope_id = scope(_owner, branch)
+    main_id = Branch.main().key.id()
 
     rows = []
     for o in Order.query().order(-Order.updated_at).fetch(max(1, min(scan, 1000))):
+        if not in_scope(o, scope_id, main_id):
+            continue
         for e in o.edits:
             if start_utc and not (e.at and start_utc <= e.at < end_utc):
                 continue
@@ -274,6 +319,7 @@ def recent_edits(date: str | None = None, scan: int = 400, _owner=Depends(requir
                 "order_public_id": o.public_id,
                 "order_type": o.order_type,
                 "order_status": o.status,
+                "branch_name": o.branch_name or "",
                 "customer_name": o.customer.name if o.customer else "",
                 "customer_phone": o.customer.phone if o.customer else "",
             })
@@ -284,9 +330,7 @@ def recent_edits(date: str | None = None, scan: int = 400, _owner=Depends(requir
 
 @router.get("/{public_id}")
 def get_one(public_id: str, user=Depends(get_current_user)):
-    order = Order.by_public_id(public_id)
-    if not order:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found.")
+    order = ensure_visible(user, Order.by_public_id(public_id))
     return order.to_dict(include_edits=True)
 
 
@@ -327,24 +371,22 @@ def edit_order(public_id: str, body: OrderEditRequest, user=Depends(get_current_
     alone: that card was opened and closed when the order was placed, and an
     edit afterwards is not a second draw.
     """
-    order = Order.by_public_id(public_id)
-    if not order:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found.")
+    order = ensure_visible(user, Order.by_public_id(public_id))
     _may_edit(user, order)
+    # Re-priced at the branch that took it: an edit corrects the order, it
+    # does not move it to another till.
+    outlet = Branch.get_by_id(order_branch_id(order)) or Branch.main()
 
     if body.order_type not in ("dine_in", "takeaway", "delivery"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid order type")
     if body.payment_method not in ("cash", "upi"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Payment method must be 'cash' or 'upi'.")
-    if not body.customer.name.strip():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Customer name is needed.")
-    if not re.fullmatch(r"[0-9]{10}", body.customer.phone.strip()):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "A 10-digit phone number is needed.")
+    _check_customer(body.customer, body.order_type)
 
     priced = price_or_reject(
         [c.model_dump() for c in body.cart], body.order_type, body.coupon_code,
         body.delivery_area_id, body.customer.phone,
-        [t.model_dump() for t in body.topups],
+        [t.model_dump() for t in body.topups], outlet,
     )
     if body.coupon_code and not priced.coupon_code:
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
@@ -443,9 +485,7 @@ def edit_order(public_id: str, body: OrderEditRequest, user=Depends(get_current_
 
 @router.post("/{public_id}/status")
 def update_status(public_id: str, body: StatusUpdateRequest, user=Depends(get_current_user)):
-    order = Order.by_public_id(public_id)
-    if not order:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found.")
+    order = ensure_visible(user, Order.by_public_id(public_id))
 
     new_status = body.status
     allowed = set(STATUS_FLOW.get(order.order_type, [])) | {"cancelled"}
@@ -462,9 +502,7 @@ def update_status(public_id: str, body: StatusUpdateRequest, user=Depends(get_cu
 
 @router.post("/{public_id}/verify-payment")
 def verify_payment(public_id: str, body: VerifyPaymentRequest, user=Depends(get_current_user)):
-    order = Order.by_public_id(public_id)
-    if not order:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Order not found.")
+    order = ensure_visible(user, Order.by_public_id(public_id))
     if not order.payment:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Order has no payment record.")
     if body.status not in ("paid", "failed"):

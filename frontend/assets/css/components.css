@@ -166,3 +166,15 @@ body:has(.modal-backdrop.open) .toast-wrap { bottom: auto; top: calc(var(--heade
 /* Empty state */
 .empty { text-align: center; padding: var(--sp-7) var(--sp-4); color: var(--ink-2); }
 .empty .emoji { font-size: 2.4rem; margin-bottom: var(--sp-2); }
+
+/* Branch picker + "ordering from" bar (js/branch.js). Only drawn when more than
+   one branch is open, so a single-branch site never shows either. */
+.branch-bar { background: var(--surface-2); border-bottom: 1px solid var(--line); font-size: var(--fs-sm); color: var(--ink-2); }
+.branch-bar .container { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); min-height: 44px; }
+.branch-bar strong { color: var(--ink); }
+.branch-option { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; text-align: left;
+  padding: 14px 16px; margin-bottom: var(--sp-2); border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; min-height: 44px; }
+.branch-option:hover, .branch-option:focus-visible { border-color: var(--brand); }
+.branch-option span { font-size: var(--fs-sm); color: var(--ink-2); }
+.branch-option .branch-closed { color: var(--err); font-weight: 700; }

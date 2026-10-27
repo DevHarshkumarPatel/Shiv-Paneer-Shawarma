@@ -55,6 +55,9 @@
     coupons: [],           // owner's own codes, when this user may list them
     quote: null,
     customer: { name: "", phone: "", address: "" },
+    // The owner's shop-wide switches (Settings tab). Both on unless told
+    // otherwise; a delivery asks for both regardless.
+    need: { name: true, phone: true },
     areas: [],
     deliveryAreaId: "",
     payment: "cash",
@@ -77,6 +80,22 @@
     }
     el("#logoutBtn").addEventListener("click", async () => { await Auth.logout(); location.href = "login.html"; });
 
+    // An order being corrected is re-priced at the branch that took it, so the
+    // menu, prices and delivery areas below are that branch's — not whichever
+    // branch the owner's picker happens to be on.
+    let editOrder = null;
+    if (EDIT_ID) {
+      try {
+        editOrder = await API.get(`/api/admin/orders/${encodeURIComponent(EDIT_ID)}`);
+        API.setParams({ branch: editOrder.branch_id || "" });
+      } catch (e) {
+        el("#posRoot").innerHTML = `<div class="empty"><div class="emoji">⚠️</div><h3>Cannot open that order</h3>
+          <p class="text-muted">${esc(e.message)}</p>
+          <p><a class="btn btn-outline" href="orders.html">← Back to the board</a></p></div>`;
+        return;
+      }
+    }
+
     try {
       const { categories } = await API.get("/api/menu");
       flatten(categories || []);
@@ -94,17 +113,13 @@
     // not an error — it just means no shortcut chips for this user.
     try { state.coupons = ((await API.get("/api/coupons")).coupons || []).filter((c) => c.active); }
     catch { state.coupons = []; }
+    // Unreadable settings keep both required — the server checks them anyway.
+    try {
+      const st = await API.get("/api/settings");
+      state.need = { name: st.require_customer_name !== false, phone: st.require_customer_phone !== false };
+    } catch { /* keep the defaults */ }
 
-    if (EDIT_ID) {
-      try {
-        await loadForEdit(EDIT_ID);
-      } catch (e) {
-        el("#posRoot").innerHTML = `<div class="empty"><div class="emoji">⚠️</div><h3>Cannot open that order</h3>
-          <p class="text-muted">${esc(e.message)}</p>
-          <p><a class="btn btn-outline" href="orders.html">← Back to the board</a></p></div>`;
-        return;
-      }
-    }
+    if (editOrder) loadForEdit(editOrder);
 
     await refreshQuote();
     render();
@@ -118,8 +133,7 @@
      first thing staff see is the order exactly as it stands — anything they do
      not touch saves back unchanged, and the log stays about what they meant to
      change rather than about what the screen forgot to load. */
-  async function loadForEdit(id) {
-    const o = await API.get(`/api/admin/orders/${encodeURIComponent(id)}`);
+  function loadForEdit(o) {
     state.editing = o;
     state.mode = o.order_type;
     /* The charged quantity only. Free items are what an offer decides, and the
@@ -589,6 +603,17 @@
         ${esc(c.code)}</button>`).join("")}</div>`;
   }
 
+  /* The line under the name and number on a non-delivery order, saying what
+     the owner's switches ask for. */
+  function customerHint(needName, needPhone) {
+    if (needName && needPhone) {
+      return "Both are needed on every order — the number is what puts the order in the customer's history and lets a reward code work.";
+    }
+    if (needPhone) return "The number is needed — it puts the order in the customer's history. The name is optional.";
+    if (needName) return "The name is needed. The number is optional, but without it the order is in nobody's history.";
+    return "Both are optional. Without a number the order is in nobody's history and a reward code cannot be used.";
+  }
+
   function areaOptions() {
     return `<option value="">Select area…</option>` + state.areas.map((a) =>
       `<option value="${a.id}" ${String(a.id) === String(state.deliveryAreaId) ? "selected" : ""}>${esc(a.name)} · ${money(a.fee)}</option>`
@@ -598,6 +623,8 @@
   function ticketPanel() {
     const c = state.customer;
     const delivery = state.mode === "delivery";
+    const needName = delivery || state.need.name;
+    const needPhone = delivery || state.need.phone;
     const q = state.quote;
     const blocked = !state.lines.length || deadList().length;
     return `
@@ -627,10 +654,10 @@
         <div class="card" style="margin-top:var(--sp-3);"><div class="card-pad">
           <h3 style="margin:0 0 var(--sp-3);font-size:var(--fs-md);">Customer</h3>
           <div class="input-row">
-            <div class="field grow"><label>Name *</label>
+            <div class="field grow"><label>Name${needName ? " *" : ""}</label>
               <input class="input" id="posName" value="${esc(c.name)}" placeholder="Customer name"
                      autocomplete="off" autocapitalize="words" enterkeyhint="next" /></div>
-            <div class="field grow"><label>Phone *</label>
+            <div class="field grow"><label>Phone${needPhone ? " *" : ""}</label>
               <input class="input" id="posPhone" value="${esc(c.phone)}" placeholder="10-digit mobile"
                      type="tel" inputmode="numeric" autocomplete="tel" enterkeyhint="done" /></div>
           </div>
@@ -639,8 +666,7 @@
               <select class="select" id="posArea">${areaOptions()}</select></div>
             <div class="field"><label>Delivery address *</label>
               <textarea class="input" id="posAddress" placeholder="Flat / house, street, area, landmark">${esc(c.address)}</textarea></div>`
-          : `<p class="text-sm text-muted" style="margin:0;">Both are needed on every order — the number is what puts the
-             order in the customer's history and lets a reward code work.</p>`}
+          : `<p class="text-sm text-muted" style="margin:0;">${customerHint(needName, needPhone)}</p>`}
         </div></div>
 
         <div class="card" style="margin-top:var(--sp-3);"><div class="card-pad">
@@ -1042,12 +1068,15 @@
     if (!state.lines.length) return toast("Add at least one item", "err");
     if (deadList().length) return toast("Remove the sold-out items first", "err");
     const c = state.customer;
-    /* Name and number are asked for on every order, walk-in included. They are
-       what the order is found by afterwards — history, reward codes, a call
-       back about a wrong bill — and a counter that can skip them ends up with
-       a day of orders belonging to nobody. */
-    if (!c.name.trim()) return toast("Customer name is needed", "err");
-    if (!/^[0-9]{10}$/.test(c.phone)) return toast("A 10-digit phone number is needed", "err");
+    /* Name and number are asked for on every order unless the owner switched
+       either off. They are what the order is found by afterwards — history,
+       reward codes, a call back about a wrong bill. A delivery needs both, and
+       a number that is typed has to be a whole one. */
+    const delivery = state.mode === "delivery";
+    if (!c.name.trim() && (delivery || state.need.name)) return toast("Customer name is needed", "err");
+    if ((c.phone || delivery || state.need.phone) && !/^[0-9]{10}$/.test(c.phone)) {
+      return toast("A 10-digit phone number is needed", "err");
+    }
     if (state.mode === "delivery") {
       if (!state.deliveryAreaId) return toast("Select the delivery area", "err");
       if (!c.address.trim()) return toast("Delivery needs an address", "err");

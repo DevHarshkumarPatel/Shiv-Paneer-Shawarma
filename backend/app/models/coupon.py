@@ -36,6 +36,12 @@ class Coupon(ndb.Model):
     # ctype "promo" is the case where unlocking is all it does.
     promo_ids = ndb.IntegerProperty(repeated=True)
 
+    # Branches the code can be used at. Empty means every branch.
+    branch_ids = ndb.IntegerProperty(repeated=True)
+
+    def valid_at(self, branch_id: int) -> bool:
+        return not self.branch_ids or branch_id in self.branch_ids
+
     @classmethod
     def by_code(cls, code: str) -> "Coupon | None":
         return cls.query(cls.code == code.upper().strip()).get()
@@ -62,6 +68,7 @@ class Coupon(ndb.Model):
             "usage_limit": self.usage_limit,
             "used_count": self.used_count,
             "promo_ids": list(self.promo_ids or []),
+            "branch_ids": list(self.branch_ids or []),
             "source": self.source,
             "bound_phone": self.bound_phone,
         }

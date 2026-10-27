@@ -308,6 +308,8 @@ const ESCPOSText = (function () {
     // Without a logo it is the only thing identifying the bill, so it comes
     // back as text.
     if (!opts.logo) d.line(opts.shop || "Shiv Paneer Shawarma", { center: true, bold: true, dw: true, dh: true });
+    // Branch name, address, phone — plain text, the printer has no emoji.
+    (opts.branchLines || []).forEach((t, i) => d.line(t, { center: true, bold: !i }));
     d.rule("=");
 
     /* ---- Order details ---- */

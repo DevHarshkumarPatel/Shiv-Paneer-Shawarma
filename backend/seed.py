@@ -10,7 +10,7 @@ from app.db import db_context
 from app.config import settings
 from app.models import (
     User, Category, Subcategory, Item, Variant, Promo, Coupon, Order, Counter,
-    DeliveryArea, ReviewQuestion, Topup,
+    DeliveryArea, ReviewQuestion, Topup, Branch, BranchMenu,
 )
 from app.security import hash_password
 
@@ -76,7 +76,7 @@ MENU = [
 
 def reset():
     for model in (Item, Subcategory, Category, Promo, Coupon, Order, Counter, DeliveryArea,
-                  Topup):
+                  Topup, Branch, BranchMenu):
         keys = model.query().fetch(keys_only=True)
         if keys:
             from google.cloud import ndb
@@ -184,10 +184,17 @@ def seed_review_questions():
     print(f"Review questions: {len(qs)} seeded.")
 
 
+def seed_branches():
+    """Main always exists (it is made on first use anyway); this just says so."""
+    main = Branch.main()
+    print(f"Branch: {main.name} (id {main.key.id()})")
+
+
 def main():
     with db_context():
         if "--reset" in sys.argv:
             reset()
+        seed_branches()
         seed_users()
         seed_menu()
         seed_coupon()

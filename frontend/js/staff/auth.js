@@ -21,9 +21,14 @@ const Auth = (() => {
   }
 
   // Guard a page: redirect to login if the session is invalid. Returns the user.
+  // Also settles which branch the page is about (js/staff/branch.js) before the
+  // page loads anything, so its first request is already scoped.
   async function requireAuth(loginPath = "login.html") {
-    try { return (await me()).user; }
+    let user;
+    try { user = (await me()).user; }
     catch { location.href = loginPath; throw new Error("redirecting"); }
+    if (typeof StaffBranch !== "undefined") await StaffBranch.init(user);
+    return user;
   }
 
   // On the login page: if already signed in, jump straight to the app.

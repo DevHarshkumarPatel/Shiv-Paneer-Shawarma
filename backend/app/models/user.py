@@ -8,6 +8,11 @@ class User(ndb.Model):
     name = ndb.StringProperty(default="")
     role = ndb.StringProperty(choices=["owner", "staff"], default="staff")
     active = ndb.BooleanProperty(default=True)
+    # The one branch a staff login works at. Read from this row on every
+    # request, never from anything the browser sends, so moving someone to
+    # another branch takes effect on their next click. None means Main (rows
+    # written before branches existed). Ignored for the owner, who sees all.
+    branch_id = ndb.IntegerProperty()
     created_at = ndb.DateTimeProperty(auto_now_add=True)
 
     @classmethod
@@ -20,4 +25,5 @@ class User(ndb.Model):
             "email": self.email,
             "name": self.name,
             "role": self.role,
+            "branch_id": self.branch_id,
         }

@@ -12,23 +12,51 @@ know they exist.
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..deps import get_current_user, require_owner
-from ..models import Topup
+from ..models import Branch, Topup
 from ..schemas.models import TopupPayload
+from ..services.branches import public_branch, read_branch
 
 router = APIRouter(tags=["topups"])
 
 
 # ---- Staff: what can go on a ticket ----
 @router.get("/api/topups")
-def list_active(_user=Depends(get_current_user)):
-    return {"topups": [t.to_dict() for t in Topup.active_ordered()]}
+def list_active(user=Depends(get_current_user), branch: str = ""):
+    """The add-ons at this counter's branch."""
+    outlet = read_branch(user, branch)
+    return {"topups": [t.to_dict() for t in Topup.active_ordered(outlet.key.id(), Branch.main().key.id())]}
 
 
 # ---- Owner management ----
+def _of(outlet: Branch) -> list[Topup]:
+    main_id = Branch.main().key.id()
+    return sorted((t for t in Topup.query() if t.belongs_to(outlet.key.id(), main_id)),
+                  key=lambda t: (t.sort_order, t.name.lower()))
+
+
 @router.get("/api/admin/topups")
-def list_all(_owner=Depends(require_owner)):
-    rows = sorted(Topup.query(), key=lambda t: (t.sort_order, t.name.lower()))
-    return {"topups": [t.to_dict() for t in rows]}
+def list_all(_owner=Depends(require_owner), branch: str = ""):
+    """One branch's add-ons (Main when none is named)."""
+    outlet = public_branch(branch)
+    return {"topups": [t.to_dict() for t in _of(outlet)], "branch": outlet.to_public()}
+
+
+@router.post("/api/admin/topups/copy-from-main")
+def copy_from_main(_owner=Depends(require_owner), branch: str = ""):
+    """Start a branch's add-on list from Main's — same names and prices, which
+    the owner then edits. Only adds what the branch does not already have."""
+    outlet = public_branch(branch)
+    if outlet.is_main:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pick a branch other than Main.")
+    have = {t.name.lower() for t in _of(outlet)}
+    added = 0
+    for t in _of(Branch.main()):
+        if t.name.lower() in have:
+            continue
+        Topup(name=t.name, price=t.price, per_quantity=t.per_quantity, description=t.description,
+              active=t.active, sort_order=t.sort_order, branch_id=outlet.key.id()).put()
+        added += 1
+    return {"added": added}
 
 
 def _clean(body: TopupPayload) -> str:
@@ -41,8 +69,9 @@ def _clean(body: TopupPayload) -> str:
 
 
 @router.post("/api/admin/topups", status_code=status.HTTP_201_CREATED)
-def create_topup(body: TopupPayload, _owner=Depends(require_owner)):
+def create_topup(body: TopupPayload, _owner=Depends(require_owner), branch: str = ""):
     topup = Topup(
+        branch_id=public_branch(branch).key.id(),
         name=_clean(body), price=body.price, per_quantity=body.per_quantity,
         description=body.description.strip(), active=body.active,
         sort_order=body.sort_order,

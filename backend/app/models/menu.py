@@ -156,7 +156,13 @@ class Promo(ndb.Model):
     # entered. Maintained by the coupon endpoints (see routers/coupons.py) so
     # pricing can filter on a field instead of scanning every coupon per quote.
     coupon_only = ndb.BooleanProperty(default=False)
+    # Branches this offer runs at. Empty means every branch, which is what
+    # every promo written before branches existed reads as.
+    branch_ids = ndb.IntegerProperty(repeated=True)
     created_at = ndb.DateTimeProperty(auto_now_add=True)
+
+    def runs_at(self, branch_id: int) -> bool:
+        return not self.branch_ids or branch_id in self.branch_ids
 
     def target_id_list(self) -> list[int]:
         """All targets, tolerating rows written before target_ids existed."""
@@ -231,4 +237,5 @@ class Promo(ndb.Model):
             "conditions": self.conditions,
             "active": self.active,
             "coupon_only": self.coupon_only,
+            "branch_ids": list(self.branch_ids or []),
         }

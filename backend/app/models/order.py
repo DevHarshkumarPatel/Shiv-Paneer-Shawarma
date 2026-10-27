@@ -174,6 +174,15 @@ class Order(ndb.Model):
     channel = ndb.StringProperty(choices=["online", "counter"], default="online")
     placed_by = ndb.StringProperty(default="")   # staff email, for counter orders
 
+    # The branch that took the order. None on orders from before branches,
+    # which were all Main's. Name, address and phone are frozen beside the id
+    # for the same reason a line keeps its promo label: a branch gets renamed
+    # or moves, and a reprinted bill must still say where it was bought.
+    branch_id = ndb.IntegerProperty()
+    branch_name = ndb.StringProperty(default="")
+    branch_address = ndb.TextProperty(default="")
+    branch_phone = ndb.StringProperty(default="")
+
     items = ndb.StructuredProperty(OrderItem, repeated=True)
     # Add-ons staff put on the ticket. Their own lines rather than something
     # hidden inside an item line: the counter adds and removes them separately,
@@ -220,6 +229,10 @@ class Order(ndb.Model):
             "repeat_no": self.repeat_no,
             "channel": self.channel or "online",
             "placed_by": self.placed_by,
+            "branch_id": self.branch_id,
+            "branch_name": self.branch_name or "",
+            "branch_address": self.branch_address or "",
+            "branch_phone": self.branch_phone or "",
             "items": [i.to_dict() for i in self.items],
             "topups": [t.to_dict() for t in self.topups],
             "payment": self.payment.to_dict() if self.payment else None,

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from ..deps import require_owner
 from ..models import Category, Subcategory, Item, ItemImage, Variant, Promo, Coupon
+from ..services.branches import clean_branch_ids as _branch_ids, public_branch
 from ..schemas.models import (
     AvailabilityPayload, CategoryPayload, SubcategoryPayload, ItemPayload,
     PromoPayload, ReorderPayload,
@@ -301,8 +302,12 @@ def delete_item_image(item_id: int, _owner=Depends(require_owner)):
 
 # ---- Promos ----
 @router.get("/promos")
-def list_promos(_owner=Depends(require_owner)):
-    return {"promos": [p.to_dict() for p in Promo.query()]}
+def list_promos(_owner=Depends(require_owner), branch: str = ""):
+    """The promos that run at the picked branch — its own and the all-branch
+    ones. Main when no branch is named."""
+    bid = public_branch(branch).key.id()
+    return {"promos": [p.to_dict() for p in Promo.query() if p.runs_at(bid)]}
+
 
 
 def _targets(body: PromoPayload) -> list[int]:
@@ -321,7 +326,7 @@ def create_promo(body: PromoPayload, _owner=Depends(require_owner)):
     promo = Promo(
         scope=body.scope, target_id=targets[0], target_ids=targets, ptype=body.ptype,
         value=body.value, label=body.label, description=body.description,
-        conditions=body.conditions, active=body.active,
+        conditions=body.conditions, active=body.active, branch_ids=_branch_ids(body.branch_ids),
     )
     promo.put()
     return promo.to_dict()
@@ -344,6 +349,7 @@ def update_promo(promo_id: int, body: PromoPayload, _owner=Depends(require_owner
     promo.description = body.description
     promo.conditions = body.conditions
     promo.active = body.active
+    promo.branch_ids = _branch_ids(body.branch_ids)
     promo.put()
     return promo.to_dict()
 

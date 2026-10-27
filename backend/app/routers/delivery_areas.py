@@ -2,31 +2,41 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..deps import require_owner
-from ..models import DeliveryArea
+from ..models import Branch, DeliveryArea
 from ..schemas.models import DeliveryAreaPayload
+from ..services.branches import public_branch
 
 router = APIRouter(tags=["delivery-areas"])
 
 
 # ---- Public: areas the customer can pick at checkout ----
 @router.get("/api/delivery-areas")
-def public_list():
-    return {"areas": [a.to_dict() for a in DeliveryArea.active_ordered()]}
+def public_list(branch: str = ""):
+    """The areas the chosen branch delivers to, each at that branch's fee."""
+    outlet = public_branch(branch)
+    main_id = Branch.main().key.id()
+    return {"areas": [a.to_dict() for a in DeliveryArea.active_ordered(outlet.key.id(), main_id)]}
 
 
 # ---- Owner management ----
 @router.get("/api/admin/delivery-areas")
-def list_areas(_owner=Depends(require_owner)):
-    areas = sorted(DeliveryArea.query(), key=lambda a: (a.sort_order, a.name.lower()))
-    return {"areas": [a.to_dict() for a in areas]}
+def list_areas(_owner=Depends(require_owner), branch: str = ""):
+    """Every area of one branch (Main when none is named), active or not."""
+    outlet = public_branch(branch)
+    main_id = Branch.main().key.id()
+    areas = sorted((a for a in DeliveryArea.query() if a.belongs_to(outlet.key.id(), main_id)),
+                   key=lambda a: (a.sort_order, a.name.lower()))
+    return {"areas": [a.to_dict() for a in areas], "branch": outlet.to_public()}
 
 
 @router.post("/api/admin/delivery-areas", status_code=status.HTTP_201_CREATED)
-def create_area(body: DeliveryAreaPayload, _owner=Depends(require_owner)):
+def create_area(body: DeliveryAreaPayload, _owner=Depends(require_owner), branch: str = ""):
     name = body.name.strip()
     if not name:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Area name is required.")
-    area = DeliveryArea(name=name, fee=body.fee, active=body.active, sort_order=body.sort_order)
+    outlet = public_branch(branch)
+    area = DeliveryArea(name=name, fee=body.fee, active=body.active, sort_order=body.sort_order,
+                        branch_id=outlet.key.id())
     area.put()
     return area.to_dict()
 

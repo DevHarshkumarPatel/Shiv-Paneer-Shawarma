@@ -358,6 +358,9 @@ const Invoice = (function () {
     } else {
       line(SHOP, { size: 19, bold: true, center: true, gap: 1 });
     }
+    // Which outlet, from what was frozen on the order — a reprint names the
+    // branch that took the money, even if it has been renamed since.
+    branchLines(o).forEach((t, i) => line(t, { size: i ? 11 : 12, bold: !i, center: true, gap: 1 }));
     line("Order receipt", { size: 11, center: true, gap: 4 });
     rule(true);
 
@@ -560,10 +563,23 @@ const Invoice = (function () {
     return px === 1 ? probe : qrCanvas(img, px);
   }
 
+  /* The owner's "QR on printed bills" switch (Settings tab, every branch).
+     Read once per page; an unreadable setting keeps the QR, as before. */
+  let qrSwitch = null;
+  function qrOn() {
+    if (!qrSwitch) {
+      qrSwitch = API.get("/api/settings")
+        .then((st) => st.print_payment_qr !== false)
+        .catch(() => true);
+    }
+    return qrSwitch;
+  }
+
   /* The UPI intent link and a QR image for what this bill still owes. The bill
      prints without them if the call fails — a receipt is worth more than a
-     payment shortcut. */
+     payment shortcut — or when the owner has switched the QR off. */
   async function upiFor(o) {
+    if (!(await qrOn())) return null;
     try {
       return await API.get(`/api/orders/${encodeURIComponent(o.public_id)}/payment`);
     } catch (e) {
@@ -571,11 +587,21 @@ const Invoice = (function () {
     }
   }
 
+  /* The branch block under the shop name: its name, address and phone. Empty
+     for a single-branch shop that never filled in Main's details, so its bill
+     looks exactly as it did before branches. */
+  function branchLines(o) {
+    const name = o.branch_name && (o.branch_name !== "Main" || o.branch_address) ? o.branch_name : "";
+    return [name && `📍 ${name}`, o.branch_address, o.branch_phone && `📞 ${o.branch_phone}`]
+      .filter(Boolean);
+  }
+
   function buildText(o, art, pay, qrImg) {
     const p = paper();
     const dots = (ESCPOSText.QR_MODULE && ESCPOSText.QR_MODULE[p.mm]) || 3;
     return ESCPOSText.build(o, {
       shop: SHOP,
+      branchLines: branchLines(o).map((t) => t.replace(/^[📍📞]\s*/u, "")),
       paperMm: p.mm,
       // Full paper width, so the badges reach the corners the owner asked for.
       logo: headerCanvas(art, p.dots),

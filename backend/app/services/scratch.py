@@ -19,7 +19,8 @@ from datetime import datetime, timedelta
 
 from google.cloud import ndb
 
-from ..models import Coupon, ScratchAward, ScratchPrize, Setting
+from ..models import Branch, Coupon, ScratchAward, ScratchPrize
+from .branches import flag
 
 # No O/0/I/1: the code gets read off a phone screen and typed back in.
 CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -105,23 +106,28 @@ def _pick(prizes: list[ScratchPrize]) -> ScratchPrize | None:
     return live[-1]
 
 
-def reprint_batch(prizes: list[ScratchPrize] | None = None) -> None:
+def branch_prizes(branch: Branch) -> list[ScratchPrize]:
+    """The batch this branch prints. Each branch has its own deck."""
+    main_id = Branch.main().key.id()
+    return [p for p in ScratchPrize.query() if p.belongs_to(branch.key.id(), main_id)]
+
+
+def reprint_batch(branch: Branch, prizes: list[ScratchPrize] | None = None) -> None:
     """Start the batch over: every card back on the deck, batch number up one.
 
     Used both by the owner's "start a new batch" button and by the automatic
     reprint, so a fresh batch is one thing and not two slightly different ones.
     """
-    for prize in (prizes if prizes is not None else list(ScratchPrize.query())):
+    for prize in (prizes if prizes is not None else branch_prizes(branch)):
         if prize.awarded_count:
             prize.awarded_count = 0
             prize.put()
-    setting = Setting.singleton()
-    setting.scratch_batch_no = (setting.scratch_batch_no or 1) + 1
-    setting.put()
+    branch.scratch_batch_no = (flag(branch, "scratch_batch_no") or 1) + 1
+    branch.put()
 
 
-def draw_for_phone(phone: str) -> tuple[ScratchAward | None, str]:
-    """Draw a card for `phone`.
+def draw_for_phone(phone: str, branch: Branch) -> tuple[ScratchAward | None, str]:
+    """Draw a card for `phone` from this branch's batch.
 
     Returns (award, error). An already-open award is returned as-is rather than
     rerolled, so a reload — or a second device — shows the same result.
@@ -130,19 +136,21 @@ def draw_for_phone(phone: str) -> tuple[ScratchAward | None, str]:
     if len(phone) != 10:
         return None, "Enter your 10-digit phone number to reveal your card."
 
-    existing = ScratchAward.open_for_phone(phone)
+    bid = branch.key.id()
+    main_id = Branch.main().key.id()
+    existing = ScratchAward.open_for_phone(phone, bid, main_id)
     if existing:
         return existing, ""
 
-    prizes = list(ScratchPrize.query())
+    prizes = branch_prizes(branch)
     if not any(p.is_drawable() for p in prizes):
         # Deck empty. Reprint it if the owner asked for that, otherwise the
         # give-away is over until they say so — silently starting batch two is
         # not a decision this code gets to make.
-        if not Setting.singleton().scratch_repeat_batch:
+        if not flag(branch, "scratch_repeat_batch"):
             return None, "No rewards are available right now."
-        reprint_batch(prizes)
-        prizes = list(ScratchPrize.query())
+        reprint_batch(branch, prizes)
+        prizes = branch_prizes(branch)
         if not any(p.is_drawable() for p in prizes):
             return None, "No rewards are available right now."
 
@@ -165,7 +173,7 @@ def draw_for_phone(phone: str) -> tuple[ScratchAward | None, str]:
     if prize.kind == "miss":
         award = ScratchAward(
             phone=phone, prize_id=prize.key.id(), status="missed",
-            label=prize.label or "Better luck next time!",
+            label=prize.label or "Better luck next time!", branch_id=bid,
         )
         award.put()
         return award, ""
@@ -176,7 +184,7 @@ def draw_for_phone(phone: str) -> tuple[ScratchAward | None, str]:
         # miss rather than an error — the claim is already spent either way.
         award = ScratchAward(
             phone=phone, prize_id=prize.key.id(), status="missed",
-            label="Better luck next time!",
+            label="Better luck next time!", branch_id=bid,
         )
         award.put()
         return award, ""
@@ -194,30 +202,39 @@ def draw_for_phone(phone: str) -> tuple[ScratchAward | None, str]:
         promo_ids=list(template.promo_ids or []),
         active=True, expires_at=expires_at, usage_limit=1, used_count=0,
         source="scratch", bound_phone=phone, prize_id=prize.key.id(),
+        # Won at this branch, spent at this branch: it is this branch's budget.
+        branch_ids=[bid],
     ).put()
 
     award = ScratchAward(
         phone=phone, prize_id=prize.key.id(), status="won",
         label=prize.label or default_label(template),
         code=code, source_code=template.code, terms=coupon_terms(template),
-        expires_at=expires_at,
+        expires_at=expires_at, branch_id=bid,
     )
     award.put()
     return award, ""
 
 
-def close_open_awards(phone: str, order_public_id: str, used_code: str = "") -> None:
+def close_open_awards(phone: str, order_public_id: str, used_code: str = "",
+                      branch_id: int | None = None) -> None:
     """Settle a phone's open draw once they have actually ordered.
 
     Closing is what re-arms the card for their next order. If the order spent
     the won code, the award is marked used so the owner's report separates
     "won it" from "came back and spent it".
+
+    Only the draw at the branch the order was placed at is settled; None (the
+    owner's manual close) settles every branch's.
     """
     phone = norm_phone(phone)
     if len(phone) != 10:
         return
     used_code = (used_code or "").upper().strip()
+    main_id = Branch.main().key.id()
     for award in ScratchAward.query(ScratchAward.phone == phone, ScratchAward.open == True):  # noqa: E712
+        if branch_id is not None and not award.belongs_to(branch_id, main_id):
+            continue
         award.open = False
         if award.code and award.code == used_code:
             award.status = "used"

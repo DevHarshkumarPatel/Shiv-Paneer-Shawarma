@@ -35,7 +35,12 @@ class ScratchPrize(ndb.Model):
     validity_days = ndb.IntegerProperty(default=7)  # life of the code it mints
     active = ndb.BooleanProperty(default=True)
     sort_order = ndb.IntegerProperty(default=0)
+    # Each branch prints its own batch. None means Main (rows from before).
+    branch_id = ndb.IntegerProperty()
     created_at = ndb.DateTimeProperty(auto_now_add=True)
+
+    def belongs_to(self, branch_id: int, main_id: int) -> bool:
+        return (self.branch_id or main_id) == branch_id
 
     def remaining(self) -> int:
         """Cards of this kind still in the batch."""
@@ -80,10 +85,19 @@ class ScratchAward(ndb.Model):
     created_at = ndb.DateTimeProperty(auto_now_add=True)
     used_at = ndb.DateTimeProperty()
     order_public_id = ndb.StringProperty(default="")
+    branch_id = ndb.IntegerProperty()              # whose batch it came from; None = Main
+
+    def belongs_to(self, branch_id: int, main_id: int) -> bool:
+        return (self.branch_id or main_id) == branch_id
 
     @classmethod
-    def open_for_phone(cls, phone: str) -> "ScratchAward | None":
-        return cls.query(cls.phone == phone, cls.open == True).get()  # noqa: E712
+    def open_for_phone(cls, phone: str, branch_id: int, main_id: int) -> "ScratchAward | None":
+        """This phone's open draw at this branch. One per branch: a card won at
+        Main carries a code for Main, and must not be shown at Adajan."""
+        for a in cls.query(cls.phone == phone, cls.open == True):  # noqa: E712
+            if a.belongs_to(branch_id, main_id):
+                return a
+        return None
 
     def to_dict(self) -> dict:
         return {
