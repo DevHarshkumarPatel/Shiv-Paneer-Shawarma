@@ -563,10 +563,23 @@ const Invoice = (function () {
     return px === 1 ? probe : qrCanvas(img, px);
   }
 
+  /* The owner's "QR on printed bills" switch (Settings tab, every branch).
+     Read once per page; an unreadable setting keeps the QR, as before. */
+  let qrSwitch = null;
+  function qrOn() {
+    if (!qrSwitch) {
+      qrSwitch = API.get("/api/settings")
+        .then((st) => st.print_payment_qr !== false)
+        .catch(() => true);
+    }
+    return qrSwitch;
+  }
+
   /* The UPI intent link and a QR image for what this bill still owes. The bill
      prints without them if the call fails — a receipt is worth more than a
-     payment shortcut. */
+     payment shortcut — or when the owner has switched the QR off. */
   async function upiFor(o) {
+    if (!(await qrOn())) return null;
     try {
       return await API.get(`/api/orders/${encodeURIComponent(o.public_id)}/payment`);
     } catch (e) {

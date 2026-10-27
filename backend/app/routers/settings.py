@@ -4,7 +4,7 @@ Most switches are per branch now: whether customers may order, the offer
 banners and the scratch card all live on each Branch (see models/branch.py and
 `services.branches.flag`). What is left on the global Setting row is the
 review page, which is still one page for the whole shop, and the counter /
-bill switches (required name and number). Both endpoints answer
+bill switches (required name and number, the QR on printed bills). Both endpoints answer
 for one branch — the one named, or Main — so the pages read one flat dict.
 """
 from fastapi import APIRouter, Depends
@@ -52,7 +52,7 @@ def update_settings(body: SettingsPayload, _owner=Depends(require_owner), branch
             setattr(outlet, field, value)
     outlet.put()
     shop = Setting.singleton()
-    shop_fields = ("require_customer_name", "require_customer_phone")
+    shop_fields = ("require_customer_name", "require_customer_phone", "print_payment_qr")
     if any(getattr(body, f) is not None for f in shop_fields):
         for field in shop_fields:
             value = getattr(body, field)

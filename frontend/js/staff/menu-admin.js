@@ -1568,6 +1568,16 @@
           : "⚪ Number is <strong>optional</strong> for dine-in and takeaway.",
         msg: (on) => (on ? "Customer number is now compulsory" : "Customer number is now optional"),
       },
+      {
+        key: "print_payment_qr", id: "billQrToggle", on: st.print_payment_qr !== false,
+        title: "Print the payment QR on bills",
+        blurb: "The \"Scan to pay\" UPI QR at the foot of every printed or shared bill, counter and " +
+               "online orders alike. The QR a customer pays with at online checkout is not affected.",
+        state: (on) => on
+          ? "🟢 Bills carry a <strong>scan-to-pay QR</strong>."
+          : "⚪ Bills print <strong>without</strong> the QR.",
+        msg: (on) => (on ? "Payment QR will print on bills" : "Payment QR removed from bills"),
+      },
     ];
     const switchCard = (r) => `
         <div class="card" style="margin-bottom:var(--sp-4);"><div class="card-pad">

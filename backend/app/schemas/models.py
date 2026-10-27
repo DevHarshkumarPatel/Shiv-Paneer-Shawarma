@@ -212,6 +212,7 @@ class SettingsPayload(BaseModel):
     # These three are shop-wide (the Setting row), not per branch.
     require_customer_name: bool | None = None
     require_customer_phone: bool | None = None
+    print_payment_qr: bool | None = None
 
 
 # ---- Scratch cards ----

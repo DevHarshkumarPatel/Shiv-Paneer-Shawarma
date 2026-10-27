@@ -45,6 +45,10 @@ class Setting(ndb.Model):
     # delivery always needs both — the rider has to know who to call.
     require_customer_name = ndb.BooleanProperty(default=True)
     require_customer_phone = ndb.BooleanProperty(default=True)
+    # The "scan to pay" UPI QR at the foot of every printed bill, counter and
+    # online alike. The online checkout's own QR is how a customer pays, so it
+    # is not affected.
+    print_payment_qr = ndb.BooleanProperty(default=True)
 
     updated_at = ndb.DateTimeProperty(auto_now=True)
 
@@ -71,4 +75,5 @@ class Setting(ndb.Model):
             "review_google_url": self.review_google_url or "",
             "require_customer_name": self.require_customer_name is not False,
             "require_customer_phone": self.require_customer_phone is not False,
+            "print_payment_qr": self.print_payment_qr is not False,
         }
