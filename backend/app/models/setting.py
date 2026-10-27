@@ -38,6 +38,14 @@ class Setting(ndb.Model):
     # Optional "write it on Google too" link, offered only after a happy review.
     review_google_url = ndb.StringProperty(default="")
 
+    # --- Counter orders and bills (every branch) -------------------------
+    # Whether the counter screen insists on the customer's name / number. On
+    # by default: they are how an order is found again (history, reward codes,
+    # a call back). The owner can relax either for a rush of walk-ins. A
+    # delivery always needs both — the rider has to know who to call.
+    require_customer_name = ndb.BooleanProperty(default=True)
+    require_customer_phone = ndb.BooleanProperty(default=True)
+
     updated_at = ndb.DateTimeProperty(auto_now=True)
 
     @classmethod
@@ -61,4 +69,6 @@ class Setting(ndb.Model):
             "review_intro": self.review_intro or "",
             "review_thanks": self.review_thanks or "",
             "review_google_url": self.review_google_url or "",
+            "require_customer_name": self.require_customer_name is not False,
+            "require_customer_phone": self.require_customer_phone is not False,
         }

@@ -209,6 +209,9 @@ class SettingsPayload(BaseModel):
     promo_banners_enabled: bool | None = None
     scratch_enabled: bool | None = None
     scratch_repeat_batch: bool | None = None
+    # These three are shop-wide (the Setting row), not per branch.
+    require_customer_name: bool | None = None
+    require_customer_phone: bool | None = None
 
 
 # ---- Scratch cards ----

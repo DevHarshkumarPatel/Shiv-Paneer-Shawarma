@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from ..deps import get_current_user, require_owner
 from ..models import (
-    Branch, Coupon, CustomerInfo, Order, OrderItem, OrderTopup, PaymentInfo, StatusEvent,
+    Branch, Coupon, CustomerInfo, Order, OrderItem, OrderTopup, PaymentInfo, Setting, StatusEvent,
 )
 from ..models.order import STATUS_FLOW
 from ..schemas.models import (
@@ -70,6 +70,24 @@ def list_orders(
     return {"orders": orders}
 
 
+def _check_customer(customer, order_type: str) -> None:
+    """Name and number, as far as the owner's switches ask for them.
+
+    Both are on by default: they are how an order is found again afterwards —
+    the customer's history, a reward code, a call back about a wrong bill. The
+    owner can relax either for walk-ins; a delivery always needs both, and a
+    number that is typed must still be a whole one.
+    """
+    shop = Setting.singleton()
+    delivery = order_type == "delivery"
+    name, phone = customer.name.strip(), customer.phone.strip()
+    if not name and (delivery or shop.require_customer_name is not False):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Customer name is needed.")
+    if phone or delivery or shop.require_customer_phone is not False:
+        if not re.fullmatch(r"[0-9]{10}", phone):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "A 10-digit phone number is needed.")
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_counter_order(body: StaffOrderRequest, user=Depends(get_current_user),
                          branch: str = ""):
@@ -101,15 +119,9 @@ def create_counter_order(body: StaffOrderRequest, user=Depends(get_current_user)
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Payment method must be 'cash' or 'upi'.")
     outlet = write_branch(user, branch)
 
-    # Name and number are required on every counter order, walk-ins included.
-    # They are how an order is found again afterwards — the customer's history,
-    # a reward code, a call back about a wrong bill — and an order with neither
-    # belongs to nobody. Checked here as well as on the counter screen because
-    # this endpoint is what actually writes the order.
-    if not body.customer.name.strip():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Customer name is needed.")
-    if not re.fullmatch(r"[0-9]{10}", body.customer.phone.strip()):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "A 10-digit phone number is needed.")
+    # Checked here as well as on the counter screen because this endpoint is
+    # what actually writes the order.
+    _check_customer(body.customer, body.order_type)
 
     priced = price_or_reject(
         [c.model_dump() for c in body.cart], body.order_type, body.coupon_code,
@@ -369,10 +381,7 @@ def edit_order(public_id: str, body: OrderEditRequest, user=Depends(get_current_
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid order type")
     if body.payment_method not in ("cash", "upi"):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Payment method must be 'cash' or 'upi'.")
-    if not body.customer.name.strip():
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Customer name is needed.")
-    if not re.fullmatch(r"[0-9]{10}", body.customer.phone.strip()):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "A 10-digit phone number is needed.")
+    _check_customer(body.customer, body.order_type)
 
     priced = price_or_reject(
         [c.model_dump() for c in body.cart], body.order_type, body.coupon_code,

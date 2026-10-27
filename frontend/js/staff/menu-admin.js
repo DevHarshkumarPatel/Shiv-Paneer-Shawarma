@@ -1547,17 +1547,29 @@
         msg: (on) => (on ? "Scratch cards turned on" : "Scratch cards turned off"),
       },
     ];
-
-    el("#tabBody").innerHTML = `
-      <h2 style="margin:0 0 var(--sp-3);">Settings${data.branches.length > 1 && pickedBranchId() ? ` · ${esc((branchById(pickedBranchId()) || {}).name || "")}` : ""}</h2>
-      ${data.branches.length > 1 ? `<p class="text-muted text-sm" style="margin:0 0 var(--sp-3);">These switches are for the branch picked at the top of the screen only.</p>` : ""}
-      <div class="card" style="margin-bottom:var(--sp-4);"><div class="card-pad">
-        <div style="font-weight:600;">Accept customer orders</div>
-        <p class="text-muted text-sm" style="margin:4px 0 0;max-width:52ch;">Ordering is opened and closed per branch now —
-          one kitchen closing early does not close the others.</p>
-        <button class="btn btn-sm btn-outline" style="margin-top:var(--sp-3);" id="toBranches">🏬 Open the Branches tab</button>
-      </div></div>
-      ${rows.map((r) => `
+    // Shop-wide: one row for every branch, whichever is picked at the top.
+    const shopRows = [
+      {
+        key: "require_customer_name", id: "needNameToggle", on: st.require_customer_name !== false,
+        title: "Customer name is compulsory",
+        blurb: "On the counter screen, for dine-in and takeaway. A delivery always needs a name.",
+        state: (on) => on
+          ? "🟢 Staff must enter a <strong>name</strong> on every counter order."
+          : "⚪ Name is <strong>optional</strong> for dine-in and takeaway.",
+        msg: (on) => (on ? "Customer name is now compulsory" : "Customer name is now optional"),
+      },
+      {
+        key: "require_customer_phone", id: "needPhoneToggle", on: st.require_customer_phone !== false,
+        title: "Customer number is compulsory",
+        blurb: "On the counter screen, for dine-in and takeaway. The number is what puts an order in " +
+               "the customer's history and lets a reward code work. A delivery always needs one.",
+        state: (on) => on
+          ? "🟢 Staff must enter a <strong>10-digit number</strong> on every counter order."
+          : "⚪ Number is <strong>optional</strong> for dine-in and takeaway.",
+        msg: (on) => (on ? "Customer number is now compulsory" : "Customer number is now optional"),
+      },
+    ];
+    const switchCard = (r) => `
         <div class="card" style="margin-bottom:var(--sp-4);"><div class="card-pad">
           <div class="row-between" style="gap:var(--sp-4);flex-wrap:wrap;">
             <div>
@@ -1570,10 +1582,24 @@
             </label>
           </div>
           <div class="text-sm ${r.on ? "" : "text-muted"}" style="margin-top:var(--sp-3);">${r.state(r.on)}</div>
-        </div></div>`).join("")}`;
+        </div></div>`;
+
+    el("#tabBody").innerHTML = `
+      <h2 style="margin:0 0 var(--sp-3);">Settings${data.branches.length > 1 && pickedBranchId() ? ` · ${esc((branchById(pickedBranchId()) || {}).name || "")}` : ""}</h2>
+      ${data.branches.length > 1 ? `<p class="text-muted text-sm" style="margin:0 0 var(--sp-3);">These switches are for the branch picked at the top of the screen only.</p>` : ""}
+      <div class="card" style="margin-bottom:var(--sp-4);"><div class="card-pad">
+        <div style="font-weight:600;">Accept customer orders</div>
+        <p class="text-muted text-sm" style="margin:4px 0 0;max-width:52ch;">Ordering is opened and closed per branch now —
+          one kitchen closing early does not close the others.</p>
+        <button class="btn btn-sm btn-outline" style="margin-top:var(--sp-3);" id="toBranches">🏬 Open the Branches tab</button>
+      </div></div>
+      ${rows.map(switchCard).join("")}
+      <h3 style="margin:var(--sp-5) 0 var(--sp-2);">Counter &amp; bills</h3>
+      ${data.branches.length > 1 ? `<p class="text-muted text-sm" style="margin:0 0 var(--sp-3);">These apply to every branch.</p>` : ""}
+      ${shopRows.map(switchCard).join("")}`;
 
     el("#toBranches").addEventListener("click", () => { tab = "branches"; render(); });
-    rows.forEach((r) => el(`#${r.id}`).addEventListener("change", (e) =>
+    [...rows, ...shopRows].forEach((r) => el(`#${r.id}`).addEventListener("change", (e) =>
       saveSwitch({ [r.key]: e.target.checked }, r.msg(e.target.checked), e.target, renderSettings)));
   }
 
